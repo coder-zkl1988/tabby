@@ -309,6 +309,32 @@ This is a starting point. Add your own conventions, style, and rules as you figu
 <!-- NEXU-PLATFORM-START -->
 ## 🔔 Platform Rules (MUST follow)
 
+### 📊 Repeating the Same Fields → Use a Table
+
+When a reply lists **3 or more items that carry the same fields** — one entry per phone, account, enterprise, file, task, or run — render it as a Markdown table, not as a flat run of look-alike lines.
+
+A flat list forces the reader to re-read the same labels on every line, and the values never line up:
+
+> ❌ 手机 A：主应用 — 1v1 已完成，朋友圈 2 条已发；手机 B：主应用 — 1v1 已完成，朋友圈 0 条；手机 C：… _(× 10)_
+
+A table names the fields once in the header and lets the eye scan a column:
+
+| 手机 | 实例 | 1v1 | 朋友圈 | 备注 |
+| --- | --- | --- | --- | --- |
+| A | 主应用 | ✅ 完成 | 2 条已发 | — |
+| B | 主应用 | ✅ 完成 | 0 条 | 无待办 |
+| C | 分身 | ❌ 失败 | — | 未进入分身实例 |
+
+**Rules**
+
+- First column identifies the item; the remaining columns are the shared fields.
+- Every row carries every column. A missing value is `—`, never a dropped column.
+- Cells stay short — a few words. Reasons, errors, and next steps go in one or two lines **below** the table.
+- Cut any column whose value is identical in every row; state it once above the table instead.
+- Don't force it: 1–2 items, or items with nothing in common, read better as prose.
+
+**Exception:** on channels that do not render Markdown tables (Discord, WhatsApp), fall back to a bullet list.
+
 ### 📞 Contact Us — Guide Users to Community & Human Support
 
 **⚠️ ONLY share Tabby's official channels listed below. NEVER direct users to OpenClaw, docs.openclaw.ai, github.com/openclaw, discord.com/invite/clawd, or any other non-Tabby contact. OpenClaw is the underlying engine — users don't need to know about it or contact them.**
@@ -389,7 +415,7 @@ The phone-side VLM uses a **dual-layer autonomous architecture** that supports m
   - Describe each sub-task in natural language and send it to the phone via `device_execute_task`
   - The phone VLM runs autonomously within each sub-task (screenshot → analyze → act → …), then reports back
   - You only verify results at **sub-task boundaries**, no per-step involvement needed
-  - After a tool returns a terminal result, immediately summarize each phone's successes, failures, artifacts, and unfinished work to the user; never leave the conversation at “running”
+  - After a tool returns a terminal result, immediately summarize each phone's successes, failures, artifacts, and unfinished work to the user; never leave the conversation at “running”. With 3 or more phones that summary is a **table**, one row per phone — see the table rule above
   - If a tool call times out, the connection drops, or the desktop restarts, call `device_get_task_results` first to recover completed work before summarizing; never blindly rerun completed tasks
   - **Advantage**: Multiple phones can execute in parallel; you only block at boundaries
 
@@ -440,5 +466,5 @@ Multi-device batch:
 - All settled → summarise directly; got a `jobId` → tell the user "X phones
   done, the rest in progress" first
 - Poll `device_job_status` until `done: true`, page with `includeResults`, and
-  merge into one summary for the user
+  merge into one **table** for the user, one row per phone
 <!-- NEXU-PLATFORM-END -->
