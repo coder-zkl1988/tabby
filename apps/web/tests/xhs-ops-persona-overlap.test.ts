@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   type PersonaOverlapInput,
   findPersonaOverlaps,
+  personaArchiveIssues,
+  personaDistributionSummary,
 } from "../src/lib/a2ui/custom-components/xhs-ops/xhs-ops-types";
 
 function row(
@@ -114,5 +116,51 @@ describe("findPersonaOverlaps (P1-3 人设差异检查)", () => {
       ),
     ];
     expect(findPersonaOverlaps(rows).size).toBe(0);
+  });
+
+  it("requires complete demographics plus 1-2 vertical and 2-3 general archive tags", () => {
+    expect(
+      personaArchiveIssues({
+        persona: {
+          age: "32岁",
+          gender: "女",
+          region: "杭州",
+          occupation: "产品经理",
+          lifeStatus: "独居养猫",
+        },
+        personaTags: {
+          vertical: ["羽毛球"],
+          general: ["咖啡", "城市漫游"],
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      personaArchiveIssues({
+        persona: {
+          age: "",
+          gender: "女",
+          region: "杭州",
+          occupation: "",
+          lifeStatus: "独居养猫",
+        },
+        personaTags: { vertical: [], general: ["咖啡"] },
+      }),
+    ).toEqual([
+      "缺少年龄、职业/身份",
+      "垂直兴趣档案标签需 1–2 个",
+      "泛兴趣档案标签需 2–3 个",
+    ]);
+  });
+
+  it("summarizes the actual age, gender, and region distribution", () => {
+    const summary = personaDistributionSummary([
+      row("a", "A", { age: "30岁", gender: "女", region: "杭州" }),
+      row("b", "B", { age: "30岁", gender: "男", region: "上海" }),
+    ]);
+    expect(summary).toContain("年龄：30岁 2");
+    expect(summary).toContain("男 1");
+    expect(summary).toContain("女 1");
+    expect(summary).toContain("上海 1");
+    expect(summary).toContain("杭州 1");
   });
 });

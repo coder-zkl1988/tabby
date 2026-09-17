@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import type { XhsOpsProject } from "./xhs-ops-types";
-import { HintLine, SecondaryButton, SectionTitle } from "./xhs-ops-ui";
+import {
+  EmptyState,
+  SecondaryButton,
+  SectionTitle,
+  Skeleton,
+} from "./xhs-ops-ui";
 
 /**
  * Agent 在新会话里通常拿不到 projectId（没有列项目的工具，只有本会话的
@@ -80,12 +85,12 @@ export function ProjectPicker({
   purpose: string;
 }) {
   const { choices, pick } = resolution;
-  if (choices === null) return <HintLine>正在加载项目列表…</HintLine>;
+  if (choices === null) return <Skeleton rows={2} label="正在加载项目列表" />;
   if (choices.length === 0) {
     return (
-      <HintLine>
+      <EmptyState>
         还没有养号项目；先用「养号项目」表单创建一个再{purpose}。
-      </HintLine>
+      </EmptyState>
     );
   }
   return (

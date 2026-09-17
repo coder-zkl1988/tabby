@@ -12,6 +12,7 @@ import { useCanvasDialog } from "./canvas-dialogs";
 import { CropDialog } from "./crop-dialog";
 import { MaskDialog } from "./mask-dialog";
 import { PreviewDialog } from "./preview-dialog";
+import { PromptEditorDialog } from "./prompt-editor-dialog";
 import { PromptLibraryDialog } from "./prompt-library-dialog";
 import { SplitDialog } from "./split-dialog";
 import { UpscaleDialog } from "./upscale-dialog";
@@ -29,5 +30,7 @@ export function CanvasDialogs() {
   if (dialog.kind === "assets") return <AssetPickerDialog />;
   if (dialog.kind === "prompt-library")
     return <PromptLibraryDialog nodeId={dialog.nodeId} />;
+  if (dialog.kind === "prompt-editor")
+    return <PromptEditorDialog nodeId={dialog.nodeId} />;
   return null;
 }

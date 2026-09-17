@@ -13,15 +13,19 @@ import { XhsOpsError, localDateString } from "./xhs-ops-run-service.js";
  * controller 自己每分钟看一眼：项目 `schedule.enabled` 且本地时间到了 `time`
  * 且今天还没触发 → 对项目下每个已绑设备的账号 plan-suggest → createRun →
  * startRun。同一手机上的多个 run（多账号 / 多段）由 XhsOpsRunService 的设备
- * 队列串行，这里只管"点火"。`lastTriggeredDate` 先写再派发，进程内再加一把
- * in-flight 锁，避免 tick 重叠或重启后当天重复触发。
+ * 队列串行，这里只管"点火"。每次派发先用持久化 run 对账，补启动未入队的
+ * planned run，并按项目/日期/账号/分段幂等创建缺失 run；全部处理完成后才记录
+ * `lastTriggeredDate`。进程内另加 in-flight 锁避免 tick 重叠。
  */
 
 export const XHS_OPS_SCHEDULER_INTERVAL_MS = 60_000;
 
 export type XhsOpsSchedulerRunService = {
   suggestPlans(projectId: string): Promise<XhsOpsPlanSuggestion[]>;
-  createRun(input: XhsOpsRunCreate): Promise<XhsOpsRun>;
+  createRun(
+    input: XhsOpsRunCreate,
+    options?: { onCreated?: () => void },
+  ): Promise<XhsOpsRun>;
   startRun(runId: string): Promise<XhsOpsRun>;
 };
 
@@ -58,6 +62,12 @@ export function isScheduleDue(project: XhsOpsProject, now: Date): boolean {
   const today = localDateString(now);
   if (schedule.lastTriggeredDate === today) return false;
   return localClock(now) >= schedule.time;
+}
+
+function dispatchKey(run: Pick<XhsOpsRun, "accountId" | "segment">): string {
+  return run.segment
+    ? `${run.accountId}:${run.segment.index}/${run.segment.count}`
+    : `${run.accountId}:single`;
 }
 
 export class XhsOpsScheduler {
@@ -135,10 +145,14 @@ export class XhsOpsScheduler {
     this.inFlight.add(projectId);
     const date = localDateString(new Date(this.now()));
     try {
-      // 先记"今天已触发"，再派发：派发中途崩溃也不会在下一个 tick 重复点火。
-      await this.store.updateProject(projectId, {
-        schedule: { ...project.schedule, lastTriggeredDate: date },
-      });
+      const existingRuns = (
+        await this.store.listRuns({ projectId, date })
+      ).filter((run) => (run.plan.kind ?? "browse") === "browse");
+      const runsByKey = new Map<string, XhsOpsRun>();
+      for (const run of existingRuns) {
+        const key = dispatchKey(run);
+        if (!runsByKey.has(key)) runsByKey.set(key, run);
+      }
       const plans = await this.runService.suggestPlans(projectId);
       const result: XhsOpsScheduleTriggerResult = {
         projectId,
@@ -150,45 +164,120 @@ export class XhsOpsScheduler {
         skipped: [],
         summary: "",
       };
+      let dispatchComplete = true;
+      const blockedAccounts = new Set<string>();
+
+      const recordDispatch = (run: XhsOpsRun): boolean => {
+        runsByKey.set(dispatchKey(run), run);
+        if (run.status === "running") {
+          result.started += 1;
+          return true;
+        }
+        if (run.status === "planned" && Boolean(run.queuedBehindRunId)) {
+          result.queued += 1;
+          return true;
+        }
+        return false;
+      };
+
+      const start = async (run: XhsOpsRun, label: string): Promise<void> => {
+        if (recordDispatch(run)) return;
+        try {
+          const started = await this.runService.startRun(run.id);
+          if (!recordDispatch(started)) {
+            dispatchComplete = false;
+            blockedAccounts.add(run.accountId);
+            result.skipped.push(`${label}：启动后仍未运行或排队`);
+          }
+        } catch (error: unknown) {
+          if (error instanceof XhsOpsError && error.status === 409) {
+            const latest = await this.store.getRun(run.id);
+            if (latest && recordDispatch(latest)) return;
+          }
+          // A conflict is retryable unless the persisted run proves that it
+          // is already running or explicitly queued behind another run.
+          dispatchComplete = false;
+          blockedAccounts.add(run.accountId);
+          result.skipped.push(
+            `${label}：${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      };
+
+      const runsToResume = [...runsByKey.values()]
+        .filter(
+          (run) => run.status === "planned" && run.queuedBehindRunId === null,
+        )
+        .sort(
+          (left, right) =>
+            left.accountId.localeCompare(right.accountId) ||
+            (left.segment?.index ?? 0) - (right.segment?.index ?? 0),
+        );
+      for (const run of runsToResume) {
+        if (blockedAccounts.has(run.accountId)) continue;
+        const label = `${run.accountLabel}${run.segment && run.segment.count > 1 ? ` 第${run.segment.index}/${run.segment.count}段` : ""}`;
+        await start(run, label);
+      }
+
       for (const plan of plans) {
         const label = `${plan.accountLabel}${plan.segment && plan.segment.count > 1 ? ` 第${plan.segment.index}/${plan.segment.count}段` : ""}`;
-        if (plan.keywords.length === 0) {
-          // run plan 要求至少一个关键词（schema min(1)），空兴趣池直接记跳过。
+        const key = dispatchKey(plan);
+        if (runsByKey.has(key)) continue;
+        if (blockedAccounts.has(plan.accountId)) {
+          result.skipped.push(`${label}：同账号前序分段启动失败，暂停派发`);
+          continue;
+        }
+        if (plan.keywords.length === 0 && plan.homeFeedCount === 0) {
           result.skipped.push(`${label}：兴趣池为空，没有可执行的关键词`);
           continue;
         }
         try {
-          const created = await this.runService.createRun({
-            projectId,
-            accountId: plan.accountId,
-            date,
-            segment: plan.segment ?? null,
-            plan: {
-              keywords: plan.keywords,
-              homeFeedCount: plan.homeFeedCount,
-              dwellSecMin: plan.dwellSecMin,
-              dwellSecMax: plan.dwellSecMax,
-              interaction: plan.interaction,
+          const created = await this.runService.createRun(
+            {
+              projectId,
+              accountId: plan.accountId,
+              reuseActive: true,
+              date,
+              segment: plan.segment ?? null,
+              plan: {
+                keywords: plan.keywords,
+                homeFeedCount: plan.homeFeedCount,
+                dwellSecMin: plan.dwellSecMin,
+                dwellSecMax: plan.dwellSecMax,
+                interaction: plan.interaction,
+              },
             },
-          });
-          result.created += 1;
-          const started = await this.runService.startRun(created.id);
-          if (started.status === "running") result.started += 1;
-          else result.queued += 1;
+            {
+              onCreated: () => {
+                result.created += 1;
+              },
+            },
+          );
+          runsByKey.set(key, created);
+          await start(created, label);
         } catch (error: unknown) {
+          dispatchComplete = false;
+          blockedAccounts.add(plan.accountId);
           result.skipped.push(
             `${label}：${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
       result.summary =
-        plans.length === 0
+        plans.length === 0 &&
+        result.started === 0 &&
+        result.queued === 0 &&
+        result.skipped.length === 0
           ? "没有可执行的计划（无已绑定手机的账号，或今日各段已执行）"
           : `${result.started} 个开始、${result.queued} 个排队${result.skipped.length > 0 ? `、${result.skipped.length} 个未派发` : ""}`;
+      const latestProject = await this.store.getProject(projectId);
       await this.store.updateProject(projectId, {
         schedule: {
-          ...project.schedule,
-          lastTriggeredDate: date,
+          ...(latestProject?.schedule ?? project.schedule),
+          lastTriggeredDate: dispatchComplete
+            ? date
+            : (latestProject?.schedule.lastTriggeredDate ??
+              project.schedule.lastTriggeredDate),
           lastResult:
             `${date} ${localClock(new Date(this.now()))} ${opts.reason === "manual" ? "手动" : "定时"}：${result.summary}${result.skipped.length > 0 ? `（${result.skipped.join("；")}）` : ""}`.slice(
               0,

@@ -1219,7 +1219,11 @@ function ChatBubble({
           </div>
         )}
         {isBot && hasA2UI && a2uiMessages && (
-          <div className="mt-1 w-full min-w-[20rem] max-w-full rounded-[20px] border border-border bg-surface-1 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+          // a2ui-inline-host: when the surface is a single self-framed card
+          // (CardShell, TeamRunCard, …) a2ui.css drops this padding so the
+          // card hugs the bubble instead of drawing a second border inside
+          // it — worth ~32px of usable width. Mixed surfaces keep it.
+          <div className="a2ui-inline-host mt-1 w-full min-w-[20rem] max-w-full rounded-[20px] border border-border bg-surface-1 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
             <A2UIRenderer messages={a2uiMessages} onAction={onA2UIAction} />
           </div>
         )}

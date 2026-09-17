@@ -84,7 +84,7 @@ export function AssetPickerDialog() {
               }}
               className={`rounded px-2.5 py-1 text-xs border ${
                 kind === tab.value
-                  ? "border-sky-500 text-sky-500 bg-sky-500/10"
+                  ? "border-[var(--color-brand-primary)] text-[var(--color-brand-ink)] bg-[var(--color-brand-subtle)]"
                   : "border-border text-text-secondary hover:bg-surface-2"
               }`}
             >
@@ -103,7 +103,7 @@ export function AssetPickerDialog() {
               setPage(1);
             }}
             placeholder="搜索素材…"
-            className="min-w-0 flex-1 rounded-lg border border-border bg-surface-1 px-3 py-1.5 text-sm outline-none focus:border-sky-500"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-surface-1 px-3 py-1.5 text-sm outline-none focus:border-[var(--color-brand-primary)]"
           />
           <label
             aria-label="上传素材"
@@ -151,7 +151,7 @@ export function AssetPickerDialog() {
               }}
               className={`rounded-full px-2 py-0.5 text-[11px] border ${
                 tagFilter === null
-                  ? "border-sky-500 text-sky-500 bg-sky-500/10"
+                  ? "border-[var(--color-brand-primary)] text-[var(--color-brand-ink)] bg-[var(--color-brand-subtle)]"
                   : "border-border text-text-secondary hover:bg-surface-2"
               }`}
             >
@@ -168,7 +168,7 @@ export function AssetPickerDialog() {
                 }}
                 className={`rounded-full px-2 py-0.5 text-[11px] border ${
                   tagFilter === tag
-                    ? "border-sky-500 text-sky-500 bg-sky-500/10"
+                    ? "border-[var(--color-brand-primary)] text-[var(--color-brand-ink)] bg-[var(--color-brand-subtle)]"
                     : "border-border text-text-secondary hover:bg-surface-2"
                 }`}
               >
@@ -283,7 +283,7 @@ function AssetCard({ asset }: { asset: CanvasAsset }) {
             insertAssetToCanvas(asset.id);
             toast.success("已插入画布");
           }}
-          className="flex flex-1 items-center justify-center gap-1 rounded bg-sky-500 px-2 py-1 text-xs font-medium text-white hover:bg-sky-600"
+          className="flex flex-1 items-center justify-center gap-1 rounded bg-[var(--color-accent)] px-2 py-1 text-xs font-medium text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)]"
         >
           <Plus size={12} />
           插入

@@ -7727,6 +7727,9 @@ export type GetApiV1DevicesTasksResponses = {
             result: {
                 taskId: string;
                 success: boolean;
+                status?: string;
+                errorCode?: string;
+                needsInteraction?: boolean;
                 message?: string;
                 totalSteps?: number;
                 steps?: Array<{
@@ -7787,6 +7790,9 @@ export type GetApiV1DevicesTasksByTaskIdResponses = {
         result: {
             taskId: string;
             success: boolean;
+            status?: string;
+            errorCode?: string;
+            needsInteraction?: boolean;
             message?: string;
             totalSteps?: number;
             steps?: Array<{
@@ -7986,7 +7992,9 @@ export type PostApiV1DevicesByDeviceIdTasksData = {
                 login?: 'required' | 'forbidden';
                 publish?: 'required' | 'forbidden';
                 payment?: 'forbidden';
+                comment?: 'forbidden' | 'allowed';
             };
+            commentAllowlist?: Array<string>;
         };
         timeout?: number;
     };
@@ -8034,6 +8042,9 @@ export type PostApiV1DevicesByDeviceIdTasksResponses = {
         result: {
             taskId: string;
             success: boolean;
+            status?: string;
+            errorCode?: string;
+            needsInteraction?: boolean;
             message?: string;
             totalSteps?: number;
             steps?: Array<{
@@ -8168,6 +8179,4286 @@ export type DeleteApiV1DevicesByDeviceIdTasksByTaskIdResponses = {
 };
 
 export type DeleteApiV1DevicesByDeviceIdTasksByTaskIdResponse = DeleteApiV1DevicesByDeviceIdTasksByTaskIdResponses[keyof DeleteApiV1DevicesByDeviceIdTasksByTaskIdResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileConfirmData = {
+    body?: {
+        profile: {
+            summary?: string;
+            base?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+            };
+            verticalInterests?: Array<string>;
+            generalInterests?: Array<string>;
+        };
+        expectedUpdatedAt: string;
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/profile/confirm';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileConfirmErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileConfirmError = PostApiV1XhsOpsProjectsByProjectIdProfileConfirmErrors[keyof PostApiV1XhsOpsProjectsByProjectIdProfileConfirmErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileConfirmResponses = {
+    /**
+     * Human-confirmed current target profile
+     */
+    200: {
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileConfirmResponse = PostApiV1XhsOpsProjectsByProjectIdProfileConfirmResponses[keyof PostApiV1XhsOpsProjectsByProjectIdProfileConfirmResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileGenerateData = {
+    body?: {
+        expectedUpdatedAt: string;
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/profile/generate';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileGenerateErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileGenerateError = PostApiV1XhsOpsProjectsByProjectIdProfileGenerateErrors[keyof PostApiV1XhsOpsProjectsByProjectIdProfileGenerateErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileGenerateResponses = {
+    /**
+     * Generated target profile awaiting human review
+     */
+    200: {
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdProfileGenerateResponse = PostApiV1XhsOpsProjectsByProjectIdProfileGenerateResponses[keyof PostApiV1XhsOpsProjectsByProjectIdProfileGenerateResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateData = {
+    body?: {
+        count?: number;
+        expectedUpdatedAt: string;
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/personas/generate';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateError = PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateErrors[keyof PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateResponses = {
+    /**
+     * N persona candidates and actual distribution for review
+     */
+    200: {
+        suggestions: Array<{
+            label: string;
+            positioning: string;
+            persona: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            interestPool: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+        }>;
+        distribution: string;
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateResponse = PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateResponses[keyof PostApiV1XhsOpsProjectsByProjectIdPersonasGenerateResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmData = {
+    body?: {
+        accounts: Array<{
+            accountId: string;
+            expectedUpdatedAt: string;
+        }>;
+        expectedUpdatedAt: string;
+        distributionReviewed: true;
+        reviewNote: string;
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/personas/confirm';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmError = PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmErrors[keyof PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponses = {
+    /**
+     * Human-reviewed personas matching the latest project
+     */
+    200: {
+        accounts: Array<{
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponse = PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponses[keyof PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateData = {
+    body?: {
+        parts: Array<'text' | 'avatar' | 'cover'>;
+        avatarPrompt?: string;
+        coverPrompt?: string;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/profile-draft/generate';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateError = PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateErrors[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponses = {
+    /**
+     * Account with regenerated profile draft parts
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponse = PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponses[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: {
+        expectedUpdatedAt?: string;
+    };
+    url: '/api/v1/xhs-ops/accounts/{accountId}/profile-draft/confirm';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmError = PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmErrors[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponses = {
+    /**
+     * Confirmed complete profile draft
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponse = PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponses[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/profile-draft/reconcile';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileError = PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileErrors[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponses = {
+    /**
+     * Reconciled a profile operation left running after a transport failure
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponse = PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponses[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdIdentityReadData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/identity/read';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdIdentityReadErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdIdentityReadError = PostApiV1XhsOpsAccountsByAccountIdIdentityReadErrors[keyof PostApiV1XhsOpsAccountsByAccountIdIdentityReadErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdIdentityReadResponses = {
+    /**
+     * Read-only screenshot of the bound phone's 编辑主页 so the operator can confirm which account is signed in
+     */
+    200: {
+        status: 'visible' | 'unavailable';
+        screenshotUrl: string | null;
+        accountId: string;
+        taskId: string;
+        reason: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdIdentityReadResponse = PostApiV1XhsOpsAccountsByAccountIdIdentityReadResponses[keyof PostApiV1XhsOpsAccountsByAccountIdIdentityReadResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/profile-draft/readback';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackError = PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackErrors[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponses = {
+    /**
+     * The phone's current profile diffed against the draft, so the operator can pick what to overwrite
+     */
+    200: {
+        status: 'read' | 'unavailable';
+        taskId: string;
+        reason: string;
+        screenshotUrl: string | null;
+        fields: Array<{
+            field: 'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region' | 'interestTags';
+            comparable: boolean;
+            phone: string;
+            draft: string;
+            differs: boolean;
+        }>;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponse = PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponses[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyData = {
+    body?: {
+        fields?: Array<'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region' | 'interestTags'>;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/profile-draft/apply';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyError = PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyErrors[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponses = {
+    /**
+     * Profile applied on the bound phone; draft carries applyStatus/applyResult
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponse = PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponses[keyof PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponses];
+
+export type GetApiV1XhsOpsProjectsByProjectIdCommentsData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: {
+        status?: 'pending' | 'approved' | 'rejected' | 'sent' | 'failed' | 'expired';
+        accountId?: string;
+    };
+    url: '/api/v1/xhs-ops/projects/{projectId}/comments';
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdCommentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdCommentsError = GetApiV1XhsOpsProjectsByProjectIdCommentsErrors[keyof GetApiV1XhsOpsProjectsByProjectIdCommentsErrors];
+
+export type GetApiV1XhsOpsProjectsByProjectIdCommentsResponses = {
+    /**
+     * Comment drafts (newest first) + today's per-account quota
+     */
+    200: {
+        drafts: Array<{
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId?: string | null;
+            sourceRunId: string;
+            sourceChunkIndex: number;
+            sourcePostIndex: number;
+            post: {
+                title: string;
+                author: string;
+                summary?: string;
+            };
+            candidates?: Array<string>;
+            text?: string | null;
+            status?: 'pending' | 'approved' | 'rejected' | 'sent' | 'failed' | 'expired';
+            reviewedAt?: string | null;
+            reviewNote?: string;
+            sentRunId?: string | null;
+            sentAt?: string | null;
+            sendResult?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+        quotas: Array<{
+            accountId: string;
+            accountLabel: string;
+            date: string;
+            enabled: boolean;
+            dailyCap: number;
+            todayBrowsed: number;
+            byBrowse: number;
+            cap: number;
+            sentToday: number;
+            approvedPending: number;
+            remaining: number;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdCommentsResponse = GetApiV1XhsOpsProjectsByProjectIdCommentsResponses[keyof GetApiV1XhsOpsProjectsByProjectIdCommentsResponses];
+
+export type PostApiV1XhsOpsRunsByRunIdCommentsGenerateData = {
+    body?: {
+        posts?: Array<{
+            chunkIndex: number;
+            postIndex: number;
+        }>;
+    };
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/runs/{runId}/comments/generate';
+};
+
+export type PostApiV1XhsOpsRunsByRunIdCommentsGenerateErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsRunsByRunIdCommentsGenerateError = PostApiV1XhsOpsRunsByRunIdCommentsGenerateErrors[keyof PostApiV1XhsOpsRunsByRunIdCommentsGenerateErrors];
+
+export type PostApiV1XhsOpsRunsByRunIdCommentsGenerateResponses = {
+    /**
+     * Drafts created for the run's posts (commentWorthy or explicit)
+     */
+    200: {
+        drafts: Array<{
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId?: string | null;
+            sourceRunId: string;
+            sourceChunkIndex: number;
+            sourcePostIndex: number;
+            post: {
+                title: string;
+                author: string;
+                summary?: string;
+            };
+            candidates?: Array<string>;
+            text?: string | null;
+            status?: 'pending' | 'approved' | 'rejected' | 'sent' | 'failed' | 'expired';
+            reviewedAt?: string | null;
+            reviewNote?: string;
+            sentRunId?: string | null;
+            sentAt?: string | null;
+            sendResult?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+        skipped: Array<string>;
+    };
+};
+
+export type PostApiV1XhsOpsRunsByRunIdCommentsGenerateResponse = PostApiV1XhsOpsRunsByRunIdCommentsGenerateResponses[keyof PostApiV1XhsOpsRunsByRunIdCommentsGenerateResponses];
+
+export type PostApiV1XhsOpsCommentsByCommentIdReviewData = {
+    body?: {
+        decision: 'approved' | 'rejected';
+        text?: string;
+        note?: string;
+    };
+    path: {
+        commentId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/comments/{commentId}/review';
+};
+
+export type PostApiV1XhsOpsCommentsByCommentIdReviewErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsCommentsByCommentIdReviewError = PostApiV1XhsOpsCommentsByCommentIdReviewErrors[keyof PostApiV1XhsOpsCommentsByCommentIdReviewErrors];
+
+export type PostApiV1XhsOpsCommentsByCommentIdReviewResponses = {
+    /**
+     * Reviewed draft
+     */
+    200: {
+        draft: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId?: string | null;
+            sourceRunId: string;
+            sourceChunkIndex: number;
+            sourcePostIndex: number;
+            post: {
+                title: string;
+                author: string;
+                summary?: string;
+            };
+            candidates?: Array<string>;
+            text?: string | null;
+            status?: 'pending' | 'approved' | 'rejected' | 'sent' | 'failed' | 'expired';
+            reviewedAt?: string | null;
+            reviewNote?: string;
+            sentRunId?: string | null;
+            sentAt?: string | null;
+            sendResult?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsCommentsByCommentIdReviewResponse = PostApiV1XhsOpsCommentsByCommentIdReviewResponses[keyof PostApiV1XhsOpsCommentsByCommentIdReviewResponses];
+
+export type GetApiV1XhsOpsAccountsByAccountIdCommentQuotaData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/comment-quota';
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdCommentQuotaErrors = {
+    /**
+     * Account not found
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdCommentQuotaError = GetApiV1XhsOpsAccountsByAccountIdCommentQuotaErrors[keyof GetApiV1XhsOpsAccountsByAccountIdCommentQuotaErrors];
+
+export type GetApiV1XhsOpsAccountsByAccountIdCommentQuotaResponses = {
+    /**
+     * Today's comment quota for the account
+     */
+    200: {
+        quota: {
+            accountId: string;
+            accountLabel: string;
+            date: string;
+            enabled: boolean;
+            dailyCap: number;
+            todayBrowsed: number;
+            byBrowse: number;
+            cap: number;
+            sentToday: number;
+            approvedPending: number;
+            remaining: number;
+        };
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdCommentQuotaResponse = GetApiV1XhsOpsAccountsByAccountIdCommentQuotaResponses[keyof GetApiV1XhsOpsAccountsByAccountIdCommentQuotaResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsData = {
+    body?: {
+        accountId: string;
+        draftIds?: Array<string>;
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/comment-runs';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsError = PostApiV1XhsOpsProjectsByProjectIdCommentRunsErrors[keyof PostApiV1XhsOpsProjectsByProjectIdCommentRunsErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsResponses = {
+    /**
+     * Comment run created and started (or queued behind the phone's current run)
+     */
+    200: {
+        run: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            accountLabel: string;
+            date: string;
+            status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            plan: {
+                kind?: 'browse' | 'comment';
+                keywords: Array<{
+                    keyword: string;
+                    count: number;
+                }>;
+                homeFeedCount: number;
+                dwellSecMin: number;
+                dwellSecMax: number;
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                comments?: Array<{
+                    draftId: string;
+                    postTitle: string;
+                    postAuthor: string;
+                    text: string;
+                }>;
+            };
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+            queuedBehindRunId?: string | null;
+            preparation?: {
+                status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reason: string | null;
+                taskId: string | null;
+                startedAt: string;
+                completedAt: string | null;
+            };
+            chunks?: Array<{
+                index: number;
+                mode: 'search' | 'home' | 'comment';
+                keyword: string | null;
+                plannedCount: number;
+                status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+                taskId?: string | null;
+                startedAt?: string | null;
+                completedAt?: string | null;
+                browsed?: number;
+                skipped?: number;
+                refreshCount?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalies?: Array<{
+                    type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
+                    detail?: string;
+                }>;
+                observation?: string | null;
+                posts?: Array<{
+                    title: string;
+                    author: string;
+                    action: 'like' | 'collect' | 'follow' | 'none' | 'skip';
+                    commentsRead?: number;
+                    dwellSeconds?: number;
+                    commentsComplete?: boolean;
+                    commentWorthy?: boolean;
+                    summary?: string;
+                }>;
+                commentDraftId?: string | null;
+                message?: string | null;
+                totalSteps?: number | null;
+                finalScreenshot?: string | null;
+                error?: string | null;
+            }>;
+            summary?: {
+                plannedTotal?: number;
+                browsedTotal?: number;
+                searchBrowsed?: number;
+                homeBrowsed?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalyCount?: number;
+                durationMs?: number | null;
+            };
+            notes?: string;
+            error?: string | null;
+            createdAt: string;
+            startedAt?: string | null;
+            completedAt?: string | null;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsResponse = PostApiV1XhsOpsProjectsByProjectIdCommentRunsResponses[keyof PostApiV1XhsOpsProjectsByProjectIdCommentRunsResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/schedule/run-now';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowError = PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowErrors[keyof PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowResponses = {
+    /**
+     * Today's plans dispatched (or queued) for the project
+     */
+    200: {
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        result: {
+            date: string;
+            planned: number;
+            created: number;
+            started: number;
+            queued: number;
+            skipped: Array<string>;
+            summary: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowResponse = PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowResponses[keyof PostApiV1XhsOpsProjectsByProjectIdScheduleRunNowResponses];
+
+export type GetApiV1XhsOpsProjectsByProjectIdPlanSuggestData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/plan-suggest';
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdPlanSuggestErrors = {
+    /**
+     * Project not found
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdPlanSuggestError = GetApiV1XhsOpsProjectsByProjectIdPlanSuggestErrors[keyof GetApiV1XhsOpsProjectsByProjectIdPlanSuggestErrors];
+
+export type GetApiV1XhsOpsProjectsByProjectIdPlanSuggestResponses = {
+    /**
+     * Deterministic per-account plan suggestions for today
+     */
+    200: {
+        plans: Array<{
+            accountId: string;
+            accountLabel: string;
+            keywords: Array<{
+                keyword: string;
+                count: number;
+            }>;
+            homeFeedCount: number;
+            dwellSecMin: number;
+            dwellSecMax: number;
+            interaction: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            rationale: Array<string>;
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdPlanSuggestResponse = GetApiV1XhsOpsProjectsByProjectIdPlanSuggestResponses[keyof GetApiV1XhsOpsProjectsByProjectIdPlanSuggestResponses];
+
+export type GetApiV1XhsOpsDeviceBindingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/xhs-ops/device-bindings';
+};
+
+export type GetApiV1XhsOpsDeviceBindingsResponses = {
+    /**
+     * Global device bindings with transfer availability
+     */
+    200: {
+        bindings: Array<{
+            deviceId: string;
+            accountId: string;
+            accountLabel: string;
+            projectId: string;
+            projectName: string;
+            canTransfer: boolean;
+            blockingReason: string | null;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsDeviceBindingsResponse = GetApiV1XhsOpsDeviceBindingsResponses[keyof GetApiV1XhsOpsDeviceBindingsResponses];
+
+export type GetApiV1XhsOpsProjectsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/xhs-ops/projects';
+};
+
+export type GetApiV1XhsOpsProjectsResponses = {
+    /**
+     * Project list
+     */
+    200: {
+        projects: Array<{
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsResponse = GetApiV1XhsOpsProjectsResponses[keyof GetApiV1XhsOpsProjectsResponses];
+
+export type PostApiV1XhsOpsProjectsData = {
+    body?: {
+        name: string;
+        business?: {
+            industry?: string;
+            product?: string;
+            regions?: Array<string>;
+            sellingPoints?: Array<string>;
+            priceBand?: string;
+            scene?: string;
+        };
+        audience?: {
+            ageRange?: string;
+            genderRatio?: string;
+            regions?: Array<string>;
+            occupations?: Array<string>;
+            spendingPower?: string;
+            knownInterests?: Array<string>;
+            painPoints?: Array<string>;
+        };
+        opsNotes?: {
+            forbiddenTopics?: Array<string>;
+            boostKeywords?: Array<string>;
+            avoidContentTypes?: Array<string>;
+        };
+        personaCount?: number;
+        schedule?: {
+            enabled?: boolean;
+            time?: string;
+            lastTriggeredDate?: string | null;
+            lastResult?: string | null;
+        };
+        profile?: {
+            summary?: string;
+            base?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+            };
+            verticalInterests?: Array<string>;
+            generalInterests?: Array<string>;
+            confirmedAt?: string | null;
+            updatedAt?: string;
+        } | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/xhs-ops/projects';
+};
+
+export type PostApiV1XhsOpsProjectsResponses = {
+    /**
+     * Created project
+     */
+    200: {
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsResponse = PostApiV1XhsOpsProjectsResponses[keyof PostApiV1XhsOpsProjectsResponses];
+
+export type DeleteApiV1XhsOpsProjectsByProjectIdData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}';
+};
+
+export type DeleteApiV1XhsOpsProjectsByProjectIdErrors = {
+    /**
+     * Invalid deletion
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Project not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Project has unfinished tasks or today's execution records
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Project deletion failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type DeleteApiV1XhsOpsProjectsByProjectIdError = DeleteApiV1XhsOpsProjectsByProjectIdErrors[keyof DeleteApiV1XhsOpsProjectsByProjectIdErrors];
+
+export type DeleteApiV1XhsOpsProjectsByProjectIdResponses = {
+    /**
+     * Deleted project (accounts and runs cascade)
+     */
+    200: {
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type DeleteApiV1XhsOpsProjectsByProjectIdResponse = DeleteApiV1XhsOpsProjectsByProjectIdResponses[keyof DeleteApiV1XhsOpsProjectsByProjectIdResponses];
+
+export type GetApiV1XhsOpsProjectsByProjectIdData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}';
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdErrors = {
+    /**
+     * Project not found
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdError = GetApiV1XhsOpsProjectsByProjectIdErrors[keyof GetApiV1XhsOpsProjectsByProjectIdErrors];
+
+export type GetApiV1XhsOpsProjectsByProjectIdResponses = {
+    /**
+     * Project
+     */
+    200: {
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdResponse = GetApiV1XhsOpsProjectsByProjectIdResponses[keyof GetApiV1XhsOpsProjectsByProjectIdResponses];
+
+export type PatchApiV1XhsOpsProjectsByProjectIdData = {
+    body?: {
+        name?: string;
+        business?: {
+            industry?: string;
+            product?: string;
+            regions?: Array<string>;
+            sellingPoints?: Array<string>;
+            priceBand?: string;
+            scene?: string;
+        };
+        audience?: {
+            ageRange?: string;
+            genderRatio?: string;
+            regions?: Array<string>;
+            occupations?: Array<string>;
+            spendingPower?: string;
+            knownInterests?: Array<string>;
+            painPoints?: Array<string>;
+        };
+        opsNotes?: {
+            forbiddenTopics?: Array<string>;
+            boostKeywords?: Array<string>;
+            avoidContentTypes?: Array<string>;
+        };
+        personaCount?: number;
+        schedule?: {
+            enabled?: boolean;
+            time?: string;
+            lastTriggeredDate?: string | null;
+            lastResult?: string | null;
+        };
+        profile?: {
+            summary?: string;
+            base?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+            };
+            verticalInterests?: Array<string>;
+            generalInterests?: Array<string>;
+            confirmedAt?: string | null;
+            updatedAt?: string;
+        } | null;
+        expectedUpdatedAt?: string;
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}';
+};
+
+export type PatchApiV1XhsOpsProjectsByProjectIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PatchApiV1XhsOpsProjectsByProjectIdError = PatchApiV1XhsOpsProjectsByProjectIdErrors[keyof PatchApiV1XhsOpsProjectsByProjectIdErrors];
+
+export type PatchApiV1XhsOpsProjectsByProjectIdResponses = {
+    /**
+     * Updated project
+     */
+    200: {
+        project: {
+            id: string;
+            name: string;
+            business?: {
+                industry?: string;
+                product?: string;
+                regions?: Array<string>;
+                sellingPoints?: Array<string>;
+                priceBand?: string;
+                scene?: string;
+            };
+            audience?: {
+                ageRange?: string;
+                genderRatio?: string;
+                regions?: Array<string>;
+                occupations?: Array<string>;
+                spendingPower?: string;
+                knownInterests?: Array<string>;
+                painPoints?: Array<string>;
+            };
+            opsNotes?: {
+                forbiddenTopics?: Array<string>;
+                boostKeywords?: Array<string>;
+                avoidContentTypes?: Array<string>;
+            };
+            profile?: {
+                summary?: string;
+                base?: {
+                    ageRange?: string;
+                    genderRatio?: string;
+                    regions?: Array<string>;
+                };
+                verticalInterests?: Array<string>;
+                generalInterests?: Array<string>;
+                confirmedAt?: string | null;
+                updatedAt: string;
+            } | null;
+            personaCount?: number;
+            schedule?: {
+                enabled?: boolean;
+                time?: string;
+                lastTriggeredDate?: string | null;
+                lastResult?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PatchApiV1XhsOpsProjectsByProjectIdResponse = PatchApiV1XhsOpsProjectsByProjectIdResponses[keyof PatchApiV1XhsOpsProjectsByProjectIdResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceData = {
+    body?: {
+        fromAccountId: string;
+        toAccountId?: string;
+        account: {
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            platformAccountId?: string;
+            deviceId: string;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+        };
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/accounts/transfer-device';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceError = PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceErrors[keyof PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponses = {
+    /**
+     * Transferred device binding
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponse = PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponses[keyof PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponses];
+
+export type GetApiV1XhsOpsProjectsByProjectIdAccountsData = {
+    body?: never;
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/accounts';
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdAccountsErrors = {
+    /**
+     * Project not found
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdAccountsError = GetApiV1XhsOpsProjectsByProjectIdAccountsErrors[keyof GetApiV1XhsOpsProjectsByProjectIdAccountsErrors];
+
+export type GetApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
+    /**
+     * Accounts of the project
+     */
+    200: {
+        accounts: Array<{
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsProjectsByProjectIdAccountsResponse = GetApiV1XhsOpsProjectsByProjectIdAccountsResponses[keyof GetApiV1XhsOpsProjectsByProjectIdAccountsResponses];
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsData = {
+    body?: {
+        projectId?: string;
+        label: string;
+        positioning?: string;
+        persona?: {
+            age?: string;
+            gender?: string;
+            region?: string;
+            occupation?: string;
+            lifeStatus?: string;
+        };
+        personaTags?: {
+            vertical?: Array<string>;
+            general?: Array<string>;
+        };
+        platformAccountId?: string;
+        profileDraft?: {
+            nickname?: string;
+            bio?: string;
+            gender?: '' | '男' | '女' | '不展示';
+            birthday?: string;
+            region?: string;
+            interestTags?: Array<string>;
+            avatarCandidates?: Array<string>;
+            coverCandidates?: Array<string>;
+            avatarPath?: string | null;
+            coverPath?: string | null;
+            generatedAt?: string | null;
+        };
+        deviceId?: string | null;
+        deviceName?: string | null;
+        interestPool?: {
+            core?: Array<string>;
+            extended?: Array<string>;
+            general?: Array<string>;
+        };
+        interaction?: {
+            like?: {
+                enabled: boolean;
+                dailyCap: number;
+                ratioPercent: number;
+                targetTypes?: Array<string>;
+            };
+            collect?: {
+                enabled: boolean;
+                dailyCap: number;
+                ratioPercent: number;
+                targetTypes?: Array<string>;
+            };
+            follow?: {
+                enabled: boolean;
+                dailyCap: number;
+                ratioPercent: number;
+                targetTypes?: Array<string>;
+            };
+            comment?: {
+                enabled?: boolean;
+                dailyCap?: number;
+            };
+        };
+        browseDefaults?: {
+            dwellSecMin?: number;
+            dwellSecMax?: number;
+            searchRatioPercent?: number;
+            postsPerKeyword?: number;
+            homeFeedCount?: number;
+            dailyTargetPosts?: number;
+            dailySegments?: number;
+        };
+    };
+    path: {
+        projectId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/projects/{projectId}/accounts';
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsErrors = {
+    /**
+     * Body projectId does not match the path
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Project not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Device already bound
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Account creation failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsError = PostApiV1XhsOpsProjectsByProjectIdAccountsErrors[keyof PostApiV1XhsOpsProjectsByProjectIdAccountsErrors];
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
+    /**
+     * Created account
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsProjectsByProjectIdAccountsResponse = PostApiV1XhsOpsProjectsByProjectIdAccountsResponses[keyof PostApiV1XhsOpsProjectsByProjectIdAccountsResponses];
+
+export type DeleteApiV1XhsOpsAccountsByAccountIdData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}';
+};
+
+export type DeleteApiV1XhsOpsAccountsByAccountIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type DeleteApiV1XhsOpsAccountsByAccountIdError = DeleteApiV1XhsOpsAccountsByAccountIdErrors[keyof DeleteApiV1XhsOpsAccountsByAccountIdErrors];
+
+export type DeleteApiV1XhsOpsAccountsByAccountIdResponses = {
+    /**
+     * Deleted account
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type DeleteApiV1XhsOpsAccountsByAccountIdResponse = DeleteApiV1XhsOpsAccountsByAccountIdResponses[keyof DeleteApiV1XhsOpsAccountsByAccountIdResponses];
+
+export type GetApiV1XhsOpsAccountsByAccountIdData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}';
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdErrors = {
+    /**
+     * Account not found
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdError = GetApiV1XhsOpsAccountsByAccountIdErrors[keyof GetApiV1XhsOpsAccountsByAccountIdErrors];
+
+export type GetApiV1XhsOpsAccountsByAccountIdResponses = {
+    /**
+     * Account
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdResponse = GetApiV1XhsOpsAccountsByAccountIdResponses[keyof GetApiV1XhsOpsAccountsByAccountIdResponses];
+
+export type PatchApiV1XhsOpsAccountsByAccountIdData = {
+    body?: {
+        label?: string;
+        positioning?: string;
+        persona?: {
+            age?: string;
+            gender?: string;
+            region?: string;
+            occupation?: string;
+            lifeStatus?: string;
+        };
+        personaTags?: {
+            vertical?: Array<string>;
+            general?: Array<string>;
+        };
+        platformAccountId?: string;
+        profileDraft?: {
+            nickname?: string;
+            bio?: string;
+            gender?: '' | '男' | '女' | '不展示';
+            birthday?: string;
+            region?: string;
+            interestTags?: Array<string>;
+            avatarCandidates?: Array<string>;
+            coverCandidates?: Array<string>;
+            avatarPath?: string | null;
+            coverPath?: string | null;
+            generatedAt?: string | null;
+        };
+        deviceId?: string | null;
+        deviceName?: string | null;
+        interestPool?: {
+            core?: Array<string>;
+            extended?: Array<string>;
+            general?: Array<string>;
+        };
+        interaction?: {
+            like?: {
+                enabled: boolean;
+                dailyCap: number;
+                ratioPercent: number;
+                targetTypes?: Array<string>;
+            };
+            collect?: {
+                enabled: boolean;
+                dailyCap: number;
+                ratioPercent: number;
+                targetTypes?: Array<string>;
+            };
+            follow?: {
+                enabled: boolean;
+                dailyCap: number;
+                ratioPercent: number;
+                targetTypes?: Array<string>;
+            };
+            comment?: {
+                enabled?: boolean;
+                dailyCap?: number;
+            };
+        };
+        browseDefaults?: {
+            dwellSecMin?: number;
+            dwellSecMax?: number;
+            searchRatioPercent?: number;
+            postsPerKeyword?: number;
+            homeFeedCount?: number;
+            dailyTargetPosts?: number;
+            dailySegments?: number;
+        };
+        expectedUpdatedAt?: string;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}';
+};
+
+export type PatchApiV1XhsOpsAccountsByAccountIdErrors = {
+    /**
+     * Invalid account update
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Account not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Device binding conflict or unfinished runs
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Account update failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PatchApiV1XhsOpsAccountsByAccountIdError = PatchApiV1XhsOpsAccountsByAccountIdErrors[keyof PatchApiV1XhsOpsAccountsByAccountIdErrors];
+
+export type PatchApiV1XhsOpsAccountsByAccountIdResponses = {
+    /**
+     * Updated account
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PatchApiV1XhsOpsAccountsByAccountIdResponse = PatchApiV1XhsOpsAccountsByAccountIdResponses[keyof PatchApiV1XhsOpsAccountsByAccountIdResponses];
+
+export type GetApiV1XhsOpsRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectId?: string;
+        accountId?: string;
+        date?: string;
+    };
+    url: '/api/v1/xhs-ops/runs';
+};
+
+export type GetApiV1XhsOpsRunsResponses = {
+    /**
+     * Runs, newest first
+     */
+    200: {
+        runs: Array<{
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            accountLabel: string;
+            date: string;
+            status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            plan: {
+                kind?: 'browse' | 'comment';
+                keywords: Array<{
+                    keyword: string;
+                    count: number;
+                }>;
+                homeFeedCount: number;
+                dwellSecMin: number;
+                dwellSecMax: number;
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                comments?: Array<{
+                    draftId: string;
+                    postTitle: string;
+                    postAuthor: string;
+                    text: string;
+                }>;
+            };
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+            queuedBehindRunId?: string | null;
+            preparation?: {
+                status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reason: string | null;
+                taskId: string | null;
+                startedAt: string;
+                completedAt: string | null;
+            };
+            chunks?: Array<{
+                index: number;
+                mode: 'search' | 'home' | 'comment';
+                keyword: string | null;
+                plannedCount: number;
+                status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+                taskId?: string | null;
+                startedAt?: string | null;
+                completedAt?: string | null;
+                browsed?: number;
+                skipped?: number;
+                refreshCount?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalies?: Array<{
+                    type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
+                    detail?: string;
+                }>;
+                observation?: string | null;
+                posts?: Array<{
+                    title: string;
+                    author: string;
+                    action: 'like' | 'collect' | 'follow' | 'none' | 'skip';
+                    commentsRead?: number;
+                    dwellSeconds?: number;
+                    commentsComplete?: boolean;
+                    commentWorthy?: boolean;
+                    summary?: string;
+                }>;
+                commentDraftId?: string | null;
+                message?: string | null;
+                totalSteps?: number | null;
+                finalScreenshot?: string | null;
+                error?: string | null;
+            }>;
+            summary?: {
+                plannedTotal?: number;
+                browsedTotal?: number;
+                searchBrowsed?: number;
+                homeBrowsed?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalyCount?: number;
+                durationMs?: number | null;
+            };
+            notes?: string;
+            error?: string | null;
+            createdAt: string;
+            startedAt?: string | null;
+            completedAt?: string | null;
+            updatedAt: string;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsRunsResponse = GetApiV1XhsOpsRunsResponses[keyof GetApiV1XhsOpsRunsResponses];
+
+export type PostApiV1XhsOpsRunsData = {
+    body?: {
+        projectId: string;
+        accountId: string;
+        reuseActive?: boolean;
+        date?: string;
+        plan: {
+            kind?: 'browse' | 'comment';
+            keywords: Array<{
+                keyword: string;
+                count: number;
+            }>;
+            homeFeedCount: number;
+            dwellSecMin: number;
+            dwellSecMax: number;
+            interaction: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            comments?: Array<{
+                draftId: string;
+                postTitle: string;
+                postAuthor: string;
+                text: string;
+            }>;
+        };
+        segment?: {
+            index: number;
+            count: number;
+        } | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/xhs-ops/runs';
+};
+
+export type PostApiV1XhsOpsRunsErrors = {
+    /**
+     * Account has no device bound
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Project or account not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Internal error
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsRunsError = PostApiV1XhsOpsRunsErrors[keyof PostApiV1XhsOpsRunsErrors];
+
+export type PostApiV1XhsOpsRunsResponses = {
+    /**
+     * Planned run (status planned)
+     */
+    200: {
+        run: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            accountLabel: string;
+            date: string;
+            status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            plan: {
+                kind?: 'browse' | 'comment';
+                keywords: Array<{
+                    keyword: string;
+                    count: number;
+                }>;
+                homeFeedCount: number;
+                dwellSecMin: number;
+                dwellSecMax: number;
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                comments?: Array<{
+                    draftId: string;
+                    postTitle: string;
+                    postAuthor: string;
+                    text: string;
+                }>;
+            };
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+            queuedBehindRunId?: string | null;
+            preparation?: {
+                status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reason: string | null;
+                taskId: string | null;
+                startedAt: string;
+                completedAt: string | null;
+            };
+            chunks?: Array<{
+                index: number;
+                mode: 'search' | 'home' | 'comment';
+                keyword: string | null;
+                plannedCount: number;
+                status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+                taskId?: string | null;
+                startedAt?: string | null;
+                completedAt?: string | null;
+                browsed?: number;
+                skipped?: number;
+                refreshCount?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalies?: Array<{
+                    type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
+                    detail?: string;
+                }>;
+                observation?: string | null;
+                posts?: Array<{
+                    title: string;
+                    author: string;
+                    action: 'like' | 'collect' | 'follow' | 'none' | 'skip';
+                    commentsRead?: number;
+                    dwellSeconds?: number;
+                    commentsComplete?: boolean;
+                    commentWorthy?: boolean;
+                    summary?: string;
+                }>;
+                commentDraftId?: string | null;
+                message?: string | null;
+                totalSteps?: number | null;
+                finalScreenshot?: string | null;
+                error?: string | null;
+            }>;
+            summary?: {
+                plannedTotal?: number;
+                browsedTotal?: number;
+                searchBrowsed?: number;
+                homeBrowsed?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalyCount?: number;
+                durationMs?: number | null;
+            };
+            notes?: string;
+            error?: string | null;
+            createdAt: string;
+            startedAt?: string | null;
+            completedAt?: string | null;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsRunsResponse = PostApiV1XhsOpsRunsResponses[keyof PostApiV1XhsOpsRunsResponses];
+
+export type GetApiV1XhsOpsRunsByRunIdData = {
+    body?: never;
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/runs/{runId}';
+};
+
+export type GetApiV1XhsOpsRunsByRunIdErrors = {
+    /**
+     * Run not found
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsRunsByRunIdError = GetApiV1XhsOpsRunsByRunIdErrors[keyof GetApiV1XhsOpsRunsByRunIdErrors];
+
+export type GetApiV1XhsOpsRunsByRunIdResponses = {
+    /**
+     * Run
+     */
+    200: {
+        run: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            accountLabel: string;
+            date: string;
+            status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            plan: {
+                kind?: 'browse' | 'comment';
+                keywords: Array<{
+                    keyword: string;
+                    count: number;
+                }>;
+                homeFeedCount: number;
+                dwellSecMin: number;
+                dwellSecMax: number;
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                comments?: Array<{
+                    draftId: string;
+                    postTitle: string;
+                    postAuthor: string;
+                    text: string;
+                }>;
+            };
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+            queuedBehindRunId?: string | null;
+            preparation?: {
+                status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reason: string | null;
+                taskId: string | null;
+                startedAt: string;
+                completedAt: string | null;
+            };
+            chunks?: Array<{
+                index: number;
+                mode: 'search' | 'home' | 'comment';
+                keyword: string | null;
+                plannedCount: number;
+                status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+                taskId?: string | null;
+                startedAt?: string | null;
+                completedAt?: string | null;
+                browsed?: number;
+                skipped?: number;
+                refreshCount?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalies?: Array<{
+                    type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
+                    detail?: string;
+                }>;
+                observation?: string | null;
+                posts?: Array<{
+                    title: string;
+                    author: string;
+                    action: 'like' | 'collect' | 'follow' | 'none' | 'skip';
+                    commentsRead?: number;
+                    dwellSeconds?: number;
+                    commentsComplete?: boolean;
+                    commentWorthy?: boolean;
+                    summary?: string;
+                }>;
+                commentDraftId?: string | null;
+                message?: string | null;
+                totalSteps?: number | null;
+                finalScreenshot?: string | null;
+                error?: string | null;
+            }>;
+            summary?: {
+                plannedTotal?: number;
+                browsedTotal?: number;
+                searchBrowsed?: number;
+                homeBrowsed?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalyCount?: number;
+                durationMs?: number | null;
+            };
+            notes?: string;
+            error?: string | null;
+            createdAt: string;
+            startedAt?: string | null;
+            completedAt?: string | null;
+            updatedAt: string;
+        };
+    };
+};
+
+export type GetApiV1XhsOpsRunsByRunIdResponse = GetApiV1XhsOpsRunsByRunIdResponses[keyof GetApiV1XhsOpsRunsByRunIdResponses];
+
+export type PatchApiV1XhsOpsRunsByRunIdData = {
+    body?: {
+        notes?: string;
+    };
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/runs/{runId}';
+};
+
+export type PatchApiV1XhsOpsRunsByRunIdErrors = {
+    /**
+     * Run not found
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type PatchApiV1XhsOpsRunsByRunIdError = PatchApiV1XhsOpsRunsByRunIdErrors[keyof PatchApiV1XhsOpsRunsByRunIdErrors];
+
+export type PatchApiV1XhsOpsRunsByRunIdResponses = {
+    /**
+     * Run with updated notes
+     */
+    200: {
+        run: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            accountLabel: string;
+            date: string;
+            status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            plan: {
+                kind?: 'browse' | 'comment';
+                keywords: Array<{
+                    keyword: string;
+                    count: number;
+                }>;
+                homeFeedCount: number;
+                dwellSecMin: number;
+                dwellSecMax: number;
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                comments?: Array<{
+                    draftId: string;
+                    postTitle: string;
+                    postAuthor: string;
+                    text: string;
+                }>;
+            };
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+            queuedBehindRunId?: string | null;
+            preparation?: {
+                status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reason: string | null;
+                taskId: string | null;
+                startedAt: string;
+                completedAt: string | null;
+            };
+            chunks?: Array<{
+                index: number;
+                mode: 'search' | 'home' | 'comment';
+                keyword: string | null;
+                plannedCount: number;
+                status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+                taskId?: string | null;
+                startedAt?: string | null;
+                completedAt?: string | null;
+                browsed?: number;
+                skipped?: number;
+                refreshCount?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalies?: Array<{
+                    type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
+                    detail?: string;
+                }>;
+                observation?: string | null;
+                posts?: Array<{
+                    title: string;
+                    author: string;
+                    action: 'like' | 'collect' | 'follow' | 'none' | 'skip';
+                    commentsRead?: number;
+                    dwellSeconds?: number;
+                    commentsComplete?: boolean;
+                    commentWorthy?: boolean;
+                    summary?: string;
+                }>;
+                commentDraftId?: string | null;
+                message?: string | null;
+                totalSteps?: number | null;
+                finalScreenshot?: string | null;
+                error?: string | null;
+            }>;
+            summary?: {
+                plannedTotal?: number;
+                browsedTotal?: number;
+                searchBrowsed?: number;
+                homeBrowsed?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalyCount?: number;
+                durationMs?: number | null;
+            };
+            notes?: string;
+            error?: string | null;
+            createdAt: string;
+            startedAt?: string | null;
+            completedAt?: string | null;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PatchApiV1XhsOpsRunsByRunIdResponse = PatchApiV1XhsOpsRunsByRunIdResponses[keyof PatchApiV1XhsOpsRunsByRunIdResponses];
+
+export type PostApiV1XhsOpsRunsByRunIdStartData = {
+    body?: never;
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/runs/{runId}/start';
+};
+
+export type PostApiV1XhsOpsRunsByRunIdStartErrors = {
+    /**
+     * Bad request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Run not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Run is already running or finished
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Internal error
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsRunsByRunIdStartError = PostApiV1XhsOpsRunsByRunIdStartErrors[keyof PostApiV1XhsOpsRunsByRunIdStartErrors];
+
+export type PostApiV1XhsOpsRunsByRunIdStartResponses = {
+    /**
+     * Run started (status running); executes asynchronously
+     */
+    200: {
+        run: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            accountLabel: string;
+            date: string;
+            status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            plan: {
+                kind?: 'browse' | 'comment';
+                keywords: Array<{
+                    keyword: string;
+                    count: number;
+                }>;
+                homeFeedCount: number;
+                dwellSecMin: number;
+                dwellSecMax: number;
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                comments?: Array<{
+                    draftId: string;
+                    postTitle: string;
+                    postAuthor: string;
+                    text: string;
+                }>;
+            };
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+            queuedBehindRunId?: string | null;
+            preparation?: {
+                status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reason: string | null;
+                taskId: string | null;
+                startedAt: string;
+                completedAt: string | null;
+            };
+            chunks?: Array<{
+                index: number;
+                mode: 'search' | 'home' | 'comment';
+                keyword: string | null;
+                plannedCount: number;
+                status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+                taskId?: string | null;
+                startedAt?: string | null;
+                completedAt?: string | null;
+                browsed?: number;
+                skipped?: number;
+                refreshCount?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalies?: Array<{
+                    type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
+                    detail?: string;
+                }>;
+                observation?: string | null;
+                posts?: Array<{
+                    title: string;
+                    author: string;
+                    action: 'like' | 'collect' | 'follow' | 'none' | 'skip';
+                    commentsRead?: number;
+                    dwellSeconds?: number;
+                    commentsComplete?: boolean;
+                    commentWorthy?: boolean;
+                    summary?: string;
+                }>;
+                commentDraftId?: string | null;
+                message?: string | null;
+                totalSteps?: number | null;
+                finalScreenshot?: string | null;
+                error?: string | null;
+            }>;
+            summary?: {
+                plannedTotal?: number;
+                browsedTotal?: number;
+                searchBrowsed?: number;
+                homeBrowsed?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalyCount?: number;
+                durationMs?: number | null;
+            };
+            notes?: string;
+            error?: string | null;
+            createdAt: string;
+            startedAt?: string | null;
+            completedAt?: string | null;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsRunsByRunIdStartResponse = PostApiV1XhsOpsRunsByRunIdStartResponses[keyof PostApiV1XhsOpsRunsByRunIdStartResponses];
+
+export type PostApiV1XhsOpsRunsByRunIdCancelData = {
+    body?: never;
+    path: {
+        runId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/runs/{runId}/cancel';
+};
+
+export type PostApiV1XhsOpsRunsByRunIdCancelErrors = {
+    /**
+     * Bad request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Run not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Run is not running
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Internal error
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsRunsByRunIdCancelError = PostApiV1XhsOpsRunsByRunIdCancelErrors[keyof PostApiV1XhsOpsRunsByRunIdCancelErrors];
+
+export type PostApiV1XhsOpsRunsByRunIdCancelResponses = {
+    /**
+     * Run cancelled; the phone's current task is cancelled
+     */
+    200: {
+        run: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            accountLabel: string;
+            date: string;
+            status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            plan: {
+                kind?: 'browse' | 'comment';
+                keywords: Array<{
+                    keyword: string;
+                    count: number;
+                }>;
+                homeFeedCount: number;
+                dwellSecMin: number;
+                dwellSecMax: number;
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                comments?: Array<{
+                    draftId: string;
+                    postTitle: string;
+                    postAuthor: string;
+                    text: string;
+                }>;
+            };
+            segment?: {
+                index: number;
+                count: number;
+            } | null;
+            queuedBehindRunId?: string | null;
+            preparation?: {
+                status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reason: string | null;
+                taskId: string | null;
+                startedAt: string;
+                completedAt: string | null;
+            };
+            chunks?: Array<{
+                index: number;
+                mode: 'search' | 'home' | 'comment';
+                keyword: string | null;
+                plannedCount: number;
+                status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+                taskId?: string | null;
+                startedAt?: string | null;
+                completedAt?: string | null;
+                browsed?: number;
+                skipped?: number;
+                refreshCount?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalies?: Array<{
+                    type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
+                    detail?: string;
+                }>;
+                observation?: string | null;
+                posts?: Array<{
+                    title: string;
+                    author: string;
+                    action: 'like' | 'collect' | 'follow' | 'none' | 'skip';
+                    commentsRead?: number;
+                    dwellSeconds?: number;
+                    commentsComplete?: boolean;
+                    commentWorthy?: boolean;
+                    summary?: string;
+                }>;
+                commentDraftId?: string | null;
+                message?: string | null;
+                totalSteps?: number | null;
+                finalScreenshot?: string | null;
+                error?: string | null;
+            }>;
+            summary?: {
+                plannedTotal?: number;
+                browsedTotal?: number;
+                searchBrowsed?: number;
+                homeBrowsed?: number;
+                interactions?: {
+                    like?: number;
+                    collect?: number;
+                    follow?: number;
+                    comment?: number;
+                };
+                anomalyCount?: number;
+                durationMs?: number | null;
+            };
+            notes?: string;
+            error?: string | null;
+            createdAt: string;
+            startedAt?: string | null;
+            completedAt?: string | null;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsRunsByRunIdCancelResponse = PostApiV1XhsOpsRunsByRunIdCancelResponses[keyof PostApiV1XhsOpsRunsByRunIdCancelResponses];
 
 export type PostApiInternalRuntimeHostExecutionBlockedData = {
     body?: {
@@ -8688,6 +12979,105 @@ export type PostApiV1MediaGenerateImageResponses = {
 
 export type PostApiV1MediaGenerateImageResponse = PostApiV1MediaGenerateImageResponses[keyof PostApiV1MediaGenerateImageResponses];
 
+export type PostApiV1MediaVideoJobsData = {
+    body?: {
+        prompt: string;
+        durationSeconds?: number;
+        resolution?: '480p' | '720p' | '1080p';
+        model?: string;
+        aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4';
+        numFrames?: number;
+        frameRate?: number;
+        numInferenceSteps?: number;
+        negativePrompt?: string;
+        seed?: number;
+        generateAudio?: boolean;
+        watermark?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/media/video-jobs';
+};
+
+export type PostApiV1MediaVideoJobsErrors = {
+    /**
+     * Video generation queue is full
+     */
+    429: {
+        message: string;
+    };
+};
+
+export type PostApiV1MediaVideoJobsError = PostApiV1MediaVideoJobsErrors[keyof PostApiV1MediaVideoJobsErrors];
+
+export type PostApiV1MediaVideoJobsResponses = {
+    /**
+     * Video generation job accepted
+     */
+    202: {
+        jobId: string;
+        status: 'queued' | 'running' | 'succeeded' | 'failed';
+        createdAt: string;
+        startedAt?: string;
+        completedAt?: string;
+        result?: {
+            url: string;
+            path: string;
+            items: Array<{
+                url: string;
+                path: string;
+            }>;
+        };
+        error?: string;
+    };
+};
+
+export type PostApiV1MediaVideoJobsResponse = PostApiV1MediaVideoJobsResponses[keyof PostApiV1MediaVideoJobsResponses];
+
+export type GetApiV1MediaVideoJobsByJobIdData = {
+    body?: never;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/v1/media/video-jobs/{jobId}';
+};
+
+export type GetApiV1MediaVideoJobsByJobIdErrors = {
+    /**
+     * Video generation job not found or expired
+     */
+    404: {
+        message: string;
+    };
+};
+
+export type GetApiV1MediaVideoJobsByJobIdError = GetApiV1MediaVideoJobsByJobIdErrors[keyof GetApiV1MediaVideoJobsByJobIdErrors];
+
+export type GetApiV1MediaVideoJobsByJobIdResponses = {
+    /**
+     * Current video generation job state
+     */
+    200: {
+        jobId: string;
+        status: 'queued' | 'running' | 'succeeded' | 'failed';
+        createdAt: string;
+        startedAt?: string;
+        completedAt?: string;
+        result?: {
+            url: string;
+            path: string;
+            items: Array<{
+                url: string;
+                path: string;
+            }>;
+        };
+        error?: string;
+    };
+};
+
+export type GetApiV1MediaVideoJobsByJobIdResponse = GetApiV1MediaVideoJobsByJobIdResponses[keyof GetApiV1MediaVideoJobsByJobIdResponses];
+
 export type PostApiV1MediaGenerateVideoData = {
     body?: {
         prompt: string;
@@ -8861,6 +13251,39 @@ export type PostApiV1MediaDescribeImageResponses = {
 };
 
 export type PostApiV1MediaDescribeImageResponse = PostApiV1MediaDescribeImageResponses[keyof PostApiV1MediaDescribeImageResponses];
+
+export type PostApiV1MediaInboundImageData = {
+    body?: {
+        dataUrl: string;
+        prefix?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/media/inbound-image';
+};
+
+export type PostApiV1MediaInboundImageErrors = {
+    /**
+     * Invalid image data
+     */
+    400: {
+        message: string;
+    };
+};
+
+export type PostApiV1MediaInboundImageError = PostApiV1MediaInboundImageErrors[keyof PostApiV1MediaInboundImageErrors];
+
+export type PostApiV1MediaInboundImageResponses = {
+    /**
+     * Image saved into the inbound media dir
+     */
+    200: {
+        path: string;
+        url: string;
+    };
+};
+
+export type PostApiV1MediaInboundImageResponse = PostApiV1MediaInboundImageResponses[keyof PostApiV1MediaInboundImageResponses];
 
 export type PostApiV1MediaGenerateTextData = {
     body?: {

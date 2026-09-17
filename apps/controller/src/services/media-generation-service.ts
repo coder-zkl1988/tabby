@@ -737,32 +737,48 @@ export class MediaGenerationService {
 
   /** Decode maskDataUrl, write to media/inbound/mask-<genId>.png, return path. */
   private async writeMaskFile(maskDataUrl: string): Promise<string> {
+    return this.writeInboundImage(maskDataUrl, "mask", "invalid mask data");
+  }
+
+  /**
+   * Decode a `data:image/...;base64,<payload>` URL and write it into the
+   * inbound media dir, returning its absolute path.
+   *
+   * Shared by the mask parameter path and the public save-inbound-image route
+   * (a canvas-composed image has to reach disk before it can be a reference —
+   * `validateMediaReference` only accepts paths under the media dir).
+   */
+  private async writeInboundImage(
+    dataUrl: string,
+    prefix: string,
+    invalidMessage: string,
+  ): Promise<string> {
     // Strip the data URL prefix: data:image/png;base64,<payload>
-    const commaIdx = maskDataUrl.indexOf(",");
+    const commaIdx = dataUrl.indexOf(",");
     if (commaIdx === -1) {
-      throw new InvalidMediaReferenceError("invalid mask data");
+      throw new InvalidMediaReferenceError(invalidMessage);
     }
-    const b64 = maskDataUrl.slice(commaIdx + 1);
+    const b64 = dataUrl.slice(commaIdx + 1);
     let buf: Buffer;
     try {
       buf = Buffer.from(b64, "base64");
       // Validate: a valid base64 round-trip should not produce an empty buffer
       // and re-encoding should match the input (modulo padding).
       if (buf.length === 0) {
-        throw new InvalidMediaReferenceError("invalid mask data");
+        throw new InvalidMediaReferenceError(invalidMessage);
       }
       // Strict check: base64 decode then re-encode must reproduce input (ignoring whitespace).
       const re = buf.toString("base64");
       const normalised = b64.replace(/\s/g, "");
       // Allow padding differences only
       if (re.replace(/=+$/, "") !== normalised.replace(/=+$/, "")) {
-        throw new InvalidMediaReferenceError("invalid mask data");
+        throw new InvalidMediaReferenceError(invalidMessage);
       }
     } catch (err) {
       if (err instanceof InvalidMediaReferenceError) {
         throw err;
       }
-      throw new InvalidMediaReferenceError("invalid mask data");
+      throw new InvalidMediaReferenceError(invalidMessage);
     }
     const inboundDir = path.resolve(
       this.deps.openclawStateDir,
@@ -770,9 +786,37 @@ export class MediaGenerationService {
       "inbound",
     );
     await mkdir(inboundDir, { recursive: true });
-    const maskPath = path.join(inboundDir, `mask-${this.deps.genId()}.png`);
-    await writeFile(maskPath, buf);
-    return maskPath;
+    const filePath = path.join(
+      inboundDir,
+      `${prefix}-${this.deps.genId()}.png`,
+    );
+    await writeFile(filePath, buf);
+    return filePath;
+  }
+
+  /**
+   * Persist a canvas-composed PNG into the inbound media dir.
+   *
+   * `prefix` is already constrained to `[a-z0-9-]` by the request schema; it is
+   * re-checked here so a non-route caller can't escape the directory.
+   */
+  async saveInboundImage(input: {
+    dataUrl: string;
+    prefix?: string;
+  }): Promise<{ path: string; url: string }> {
+    const prefix =
+      input.prefix !== undefined && /^[a-z0-9-]+$/.test(input.prefix)
+        ? input.prefix
+        : "canvas";
+    const filePath = await this.writeInboundImage(
+      input.dataUrl,
+      prefix,
+      "invalid image data",
+    );
+    return {
+      path: filePath,
+      url: `/api/v1/media/state-file?path=${encodeURIComponent(filePath)}`,
+    };
   }
 
   private async validateMediaReference(

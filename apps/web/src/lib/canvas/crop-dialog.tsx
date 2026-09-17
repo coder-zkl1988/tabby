@@ -358,7 +358,7 @@ export function CropDialog({
                 type="button"
                 data-canvas-crop-confirm="true"
                 onClick={handleConfirm}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-600"
+                className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)]"
               >
                 <Crop size={14} />
                 裁剪并生成节点

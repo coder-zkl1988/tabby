@@ -15,20 +15,17 @@
 
 import { isImeComposing } from "@/lib/keyboard";
 import {
-  ChevronLeft,
-  ChevronRight,
   CircleDot,
-  Eraser,
   Grid2x2,
   Group,
   ImagePlus,
   Library,
-  Map as MapIcon,
   Maximize2,
   Music2,
   NotebookPen,
   Palette,
   Pencil,
+  Plus,
   Redo2,
   SlidersHorizontal,
   Smartphone,
@@ -36,6 +33,7 @@ import {
   Trash2,
   Type,
   Undo2,
+  Ungroup,
   Upload,
   Video,
   X,
@@ -43,18 +41,18 @@ import {
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
-  useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
 import { renameBoard, useCanvasBoards } from "./canvas-boards";
 import { openCanvasDialog } from "./canvas-dialogs";
+import { groupSelectedNodes, ungroupSelectedNodes } from "./canvas-group-ops";
+import { canGroupSelection, canUngroupSelection } from "./canvas-groups";
 import { ingestFilesAsNodes, readFilesAsDataUrls } from "./canvas-ingest";
 import {
   type CanvasViewport,
   addNode,
-  clearCanvas,
   deleteSelection,
   redo,
   setViewport,
@@ -86,42 +84,17 @@ export function CanvasToolbar({
   const { nodes, viewport, selectedNodeIds, selectedConnectionId } =
     useCanvas();
   const { minimapVisible, gridMode, showImageInfo } = useCanvasUiPrefs();
+  const [createOpen, setCreateOpen] = useState(false);
   const hasSelection = selectedNodeIds.length > 0 || !!selectedConnectionId;
+  // Group actions read the live selection (reference v0.18: select → group).
+  const selectedIdSet = new Set(selectedNodeIds);
+  const groupable = canGroupSelection(selectedIdSet, nodes);
+  const ungroupable = canUngroupSelection(selectedIdSet, nodes);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [tip, setTip] = useState<DockTip | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   // Single-row dock: when the panel is narrower than the dock's content, the
-  // row scrolls horizontally (scrollbar hidden) and an arrow appears on each
-  // side that still has icons hidden beyond the edge.
   const dockRef = useRef<HTMLDivElement>(null);
-  const [dockOverflow, setDockOverflow] = useState({
-    left: false,
-    right: false,
-  });
-
-  const updateDockOverflow = useCallback(() => {
-    const dock = dockRef.current;
-    if (!dock) return;
-    const left = dock.scrollLeft > 1;
-    const right = dock.scrollLeft + dock.clientWidth < dock.scrollWidth - 1;
-    setDockOverflow((prev) =>
-      prev.left === left && prev.right === right ? prev : { left, right },
-    );
-  }, []);
-
-  useEffect(() => {
-    updateDockOverflow();
-    const dock = dockRef.current;
-    if (!dock || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(updateDockOverflow);
-    observer.observe(dock);
-    return () => observer.disconnect();
-  }, [updateDockOverflow]);
-
-  const scrollDockBy = (direction: -1 | 1) => {
-    dockRef.current?.scrollBy({ left: direction * 192, behavior: "smooth" });
-  };
-
   // Escape closes the appearance panel (mount-once; harmless when panel closed).
   useEffect(() => {
     if (!appearanceOpen) return;
@@ -179,7 +152,7 @@ export function CanvasToolbar({
               <X size={12} />
             </button>
           </div>
-          <p className="px-1 pb-1.5 text-[11px] font-medium text-text-tertiary">
+          <p className="px-1 pb-1.5 text-[12px] font-medium text-text-secondary">
             网格样式
           </p>
           <div className="grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1">
@@ -205,8 +178,28 @@ export function CanvasToolbar({
               </button>
             ))}
           </div>
+          {/* Moved off the dock: showing/hiding a panel is a display
+                preference, which is what this panel is for. */}
           <div className="mt-3 flex items-center justify-between gap-3 rounded-lg px-1.5 py-1">
-            <span className="text-[11px] font-medium text-text-secondary">
+            <span className="text-[12px] font-medium text-text-secondary">
+              小地图
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={minimapVisible}
+              aria-label="小地图"
+              data-canvas-minimap-toggle="true"
+              onClick={() => setCanvasUiPref("minimapVisible", !minimapVisible)}
+              className={`relative h-4 w-7 rounded-full transition-colors ${minimapVisible ? "bg-[var(--color-brand-primary)]" : "bg-surface-3"}`}
+            >
+              <span
+                className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${minimapVisible ? "translate-x-3.5" : "translate-x-0.5"}`}
+              />
+            </button>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-lg px-1.5 py-1">
+            <span className="text-[12px] font-medium text-text-secondary">
               图片信息
             </span>
             <button
@@ -215,7 +208,7 @@ export function CanvasToolbar({
               aria-checked={showImageInfo}
               aria-label="图片信息"
               onClick={() => setCanvasUiPref("showImageInfo", !showImageInfo)}
-              className={`relative h-4 w-7 rounded-full transition-colors ${showImageInfo ? "bg-sky-500" : "bg-surface-3"}`}
+              className={`relative h-4 w-7 rounded-full transition-colors ${showImageInfo ? "bg-[var(--color-brand-primary)]" : "bg-surface-3"}`}
             >
               <span
                 className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${showImageInfo ? "translate-x-3.5" : "translate-x-0.5"}`}
@@ -229,9 +222,12 @@ export function CanvasToolbar({
         <div
           ref={dockRef}
           data-canvas-toolbar="true"
-          className="no-scrollbar flex h-14 max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-surface-1/85 px-2 shadow-[0_16px_40px_rgba(0,0,0,0.16)] backdrop-blur [&>*]:shrink-0"
+          // The dock no longer scrolls: with the nine create actions behind "+"
+          // it fits the 320px sidebar floor. min-h (not h) so that if a future
+          // control does push it over, the second row grows instead of being
+          // clipped — the failure the scroll arrows used to paper over.
+          className="flex min-h-14 max-w-full flex-wrap items-center justify-center gap-1 rounded-xl border border-border bg-surface-1/85 px-2 py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.16)] backdrop-blur"
           onPointerDown={(event) => event.stopPropagation()}
-          onScroll={updateDockOverflow}
         >
           <ToolButton
             label="撤销"
@@ -250,118 +246,173 @@ export function CanvasToolbar({
             <Redo2 size={ICON} />
           </ToolButton>
           <Divider />
-          <ToolButton
-            label="文本"
-            onClick={() => addNode({ type: "text", title: "文本" })}
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <Type size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="图片"
-            onClick={() => addNode({ type: "image", title: "图片" })}
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <ImagePlus size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="视频"
-            onClick={() => addNode({ type: "video", title: "视频" })}
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <Video size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="音频"
-            onClick={() => addNode({ type: "audio", title: "音频" })}
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <Music2 size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="生成配置"
-            onClick={() =>
-              addNode({
-                type: "config",
-                title: "生成配置",
-                metadata: { config: { mode: "image" } },
-              })
-            }
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <SlidersHorizontal size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="小红书"
-            onClick={() =>
-              addNode({
-                type: "xhs",
-                title: "小红书帖子",
-                metadata: {
-                  xhs: {
-                    title: "",
-                    content: "",
-                    images: [],
-                    hashtags: [],
-                  },
-                },
-              })
-            }
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <NotebookPen size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="手机"
-            onClick={() =>
-              addNode({
-                type: "phone",
-                title: "手机预览",
-                metadata: { phone: {} },
-              })
-            }
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <Smartphone size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="组"
-            onClick={() => addNode({ type: "group", title: "组" })}
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <Group size={ICON} />
-          </ToolButton>
-          <label
-            aria-label="上传素材"
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-text-secondary hover:bg-surface-2 hover:text-text-primary"
-            onMouseEnter={showTip("上传素材")}
-            onMouseLeave={hideTip}
-          >
-            <Upload size={ICON} />
-            <input
-              type="file"
-              multiple
-              accept="image/*,video/*,audio/*"
-              className="hidden"
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                event.target.value = "";
-                if (files.length === 0) return;
-                // Place at top-left cascade; ingestFilesAsNodes handles MIME detection.
-                void readFilesAsDataUrls(files).then((inputs) => {
-                  ingestFilesAsNodes(inputs, { x: 32, y: 32 });
-                });
-              }}
-            />
-          </label>
+          <div className="relative">
+            <ToolButton
+              label="添加节点"
+              active={createOpen}
+              dataAttr={{ name: "data-canvas-create-toggle", value: "true" }}
+              onClick={() => setCreateOpen((v) => !v)}
+              onTipEnter={showTip}
+              onTipLeave={hideTip}
+            >
+              <Plus size={ICON} />
+            </ToolButton>
+            {createOpen ? (
+              <span
+                aria-hidden
+                className="fixed inset-0 z-40"
+                onPointerDown={() => setCreateOpen(false)}
+              />
+            ) : null}
+            {/* Nine create actions behind one trigger: creating is the
+                lowest-frequency thing on this dock, and at ~700px the row
+                could not fit a 320px sidebar without scrolling. Kept
+                mounted and hidden so "which node types can I create" stays
+                assertable on the rendered markup. */}
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: not interactive
+                itself — it closes on clicks bubbling from its buttons, which
+                keyboard activation already fires. */}
+            <div
+              hidden={!createOpen}
+              data-canvas-create-menu="true"
+              className="absolute bottom-[calc(100%+10px)] left-1/2 z-50 grid w-max -translate-x-1/2 grid-cols-3 gap-1 rounded-xl border border-border bg-surface-1/95 p-2 shadow-xl backdrop-blur"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setCreateOpen(false)}
+            >
+              <ToolButton
+                label="文本"
+                onClick={() => addNode({ type: "text", title: "文本" })}
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <Type size={ICON} />
+              </ToolButton>
+              <ToolButton
+                label="图片"
+                onClick={() => addNode({ type: "image", title: "图片" })}
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <ImagePlus size={ICON} />
+              </ToolButton>
+              <ToolButton
+                label="视频"
+                onClick={() => addNode({ type: "video", title: "视频" })}
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <Video size={ICON} />
+              </ToolButton>
+              <ToolButton
+                label="音频"
+                onClick={() => addNode({ type: "audio", title: "音频" })}
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <Music2 size={ICON} />
+              </ToolButton>
+              <ToolButton
+                label="生成配置"
+                onClick={() =>
+                  addNode({
+                    type: "config",
+                    title: "生成配置",
+                    metadata: { config: { mode: "image" } },
+                  })
+                }
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <SlidersHorizontal size={ICON} />
+              </ToolButton>
+              <ToolButton
+                label="小红书"
+                onClick={() =>
+                  addNode({
+                    type: "xhs",
+                    title: "小红书帖子",
+                    metadata: {
+                      xhs: {
+                        title: "",
+                        content: "",
+                        images: [],
+                        hashtags: [],
+                      },
+                    },
+                  })
+                }
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <NotebookPen size={ICON} />
+              </ToolButton>
+              <ToolButton
+                label="手机"
+                onClick={() =>
+                  addNode({
+                    type: "phone",
+                    title: "手机预览",
+                    metadata: { phone: {} },
+                  })
+                }
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <Smartphone size={ICON} />
+              </ToolButton>
+              <ToolButton
+                label="空白组"
+                onClick={() => addNode({ type: "group", title: "组" })}
+                onTipEnter={showTip}
+                onTipLeave={hideTip}
+              >
+                <Group size={ICON} />
+              </ToolButton>
+              <label
+                aria-label="上传素材"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+                onMouseEnter={showTip("上传素材")}
+                onMouseLeave={hideTip}
+              >
+                <Upload size={ICON} />
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,audio/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    event.target.value = "";
+                    if (files.length === 0) return;
+                    // Place at top-left cascade; ingestFilesAsNodes handles MIME detection.
+                    void readFilesAsDataUrls(files).then((inputs) => {
+                      ingestFilesAsNodes(inputs, { x: 32, y: 32 });
+                    });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+          {groupable ? (
+            <ToolButton
+              label={`打组（${selectedNodeIds.length} 个元素）`}
+              onClick={() => groupSelectedNodes()}
+              onTipEnter={showTip}
+              onTipLeave={hideTip}
+            >
+              <Group size={ICON} />
+            </ToolButton>
+          ) : null}
+          {ungroupable ? (
+            <ToolButton
+              label="解散组"
+              onClick={() => ungroupSelectedNodes()}
+              onTipEnter={showTip}
+              onTipLeave={hideTip}
+            >
+              <Ungroup size={ICON} />
+            </ToolButton>
+          ) : null}
           <Divider />
           <ToolButton
             label="素材库"
@@ -371,16 +422,6 @@ export function CanvasToolbar({
             onTipLeave={hideTip}
           >
             <Library size={ICON} />
-          </ToolButton>
-          <ToolButton
-            label="小地图"
-            active={minimapVisible}
-            dataAttr={{ name: "data-canvas-minimap-toggle", value: "true" }}
-            onClick={() => setCanvasUiPref("minimapVisible", !minimapVisible)}
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <MapIcon size={ICON} />
           </ToolButton>
           <ToolButton
             label="画布外观"
@@ -401,7 +442,7 @@ export function CanvasToolbar({
           >
             <Maximize2 size={ICON} />
           </ToolButton>
-          <span className="px-1 text-[11px] tabular-nums text-text-tertiary">
+          <span className="px-1 text-[12px] tabular-nums text-text-secondary">
             {Math.round(viewport.scale * 100)}%
           </span>
           {hasSelection ? (
@@ -419,47 +460,7 @@ export function CanvasToolbar({
             </>
           ) : null}
           <Divider />
-          <ToolButton
-            label="清空画布"
-            danger
-            onClick={() => {
-              if (
-                nodes.length === 0 ||
-                window.confirm("清空画布上的全部节点？")
-              ) {
-                clearCanvas();
-              }
-            }}
-            onTipEnter={showTip}
-            onTipLeave={hideTip}
-          >
-            <Eraser size={ICON} />
-          </ToolButton>
         </div>
-        {dockOverflow.left ? (
-          <button
-            type="button"
-            aria-label="向左滚动工具栏"
-            data-canvas-toolbar-scroll="left"
-            onClick={() => scrollDockBy(-1)}
-            onPointerDown={(event) => event.stopPropagation()}
-            className="absolute left-1 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface-1/95 text-text-secondary shadow-md backdrop-blur hover:text-text-primary"
-          >
-            <ChevronLeft size={14} />
-          </button>
-        ) : null}
-        {dockOverflow.right ? (
-          <button
-            type="button"
-            aria-label="向右滚动工具栏"
-            data-canvas-toolbar-scroll="right"
-            onClick={() => scrollDockBy(1)}
-            onPointerDown={(event) => event.stopPropagation()}
-            className="absolute right-1 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface-1/95 text-text-secondary shadow-md backdrop-blur hover:text-text-primary"
-          >
-            <ChevronRight size={14} />
-          </button>
-        ) : null}
       </div>
     </div>
   );
@@ -563,7 +564,7 @@ function ToolButton({
   children: ReactNode;
 }) {
   const stateClass = active
-    ? "bg-sky-500/15 text-sky-500"
+    ? "bg-[var(--color-brand-wash)] text-[var(--color-brand-ink)]"
     : danger
       ? "text-danger/80 hover:bg-danger/10 hover:text-danger"
       : "text-text-secondary hover:bg-surface-2 hover:text-text-primary";
@@ -575,7 +576,7 @@ function ToolButton({
       onClick={onClick}
       onMouseEnter={onTipEnter(label)}
       onMouseLeave={onTipLeave}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${stateClass}`}
+      className={`grid size-9 shrink-0 place-items-center rounded-lg transition-colors ${stateClass}`}
     >
       {children}
     </button>

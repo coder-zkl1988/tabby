@@ -1,8 +1,10 @@
 import { type OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   xhsOpsAccountCreateSchema,
+  xhsOpsAccountIdentityResponseSchema,
   xhsOpsAccountListResponseSchema,
   xhsOpsAccountResponseSchema,
+  xhsOpsAccountTransferSchema,
   xhsOpsAccountUpdateSchema,
   xhsOpsCommentGenerateBodySchema,
   xhsOpsCommentGenerateResponseSchema,
@@ -11,8 +13,15 @@ import {
   xhsOpsCommentQuotaResponseSchema,
   xhsOpsCommentResponseSchema,
   xhsOpsCommentReviewBodySchema,
+  xhsOpsDeviceBindingListResponseSchema,
+  xhsOpsPersonaGenerateBodySchema,
+  xhsOpsPersonaGenerateResponseSchema,
+  xhsOpsPersonasConfirmBodySchema,
   xhsOpsPlanSuggestResponseSchema,
+  xhsOpsProfileApplyBodySchema,
+  xhsOpsProfileConfirmBodySchema,
   xhsOpsProfileGenerateBodySchema,
+  xhsOpsProfileReadbackResponseSchema,
   xhsOpsProjectCreateSchema,
   xhsOpsProjectListResponseSchema,
   xhsOpsProjectResponseSchema,
@@ -26,7 +35,15 @@ import {
 } from "@nexu/shared";
 import type { ControllerContainer } from "../app/container.js";
 import { logger } from "../lib/logger.js";
-import { XhsOpsError } from "../services/xhs-ops-run-service.js";
+import { ImageGenerationFailedError } from "../services/media-generation-service.js";
+import {
+  generateXhsOpsPersonas,
+  generateXhsOpsProfile,
+} from "../services/xhs-ops-persona-service.js";
+import {
+  XHS_OPS_DEFAULT_OFFLINE_AFTER_MS,
+  XhsOpsError,
+} from "../services/xhs-ops-run-service.js";
 import type { ControllerBindings } from "../types.js";
 
 const TAGS = ["XHS Ops"];
@@ -45,6 +62,31 @@ const jsonError = (description: string) => ({
   description,
 });
 
+/**
+ * Media generation fails for reasons the operator can act on (relay down,
+ * relay slow, no bot configured). Collapsing them all into the generic retry
+ * message meant the only way to tell those apart was reading controller logs.
+ */
+function describeGenerationFailure(reason: string): string {
+  if (/timed out after \d+ms/i.test(reason)) {
+    return "素材生成超时：模型服务响应太慢，请稍后重试";
+  }
+  if (/generation session failed/i.test(reason)) {
+    return "素材生成失败：模型服务不可用（上游可能限流或无可用通道），请稍后重试";
+  }
+  if (/no active bot available/i.test(reason)) {
+    return "素材生成失败：没有可用的机器人来执行生成";
+  }
+  if (/text generation backend is not configured/i.test(reason)) {
+    return "素材生成失败：文本生成后端未配置";
+  }
+  if (/returned empty text|no media path was found/i.test(reason)) {
+    return "素材生成失败：模型没有返回可用结果，请重试";
+  }
+  // tabby-image errors are already operator-readable Chinese.
+  return reason;
+}
+
 function mapError(err: unknown): {
   status: 400 | 404 | 409 | 500;
   message: string;
@@ -52,10 +94,11 @@ function mapError(err: unknown): {
   if (err instanceof XhsOpsError) {
     return { status: err.status, message: err.message };
   }
-  logger.error(
-    { error: err instanceof Error ? err.message : String(err) },
-    "xhs-ops: route failed",
-  );
+  const reason = err instanceof Error ? err.message : String(err);
+  logger.error({ error: reason }, "xhs-ops: route failed");
+  if (err instanceof ImageGenerationFailedError) {
+    return { status: 500, message: describeGenerationFailure(reason) };
+  }
   return { status: 500, message: "小红书运营操作失败，请稍后重试" };
 }
 
@@ -76,6 +119,177 @@ export function registerXhsOpsRoutes(
     409: jsonError("Conflict"),
     500: jsonError("Failed"),
   };
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/projects/{projectId}/profile/confirm",
+      tags: TAGS,
+      request: {
+        params: projectIdParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: xhsOpsProfileConfirmBodySchema },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: xhsOpsProjectResponseSchema },
+          },
+          description: "Human-confirmed current target profile",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        return c.json(
+          {
+            project: await store.confirmProfile(
+              c.req.valid("param").projectId,
+              c.req.valid("json"),
+            ),
+          },
+          200,
+        );
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/projects/{projectId}/profile/generate",
+      tags: TAGS,
+      request: {
+        params: projectIdParamSchema,
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({ expectedUpdatedAt: z.string() }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: xhsOpsProjectResponseSchema },
+          },
+          description: "Generated target profile awaiting human review",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        return c.json(
+          {
+            project: await generateXhsOpsProfile(
+              store,
+              container.mediaGenerationService,
+              c.req.valid("param").projectId,
+              c.req.valid("json").expectedUpdatedAt,
+            ),
+          },
+          200,
+        );
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/projects/{projectId}/personas/generate",
+      tags: TAGS,
+      request: {
+        params: projectIdParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: xhsOpsPersonaGenerateBodySchema },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: xhsOpsPersonaGenerateResponseSchema },
+          },
+          description:
+            "N persona candidates and actual distribution for review",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        const body = c.req.valid("json");
+        return c.json(
+          await generateXhsOpsPersonas(
+            store,
+            container.mediaGenerationService,
+            c.req.valid("param").projectId,
+            body.count,
+            body.expectedUpdatedAt,
+          ),
+          200,
+        );
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/projects/{projectId}/personas/confirm",
+      tags: TAGS,
+      request: {
+        params: projectIdParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: xhsOpsPersonasConfirmBodySchema },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: xhsOpsAccountListResponseSchema },
+          },
+          description: "Human-reviewed personas matching the latest project",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        return c.json(
+          {
+            accounts: await store.confirmPersonas(
+              c.req.valid("param").projectId,
+              c.req.valid("json"),
+            ),
+          },
+          200,
+        );
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
 
   // ─── Profile draft (P2-1) ────────────────────────────────────────────────
 
@@ -104,9 +318,18 @@ export function registerXhsOpsRoutes(
     }),
     async (c) => {
       try {
+        const body = c.req.valid("json");
         const account = await profileService.generate(
           c.req.valid("param").accountId,
-          c.req.valid("json").parts,
+          body.parts,
+          {
+            ...(body.avatarPrompt !== undefined
+              ? { avatarPrompt: body.avatarPrompt }
+              : {}),
+            ...(body.coverPrompt !== undefined
+              ? { coverPrompt: body.coverPrompt }
+              : {}),
+          },
         );
         return c.json({ account }, 200);
       } catch (err) {
@@ -119,9 +342,146 @@ export function registerXhsOpsRoutes(
   app.openapi(
     createRoute({
       method: "post",
-      path: "/api/v1/xhs-ops/accounts/{accountId}/profile-draft/apply",
+      path: "/api/v1/xhs-ops/accounts/{accountId}/profile-draft/confirm",
+      tags: TAGS,
+      request: {
+        params: accountIdParamSchema,
+        query: z.object({ expectedUpdatedAt: z.string().optional() }),
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: xhsOpsAccountResponseSchema },
+          },
+          description: "Confirmed complete profile draft",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        const account = await store.confirmProfileDraft(
+          c.req.valid("param").accountId,
+          c.req.valid("query").expectedUpdatedAt,
+        );
+        if (!account) return c.json({ message: "账号不存在" }, 404);
+        return c.json({ account }, 200);
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/accounts/{accountId}/profile-draft/reconcile",
       tags: TAGS,
       request: { params: accountIdParamSchema },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: xhsOpsAccountResponseSchema },
+          },
+          description:
+            "Reconciled a profile operation left running after a transport failure",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        const account = await profileService.reconcile(
+          c.req.valid("param").accountId,
+        );
+        if (!account) return c.json({ message: "账号不存在" }, 404);
+        return c.json({ account }, 200);
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/accounts/{accountId}/identity/read",
+      tags: TAGS,
+      request: { params: accountIdParamSchema },
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              schema: xhsOpsAccountIdentityResponseSchema,
+            },
+          },
+          description:
+            "Read-only screenshot of the bound phone's 编辑主页 so the operator can confirm which account is signed in",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        const identity = await profileService.readIdentity(
+          c.req.valid("param").accountId,
+        );
+        return c.json(identity, 200);
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/accounts/{accountId}/profile-draft/readback",
+      tags: TAGS,
+      request: { params: accountIdParamSchema },
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              schema: xhsOpsProfileReadbackResponseSchema,
+            },
+          },
+          description:
+            "The phone's current profile diffed against the draft, so the operator can pick what to overwrite",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        const readback = await profileService.readbackProfile(
+          c.req.valid("param").accountId,
+        );
+        return c.json(readback, 200);
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/accounts/{accountId}/profile-draft/apply",
+      tags: TAGS,
+      request: {
+        params: accountIdParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: xhsOpsProfileApplyBodySchema },
+          },
+          required: false,
+        },
+      },
       responses: {
         200: {
           content: {
@@ -135,8 +495,10 @@ export function registerXhsOpsRoutes(
     }),
     async (c) => {
       try {
+        const body = c.req.valid("json") as { fields?: string[] } | undefined;
         const account = await profileService.apply(
           c.req.valid("param").accountId,
+          body?.fields as Parameters<typeof profileService.apply>[1],
         );
         return c.json({ account }, 200);
       } catch (err) {
@@ -418,6 +780,25 @@ export function registerXhsOpsRoutes(
   app.openapi(
     createRoute({
       method: "get",
+      path: "/api/v1/xhs-ops/device-bindings",
+      tags: TAGS,
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              schema: xhsOpsDeviceBindingListResponseSchema,
+            },
+          },
+          description: "Global device bindings with transfer availability",
+        },
+      },
+    }),
+    async (c) => c.json({ bindings: await store.listDeviceBindings() }, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
       path: "/api/v1/xhs-ops/projects",
       tags: TAGS,
       responses: {
@@ -500,16 +881,21 @@ export function registerXhsOpsRoutes(
           },
           description: "Updated project",
         },
-        404: jsonError("Project not found"),
+        ...mutationErrors,
       },
     }),
     async (c) => {
-      const project = await store.updateProject(
-        c.req.valid("param").projectId,
-        c.req.valid("json"),
-      );
-      if (!project) return c.json({ message: "项目不存在" }, 404);
-      return c.json({ project }, 200);
+      try {
+        const project = await store.updateProject(
+          c.req.valid("param").projectId,
+          c.req.valid("json"),
+        );
+        if (!project) return c.json({ message: "项目不存在" }, 404);
+        return c.json({ project }, 200);
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
     },
   );
 
@@ -526,17 +912,81 @@ export function registerXhsOpsRoutes(
           },
           description: "Deleted project (accounts and runs cascade)",
         },
+        400: jsonError("Invalid deletion"),
         404: jsonError("Project not found"),
+        409: jsonError(
+          "Project has unfinished tasks or today's execution records",
+        ),
+        500: jsonError("Project deletion failed"),
       },
     }),
     async (c) => {
-      const project = await store.deleteProject(c.req.valid("param").projectId);
-      if (!project) return c.json({ message: "项目不存在" }, 404);
-      return c.json({ project }, 200);
+      try {
+        const project = await store.deleteProject(
+          c.req.valid("param").projectId,
+        );
+        if (!project) return c.json({ message: "项目不存在" }, 404);
+        return c.json({ project }, 200);
+      } catch (err) {
+        const error = mapError(err);
+        return c.json({ message: error.message }, error.status);
+      }
     },
   );
 
   // ─── Accounts ──────────────────────────────────────────────────────────────
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/xhs-ops/projects/{projectId}/accounts/transfer-device",
+      tags: TAGS,
+      request: {
+        params: projectIdParamSchema,
+        body: {
+          content: {
+            "application/json": { schema: xhsOpsAccountTransferSchema },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: xhsOpsAccountResponseSchema },
+          },
+          description: "Transferred device binding",
+        },
+        ...mutationErrors,
+      },
+    }),
+    async (c) => {
+      try {
+        const input = c.req.valid("json");
+        const device = await container.deviceControlService
+          .getDevice(input.account.deviceId)
+          .catch(() => {
+            throw new XhsOpsError(409, "设备离线，无法确认空闲状态");
+          });
+        if (
+          !device ||
+          Date.now() - device.lastSeen > XHS_OPS_DEFAULT_OFFLINE_AFTER_MS
+        ) {
+          throw new XhsOpsError(409, "设备离线，无法转移绑定");
+        }
+        if (device.status !== "idle" || device.currentTaskId) {
+          throw new XhsOpsError(409, "设备正在执行任务，无法转移绑定");
+        }
+        const account = await store.transferDevice(
+          c.req.valid("param").projectId,
+          input,
+        );
+        return c.json({ account }, 200);
+      } catch (err) {
+        const error = mapError(err);
+        return c.json({ message: error.message }, error.status);
+      }
+    },
+  );
 
   app.openapi(
     createRoute({
@@ -586,6 +1036,8 @@ export function registerXhsOpsRoutes(
         },
         400: jsonError("Body projectId does not match the path"),
         404: jsonError("Project not found"),
+        409: jsonError("Device already bound"),
+        500: jsonError("Account creation failed"),
       },
     }),
     async (c) => {
@@ -597,8 +1049,13 @@ export function registerXhsOpsRoutes(
       if (!(await store.getProject(projectId))) {
         return c.json({ message: "项目不存在" }, 404);
       }
-      const account = await store.createAccount({ ...body, projectId });
-      return c.json({ account }, 200);
+      try {
+        const account = await store.createAccount({ ...body, projectId });
+        return c.json({ account }, 200);
+      } catch (err) {
+        const error = mapError(err);
+        return c.json({ message: error.message }, error.status);
+      }
     },
   );
 
@@ -645,16 +1102,24 @@ export function registerXhsOpsRoutes(
           },
           description: "Updated account",
         },
+        400: jsonError("Invalid account update"),
         404: jsonError("Account not found"),
+        409: jsonError("Device binding conflict or unfinished runs"),
+        500: jsonError("Account update failed"),
       },
     }),
     async (c) => {
-      const account = await store.updateAccount(
-        c.req.valid("param").accountId,
-        c.req.valid("json"),
-      );
-      if (!account) return c.json({ message: "账号不存在" }, 404);
-      return c.json({ account }, 200);
+      try {
+        const account = await store.updateAccount(
+          c.req.valid("param").accountId,
+          c.req.valid("json"),
+        );
+        if (!account) return c.json({ message: "账号不存在" }, 404);
+        return c.json({ account }, 200);
+      } catch (err) {
+        const error = mapError(err);
+        return c.json({ message: error.message }, error.status);
+      }
     },
   );
 
@@ -671,13 +1136,20 @@ export function registerXhsOpsRoutes(
           },
           description: "Deleted account",
         },
-        404: jsonError("Account not found"),
+        ...mutationErrors,
       },
     }),
     async (c) => {
-      const account = await store.deleteAccount(c.req.valid("param").accountId);
-      if (!account) return c.json({ message: "账号不存在" }, 404);
-      return c.json({ account }, 200);
+      try {
+        const account = await store.deleteAccount(
+          c.req.valid("param").accountId,
+        );
+        if (!account) return c.json({ message: "账号不存在" }, 404);
+        return c.json({ account }, 200);
+      } catch (err) {
+        const mapped = mapError(err);
+        return c.json({ message: mapped.message }, mapped.status);
+      }
     },
   );
 

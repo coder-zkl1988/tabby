@@ -155,6 +155,21 @@ export const generateVideoResponseSchema = z.object({
   items: z.array(generatedMediaItemSchema).min(1),
 });
 
+/**
+ * Controller-owned asynchronous video-generation job — same lifecycle as the
+ * image one. Video runs long enough that a page reload would otherwise orphan
+ * it, so the canvas persists the job id and resumes polling after a refresh.
+ */
+export const videoGenerationJobSchema = z.object({
+  jobId: z.string().uuid(),
+  status: imageGenerationJobStatusSchema,
+  createdAt: z.string().datetime(),
+  startedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
+  result: generateVideoResponseSchema.optional(),
+  error: z.string().optional(),
+});
+
 export const generateAudioRequestSchema = z.object({
   prompt: z.string().min(1).max(2_000),
   /** Optional voice identifier passed as a hint to the TTS backend. */
@@ -224,6 +239,33 @@ export const describeImageResponseSchema = z.object({
 });
 
 /**
+ * Save a browser-drawn image (data URL) into the OpenClaw inbound media dir so
+ * it can be used as a generation reference.
+ *
+ * Reference images must be absolute paths under the media dir — a data URL is
+ * rejected — so anything composed on the canvas (today: the mask annotation)
+ * has to land on disk first.
+ */
+export const saveInboundImageRequestSchema = z.object({
+  /** `data:image/png;base64,...`. Capped so a stray upload can't fill the dir. */
+  dataUrl: z.string().min(1).max(24_000_000),
+  /** Filename prefix, e.g. "mask-annotation". Sanitized server-side. */
+  prefix: z
+    .string()
+    .min(1)
+    .max(40)
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
+});
+
+export const saveInboundImageResponseSchema = z.object({
+  /** Absolute path under the media dir — what `referenceImages` takes. */
+  path: z.string(),
+  /** Servable URL for rendering it on the canvas. */
+  url: z.string(),
+});
+
+/**
  * Generate-text channel: write new text, or rewrite/transform existing text,
  * via the utility lane. Returns the resulting text (no media file). May work
  * today with any chat-capable model.
@@ -242,6 +284,12 @@ export const generateTextResponseSchema = z.object({
   text: z.string(),
 });
 
+export type SaveInboundImageRequest = z.infer<
+  typeof saveInboundImageRequestSchema
+>;
+export type SaveInboundImageResponse = z.infer<
+  typeof saveInboundImageResponseSchema
+>;
 export type GenerateTextRequest = z.infer<typeof generateTextRequestSchema>;
 export type GenerateTextResponse = z.infer<typeof generateTextResponseSchema>;
 export type GeneratedMediaItem = z.infer<typeof generatedMediaItemSchema>;
@@ -253,6 +301,7 @@ export type ImageGenerationJobStatus = z.infer<
 export type ImageGenerationJob = z.infer<typeof imageGenerationJobSchema>;
 export type GenerateVideoRequest = z.infer<typeof generateVideoRequestSchema>;
 export type GenerateVideoResponse = z.infer<typeof generateVideoResponseSchema>;
+export type VideoGenerationJob = z.infer<typeof videoGenerationJobSchema>;
 export type GenerateAudioRequest = z.infer<typeof generateAudioRequestSchema>;
 export type GenerateAudioResponse = z.infer<typeof generateAudioResponseSchema>;
 export type EnhanceImageRequest = z.infer<typeof enhanceImageRequestSchema>;

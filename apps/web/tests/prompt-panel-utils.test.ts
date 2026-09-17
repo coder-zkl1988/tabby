@@ -7,8 +7,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  buildReferenceChips,
+  chipSiblingCount,
+  labelUpstreamTextBlocks,
   mentionQueryAt,
   mergeUpstreamPrompt,
+  resolveImagePixelSize,
   servablePathFromUrl,
   servableSourceOf,
   upstreamSummary,
@@ -238,9 +242,9 @@ describe("upstreamSummary", () => {
 });
 
 describe("mergeUpstreamPrompt", () => {
-  it("joins local prompt then upstream prompts, blank-line separated", () => {
+  it("joins local prompt then labeled upstream prompts, blank-line separated", () => {
     expect(mergeUpstreamPrompt("a landscape", ["always mention a cat"])).toBe(
-      "a landscape\n\nalways mention a cat",
+      "a landscape\n\n【文本1】\nalways mention a cat",
     );
   });
 
@@ -250,23 +254,150 @@ describe("mergeUpstreamPrompt", () => {
 
   it("upstream text alone (empty local draft) still produces a usable prompt", () => {
     expect(mergeUpstreamPrompt("", ["always mention a cat"])).toBe(
-      "always mention a cat",
+      "【文本1】\nalways mention a cat",
     );
   });
 
-  it("trims each part and drops empty/whitespace-only entries", () => {
+  it("trims each part and drops empty/whitespace-only entries before numbering", () => {
+    // The dropped blanks must not consume a number — 【文本1】 is the first
+    // block that actually reaches the prompt, so the reference bar agrees.
     expect(mergeUpstreamPrompt("  a landscape  ", ["  ", "a cat", ""])).toBe(
-      "a landscape\n\na cat",
+      "a landscape\n\n【文本1】\na cat",
     );
   });
 
-  it("multiple upstream text nodes join in order", () => {
+  it("multiple upstream text nodes join in order, numbered from 1", () => {
     expect(mergeUpstreamPrompt("base", ["one", "two"])).toBe(
-      "base\n\none\n\ntwo",
+      "base\n\n【文本1】\none\n\n【文本2】\ntwo",
     );
   });
 
   it("both empty yields an empty string", () => {
     expect(mergeUpstreamPrompt("  ", ["", "  "])).toBe("");
+  });
+});
+
+describe("labelUpstreamTextBlocks", () => {
+  it("numbers surviving blocks from 1 after dropping blanks", () => {
+    expect(labelUpstreamTextBlocks(["  ", " one ", "", "two"])).toEqual([
+      "【文本1】\none",
+      "【文本2】\ntwo",
+    ]);
+  });
+
+  it("labels a lone block too — a single 文本1 still needs a name to reference", () => {
+    expect(labelUpstreamTextBlocks(["only"])).toEqual(["【文本1】\nonly"]);
+  });
+});
+
+describe("resolveImagePixelSize", () => {
+  it("resolves each tier for a given aspect ratio", () => {
+    expect(resolveImagePixelSize("1K", "1:1")).toBe("1024x1024");
+    expect(resolveImagePixelSize("2K", "16:9")).toBe("2048x1152");
+    expect(resolveImagePixelSize("4K", "9:16")).toBe("2160x3840");
+  });
+
+  it("returns undefined when either half is unset", () => {
+    expect(resolveImagePixelSize("", "16:9")).toBeUndefined();
+    expect(resolveImagePixelSize("2K", "")).toBeUndefined();
+  });
+
+  it("returns undefined for a pair with no table entry", () => {
+    expect(resolveImagePixelSize("8K", "1:1")).toBeUndefined();
+    expect(resolveImagePixelSize("2K", "21:9")).toBeUndefined();
+  });
+});
+
+describe("buildReferenceChips", () => {
+  const textNode = {
+    id: "t1",
+    type: "text" as const,
+    title: "文案",
+    position: { x: 0, y: 0 },
+    size: { width: 0, height: 0 },
+    metadata: { content: "  a cat  " },
+  };
+  const servableImage = {
+    id: "i1",
+    type: "image" as const,
+    title: "参考图",
+    position: { x: 0, y: 0 },
+    size: { width: 0, height: 0 },
+    metadata: {
+      content: "/api/v1/media/state-file?path=%2Fabs%2Fref.png",
+    },
+  };
+  const uploadedImage = {
+    ...servableImage,
+    id: "i2",
+    title: "上传图",
+    metadata: { content: "data:image/png;base64,AAAA" },
+  };
+
+  it("numbers text chips the same way the prompt does", () => {
+    const chips = buildReferenceChips(
+      [
+        { node: textNode, edgeId: "e1" },
+        {
+          node: { ...textNode, id: "t2", metadata: { content: "b" } },
+          edgeId: "e2",
+        },
+      ],
+      true,
+    );
+    expect(chips.map((c) => c.label)).toEqual(["【文本1】", "【文本2】"]);
+    expect(chips[0]?.preview).toBe("a cat");
+  });
+
+  it("skips empty text and empty media — nothing to reference", () => {
+    const chips = buildReferenceChips(
+      [
+        { node: { ...textNode, metadata: { content: "   " } }, edgeId: "e1" },
+        { node: { ...servableImage, metadata: {} }, edgeId: "e2" },
+      ],
+      true,
+    );
+    expect(chips).toEqual([]);
+  });
+
+  it("marks a dataURL upload unusable — the backend cannot take it", () => {
+    const chips = buildReferenceChips(
+      [
+        { node: servableImage, edgeId: "e1" },
+        { node: uploadedImage, edgeId: "e2" },
+      ],
+      true,
+    );
+    expect(chips.map((c) => c.usable)).toEqual([true, false]);
+  });
+
+  it("marks every image unusable when images are not references for this node", () => {
+    const chips = buildReferenceChips(
+      [{ node: servableImage, edgeId: "e1" }],
+      false,
+    );
+    expect(chips[0]?.usable).toBe(false);
+  });
+
+  it("carries the edge id and group provenance through", () => {
+    const chips = buildReferenceChips(
+      [{ node: servableImage, edgeId: "e1", viaGroupId: "g1" }],
+      true,
+    );
+    expect(chips[0]?.edgeId).toBe("e1");
+    expect(chips[0]?.viaGroupId).toBe("g1");
+  });
+
+  it("chipSiblingCount counts what one cut would drop", () => {
+    const chips = buildReferenceChips(
+      [
+        { node: textNode, edgeId: "e1", viaGroupId: "g1" },
+        { node: servableImage, edgeId: "e1", viaGroupId: "g1" },
+        { node: uploadedImage, edgeId: "e2" },
+      ],
+      true,
+    );
+    expect(chipSiblingCount(chips, "e1")).toBe(2);
+    expect(chipSiblingCount(chips, "e2")).toBe(1);
   });
 });

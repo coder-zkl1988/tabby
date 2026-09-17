@@ -20,6 +20,7 @@ export type CanvasDialogState =
   | { kind: "preview"; nodeId: string }
   | { kind: "assets" }
   | { kind: "prompt-library"; nodeId: string }
+  | { kind: "prompt-editor"; nodeId: string }
   | null;
 
 // ── Store internals ────────────────────────────────────────────────────────

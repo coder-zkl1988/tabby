@@ -2352,7 +2352,7 @@ export class NexuConfigStore {
     // BYOK channel: "<providerId>/<modelId>" — phone talks to the provider
     // directly with the channel's own key. Checked before the cloud gate so a
     // BYOK phone model works without a cloud login.
-    if (selected !== null && selected.includes("/")) {
+    if (selected?.includes("/")) {
       const slash = selected.indexOf("/");
       const providerId = selected.slice(0, slash);
       const modelId = selected.slice(slash + 1);
@@ -2389,9 +2389,7 @@ export class NexuConfigStore {
         };
       }
       console.warn(
-        `[nexu-config] phone VLM model "${selected}" is not usable ` +
-          "(provider disabled/missing, model not listed, secret-ref key, or non-openai api) — " +
-          "falling back to the gateway default",
+        `[nexu-config] phone VLM model "${selected}" is not usable (provider disabled/missing, model not listed, secret-ref key, or non-openai api) — falling back to the gateway default`,
       );
       selected = null;
     }

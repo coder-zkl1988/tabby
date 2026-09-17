@@ -164,4 +164,12 @@ async function main() {
   console.log(`MEDIA: ${outputPath}`);
 }
 
-await main();
+// Without this, a transport-level throw (e.g. TypeError: fetch failed) becomes an
+// unhandled top-level rejection and Node dumps a stack trace to stderr, which the
+// controller then surfaces verbatim as the failure reason.
+try {
+  await main();
+} catch (err) {
+  console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+}

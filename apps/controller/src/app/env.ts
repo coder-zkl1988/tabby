@@ -154,12 +154,12 @@ export const env = {
   deviceTaskHistoryPath: path.join(nexuHomeDir, "device-task-history.json"),
   deviceNamesPath: path.join(nexuHomeDir, "device-names.json"),
   xhsOpsStorePath: path.join(nexuHomeDir, "xhs-ops.json"),
-  screenshotsDir: path.join(
-    os.homedir(),
-    ".openclaw",
-    "media",
-    "lobster-screenshots",
-  ),
+  // Where the phone agent actually writes task screenshots. This was hardcoded
+  // to ~/.openclaw/media/lobster-screenshots, wrong on both counts: the folder
+  // was renamed to tabby-screenshots, and the state dir is configurable
+  // (OPENCLAW_STATE_DIR), so it is rarely ~/.openclaw. Every
+  // /api/v1/media/screenshots/:filename therefore 404'd.
+  screenshotsDir: path.join(openclawStateDir, "media", "tabby-screenshots"),
   compiledOpenclawSnapshotPath: path.join(
     nexuHomeDir,
     "compiled-openclaw.json",

@@ -249,7 +249,7 @@ export function AngleDialog({
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="补充场景描述（可留空）"
-                  className="w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm font-normal text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-sky-400"
+                  className="w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm font-normal text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-[var(--color-brand-primary)]"
                 />
               </label>
             </div>
@@ -260,7 +260,7 @@ export function AngleDialog({
                 type="button"
                 data-canvas-angle-confirm="true"
                 onClick={handleConfirm}
-                className="rounded-lg bg-sky-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-600"
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)]"
               >
                 生成新视角
               </button>

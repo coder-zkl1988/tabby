@@ -2,15 +2,21 @@
 import { A2UIRenderer } from "@/lib/a2ui";
 import { Group, ImagePlus, Music2, Video } from "lucide-react";
 import { type ReactNode, memo, useState } from "react";
+import { StatusPill } from "../a2ui/a2ui-status";
 import { openCanvasDialog } from "./canvas-dialogs";
 import { retryNodeTask } from "./canvas-generation";
 import { memberIdsOf } from "./canvas-groups";
+import { readFilesAsDataUrls } from "./canvas-ingest";
 import {
   type CanvasNode,
   getA2UIPayload,
   updateNode,
   useCanvas,
 } from "./canvas-store";
+import {
+  setActiveTextAlternative,
+  updateTextNodeContent,
+} from "./canvas-text-alternatives";
 import { useCanvasUiPrefs } from "./canvas-ui-prefs";
 import { ConfigNodeContent } from "./config-node";
 import { PhoneNodeContent } from "./phone-node";
@@ -48,39 +54,78 @@ function TextNodeContent({ node }: { node: CanvasNode }) {
   const [editing, setEditing] = useState(false);
   const fontSize = node.metadata.fontSize ?? 14;
   const content = node.metadata.content ?? "";
+  const alternatives = node.metadata.textAlternatives;
 
-  if (editing) {
-    return (
-      <textarea
-        // biome-ignore lint/a11y/noAutofocus: edit mode intentionally auto-focuses
-        autoFocus
-        data-canvas-wheel-exempt="true"
-        className="h-full w-full select-text resize-none bg-transparent font-mono text-sm outline-none"
-        style={{ fontSize }}
-        value={content}
-        onChange={(event) =>
-          updateNode(node.id, { metadata: { content: event.target.value } })
+  const body = editing ? (
+    <textarea
+      // biome-ignore lint/a11y/noAutofocus: edit mode intentionally auto-focuses
+      autoFocus
+      data-canvas-wheel-exempt="true"
+      className="min-h-0 w-full flex-1 select-text resize-none bg-transparent font-mono text-sm outline-none"
+      style={{ fontSize }}
+      value={content}
+      // Writes through to the active alternative too, so switching away after
+      // an edit doesn't quietly restore the generated text.
+      onChange={(event) => updateTextNodeContent(node.id, event.target.value)}
+      onBlur={() => setEditing(false)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          setEditing(false);
         }
-        onBlur={() => setEditing(false)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.stopPropagation();
-            setEditing(false);
-          }
-        }}
-      />
-    );
-  }
-
-  return (
+      }}
+    />
+  ) : (
     <div
       data-canvas-text-display
       data-canvas-wheel-exempt="true"
-      className="h-full w-full select-none overflow-y-auto whitespace-pre-wrap font-mono text-sm"
+      className="min-h-0 w-full flex-1 select-none overflow-y-auto whitespace-pre-wrap font-mono text-sm"
       style={{ fontSize }}
       onDoubleClick={() => setEditing(true)}
     >
       {content || <span className="text-text-tertiary">双击编辑文字</span>}
+    </div>
+  );
+
+  if (!alternatives || alternatives.items.length <= 1) {
+    return <div className="flex h-full w-full flex-col">{body}</div>;
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col gap-1.5">
+      {body}
+      {/* Alternative switcher (reference v0.17): several generations live in
+          this one node rather than fanning out like images. */}
+      <div
+        data-canvas-text-alternatives={node.id}
+        className="flex shrink-0 flex-wrap items-center gap-1 text-[11px]"
+      >
+        {alternatives.items.map((_, index) => (
+          <button
+            // biome-ignore lint/suspicious/noArrayIndexKey: the slot IS the identity
+            key={index}
+            type="button"
+            data-canvas-text-alternative={index}
+            aria-label={`备选 ${index + 1}`}
+            aria-pressed={index === alternatives.activeIndex}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => setActiveTextAlternative(node.id, index)}
+            className={
+              index === alternatives.activeIndex
+                ? "rounded-md bg-[var(--color-accent)] px-1.5 py-0.5 font-medium text-[var(--color-accent-fg)]"
+                : "rounded-md bg-surface-2 px-1.5 py-0.5 text-text-secondary hover:text-text-primary"
+            }
+          >
+            {index + 1}
+          </button>
+        ))}
+        {alternatives.requested !== undefined ? (
+          <span className="text-text-tertiary">
+            {alternatives.items.length}/{alternatives.requested}{" "}
+            条，其余生成失败
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -102,15 +147,54 @@ export const NodeBody = memo(
 function EmptyMediaHint({
   icon,
   label,
+  nodeId,
+  accept,
 }: {
   icon: ReactNode;
   label: string;
+  nodeId?: string;
+  accept?: string;
 }) {
-  // Reference parity: soft-filled panel, quiet centered icon + text-sm label.
+  // An empty node used to be a label and nothing else — the two ways to fill
+  // it (upload, asset library) both lived elsewhere. They are 28px because
+  // they sit inside the node body, not on a form.
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-2xl bg-surface-2/60 text-text-tertiary">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-2xl bg-surface-2/60 p-4 text-text-secondary">
       <span className="opacity-35">{icon}</span>
-      <span className="text-sm">{label}</span>
+      <span className="text-[13px]">{label}</span>
+      {nodeId ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {/* Upload is the one action that can fill THIS node: the asset
+              picker is a global dialog with no node target. */}
+          <label
+            className="inline-flex h-7 cursor-pointer items-center rounded-md border border-border-strong bg-surface-1 px-2.5 text-[12px] font-medium text-text-primary transition-colors hover:border-[var(--color-accent)]"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            上传
+            <input
+              type="file"
+              accept={accept}
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                if (files.length === 0) return;
+                void readFilesAsDataUrls(files).then((inputs) => {
+                  const first = inputs[0];
+                  if (!first) return;
+                  updateNode(nodeId, {
+                    title: first.name,
+                    metadata: {
+                      content: first.dataUrl,
+                      mimeType: first.type,
+                    },
+                  });
+                });
+              }}
+            />
+          </label>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -183,10 +267,8 @@ function NodeContent({ node }: { node: CanvasNode }): ReactNode {
         data-canvas-node-generating={node.id}
         className="flex h-full w-full flex-col items-center justify-center gap-3"
       >
-        <div className="size-10 animate-spin rounded-full border-2 border-border border-t-sky-500" />
-        <span className="text-[11px] tracking-[0.18em] text-text-tertiary">
-          生成中
-        </span>
+        <div className="size-10 animate-spin rounded-full border-2 border-border border-t-[var(--color-brand-primary)]" />
+        <StatusPill tone="running">生成中</StatusPill>
       </div>
     );
   }
@@ -194,17 +276,18 @@ function NodeContent({ node }: { node: CanvasNode }): ReactNode {
     return (
       <div
         data-canvas-node-error={node.id}
-        className="flex h-full w-full flex-col items-center justify-center gap-2"
+        className="flex h-full w-full flex-col items-center justify-center gap-3 p-4"
       >
-        <p className="text-[11px] text-danger">
-          {node.metadata.task.error ?? "生成失败，请重试"}
+        <StatusPill tone="failed">生成失败</StatusPill>
+        <p className="max-w-full text-center text-[12px] leading-[1.5] text-text-secondary">
+          {node.metadata.task.error ?? "未返回失败原因"}
         </p>
         <button
           type="button"
           data-canvas-node-retry={node.id}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => retryNodeTask(node.id)}
-          className="rounded-full border border-border px-3 py-1 text-[11px] text-text-secondary hover:bg-surface-2"
+          className="inline-flex h-9 items-center rounded-lg bg-[var(--color-accent)] px-5 text-[13px] font-semibold text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)]"
         >
           重试
         </button>
@@ -221,7 +304,12 @@ function NodeContent({ node }: { node: CanvasNode }): ReactNode {
         className="h-full w-full bg-black object-contain"
       />
     ) : (
-      <EmptyMediaHint icon={<Video size={28} />} label="空视频节点" />
+      <EmptyMediaHint
+        icon={<Video size={28} />}
+        label="空视频节点"
+        nodeId={node.id}
+        accept="video/*"
+      />
     );
   }
   if (node.type === "audio") {
@@ -236,7 +324,12 @@ function NodeContent({ node }: { node: CanvasNode }): ReactNode {
         <audio src={node.metadata.content} controls className="w-full" />
       </div>
     ) : (
-      <EmptyMediaHint icon={<Music2 size={28} />} label="空音频节点" />
+      <EmptyMediaHint
+        icon={<Music2 size={28} />}
+        label="空音频节点"
+        nodeId={node.id}
+        accept="audio/*"
+      />
     );
   }
   if (node.type === "a2ui") {

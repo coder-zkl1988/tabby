@@ -15,7 +15,11 @@ import {
   generateVideoIntoNode,
 } from "./canvas-generation";
 import { addNode, connectNodes, getCanvasState } from "./canvas-store";
-import { usableReferencePaths } from "./prompt-panel-utils";
+import {
+  labelUpstreamTextBlocks,
+  resolveImagePixelSize,
+  usableReferencePaths,
+} from "./prompt-panel-utils";
 import { collectUpstream } from "./resource-references";
 import {
   type VideoAspectRatio,
@@ -66,6 +70,8 @@ export type ConfigGenerationPlan =
       kind: "text";
       prompt: string;
       model?: string;
+      /** How many alternatives to generate (1-4). */
+      count?: number;
     };
 
 type PlanError = { error: "no-config" | "no-prompt" };
@@ -76,8 +82,8 @@ type PlanError = { error: "no-config" | "no-prompt" };
  * Build a typed generation plan from the config node's current state.
  *
  * - Reads `metadata.config` for mode/params.
- * - Reads upstream resources: prompts joined with `"\n\n"` (trimmed items),
- *   images filtered through `usableReferencePaths`.
+ * - Reads upstream resources: prompts joined with `"\n\n"` as 【文本N】-labeled
+ *   blocks (trimmed items), images filtered through `usableReferencePaths`.
  * - Returns `{ error: "no-config" }` if `metadata.config` is absent.
  * - Returns `{ error: "no-prompt" }` if upstream produces no non-empty prompt.
  */
@@ -91,9 +97,11 @@ export function buildConfigGenerationPlan(
   const upstream = collectUpstream(nodeId);
 
   // Prompt = the composer's base prompt (if any) followed by the trimmed,
-  // non-empty upstream text items, joined with a double newline.
+  // non-empty upstream text items as 【文本N】-labeled blocks, joined with a
+  // double newline. Same helper as the prompt panel so a given text node
+  // carries the same number on both paths.
   const composed = cfg.composedPrompt?.trim();
-  const prompt = [composed, ...upstream.prompts.map((p) => p.trim())]
+  const prompt = [composed, ...labelUpstreamTextBlocks(upstream.prompts)]
     .filter((p): p is string => p !== undefined && p.length > 0)
     .join("\n\n");
 
@@ -101,6 +109,12 @@ export function buildConfigGenerationPlan(
 
   if (cfg.mode === "image") {
     const referenceImages = usableReferencePaths(upstream.images);
+    // Same fixed table as the prompt panel: a tier plus an aspect ratio resolves
+    // to concrete pixels, a tier on its own is sent as-is.
+    const pixelSize = resolveImagePixelSize(
+      cfg.size ?? "",
+      cfg.aspectRatio ?? "",
+    );
     return {
       kind: "image",
       prompt,
@@ -111,7 +125,7 @@ export function buildConfigGenerationPlan(
       ...(cfg.aspectRatio !== undefined
         ? { aspectRatio: cfg.aspectRatio }
         : {}),
-      ...(cfg.size !== undefined ? { size: cfg.size } : {}),
+      ...(cfg.size !== undefined ? { size: pixelSize ?? cfg.size } : {}),
     };
   }
 
@@ -164,6 +178,7 @@ export function buildConfigGenerationPlan(
       kind: "text",
       prompt,
       ...(cfg.model !== undefined ? { model: cfg.model } : {}),
+      ...(cfg.textCount !== undefined ? { count: cfg.textCount } : {}),
     };
   }
 
@@ -258,6 +273,7 @@ export function runConfigGeneration(
   if (plan.kind === "text") {
     return generateTextIntoNode(resultNode.id, plan.prompt, {
       ...(plan.model !== undefined ? { model: plan.model } : {}),
+      ...(plan.count !== undefined ? { count: plan.count } : {}),
     });
   }
 

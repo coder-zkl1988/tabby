@@ -488,7 +488,7 @@ const COMPONENT_SCHEMAS = [
   },
   {
     type: "XhsOpsProfileCard",
-    required: ["id", "type", "projectId", "profile"],
+    required: ["id", "type", "projectId"],
     properties: {
       id: { type: "string", description: "Unique component ID" },
       type: { const: "XhsOpsProfileCard" },
@@ -505,7 +505,7 @@ const COMPONENT_SCHEMAS = [
   },
   {
     type: "XhsOpsAccountPlanner",
-    required: ["id", "type", "projectId", "suggestions"],
+    required: ["id", "type", "projectId"],
     properties: {
       id: { type: "string", description: "Unique component ID" },
       type: { const: "XhsOpsAccountPlanner" },
@@ -516,7 +516,7 @@ const COMPONENT_SCHEMAS = [
       suggestions: {
         type: "array",
         description:
-          "Differentiated KOC persona suggestions — generate TEN by default unless the user asks for another count (the ops spec's minimal loop generates 10 personas, then binds 2-3 to phones). Each: {label (<=40 chars, unique), positioning (one sentence), persona {age, gender, region, occupation, lifeStatus} (REQUIRED structured demographics), interestPool {core[], extended[], general[]}}. Personas must differ from each other (age band / city district / occupation / life status / interest mix) while their overall distribution matches the CONFIRMED target profile (e.g. ~70% female if the profile says so). The card lists connected phones for binding.",
+          "Optional candidates; prefer the card’s N-count generate/retry and human distribution review. Wait for xhs_ops_personas_confirmed before materials. Differentiated KOC persona suggestions — generate TEN by default unless the user asks for another count (the ops spec's minimal loop generates 10 personas, then binds 2-3 to phones). Each: {label (<=40 chars, unique), positioning (one sentence), persona {age, gender, region, occupation, lifeStatus} (REQUIRED structured demographics), interestPool {core[], extended[], general[]}}. Personas must differ from each other (age band / city district / occupation / life status / interest mix) while their overall distribution matches the CONFIRMED target profile (e.g. ~70% female if the profile says so). The card lists connected phones for binding.",
         items: {
           type: "object",
           properties: {
@@ -537,6 +537,14 @@ const COMPONENT_SCHEMAS = [
                 lifeStatus: { type: "string" },
               },
               required: ["age", "gender", "region", "occupation", "lifeStatus"],
+            },
+            personaTags: {
+              type: "object",
+              description: "Compact archive tags, separate from the rotating interest pool: vertical 1–2 distinct tags, general 2–3 distinct tags.",
+              properties: {
+                vertical: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 2 },
+                general: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 3 },
+              },
             },
             interestPool: {
               type: "object",
@@ -701,9 +709,9 @@ WHEN TO USE:
 - Running the Xiaohongshu KOC account-nurturing (小红书养号) workflow — render the stage component IN ORDER, one stage at a time, in the same conversation:
     • collect / edit customer business + target-audience info → XhsOpsProjectForm (it fires xhs_ops_project_saved; then generate the target-user profile from the saved business/audience/opsNotes)
     • present the generated profile for HUMAN confirmation → XhsOpsProfileCard (wait for xhs_ops_profile_confirmed or xhs_ops_profile_regenerate; NEVER proceed to personas before confirmed — this gate is a product requirement)
-    • batch persona suggestions + phone binding → XhsOpsAccountPlanner (TEN personas by default, each with structured persona demographics {age, gender, region, occupation, lifeStatus}; differentiated from each other but jointly matching the confirmed profile)
-    • (optional, after personas are saved) account profile material → XhsOpsProfileMaterial (render with just projectId; the DESKTOP generates nickname/bio and 3 avatar + 3 cover candidates on button click, the user picks and edits, and only the user's 「应用到手机」 changes the public profile — you receive xhs_ops_profile_applied; never trigger profile changes yourself)
-    • today's per-account plan + execution + progress → XhsOpsRunPlanner (render it with just projectId — the desktop generates each account's plan from its interest pool and shows the rationale; pass plans only when the user dictated keywords; the user adjusts and starts; xhs_ops_run_finished carries the summary — do NOT re-dispatch afterwards, help review instead. Accounts whose browse defaults set dailySegments>1 get one card per segment; the desktop runs them serially and auto-chains them, so you receive one xhs_ops_run_finished per segment (payload.segment = {index, count}) — do not re-render the planner between segments. Daily auto-run (每日自动执行/定时/每天早上自动跑) is a switch + time on this planner card, stored on the project and fired by the desktop's own scheduler — do NOT create OpenClaw cron jobs or schedules for xhs-ops; just render the planner and tell the user to flip the switch)
+    • batch persona suggestions + phone binding → XhsOpsAccountPlanner (TEN personas by default, each with structured persona demographics {age, gender, region, occupation, lifeStatus}; differentiated from each other but jointly matching the confirmed profile; the card supports N-count generation and distribution review, and only xhs_ops_personas_confirmed advances to materials)
+    • required new-account profile material after personas are confirmed → XhsOpsProfileMaterial (render with projectId; desktop generates nickname/bio and avatar/cover candidates; the user supplies target platform ID, gender, exact birthday, region and interest tags. xhs_ops_profile_material_confirmed means only the eight draft fields were reviewed. Do not proceed to nurturing until xhs_ops_profile_applied reports independent target-account and eight-field verification. The user's separate setup action prepares installation/login, applies the profile and reads it back; failed/partial/unverified results remain locked. Never infer a birthday from an age range or trigger public-profile changes yourself)
+    • today's per-account plan + execution + progress → XhsOpsRunPlanner (render it with projectId after verified phone account setup — the desktop generates each account's plan from its interest pool and shows the rationale; if an account is not ready, the planner embeds the material step and keeps execution disabled; pass plans only when the user dictated keywords; the user adjusts and starts; xhs_ops_run_finished carries the summary — do NOT re-dispatch afterwards, help review instead. Accounts whose browse defaults set dailySegments>1 get one card per segment; the desktop runs them serially and auto-chains them, so you receive one xhs_ops_run_finished per segment (payload.segment = {index, count}) — do not re-render the planner between segments. Daily auto-run (每日自动执行/定时/每天早上自动跑) is a switch + time on this planner card, stored on the project and fired by the desktop's own scheduler — do NOT create OpenClaw cron jobs or schedules for xhs-ops; just render the planner and tell the user to flip the switch)
     • reviewing results across days (复盘/看板/效果如何/推荐流有没有变/哪些关键词不行/异常多不多) → XhsOpsDashboard, IMMEDIATELY and as the FIRST tool call. Pass projectId if this session already has it, otherwise pass projectName (what the user called it) or nothing — the component lets the user pick. The run data lives ONLY in the desktop's xhs-ops store, which this board reads; it is NOT in sessions_history, memory_search, files or exec output — do not search for it there. READ-ONLY: never re-dispatch phone tasks to "refresh" results. The user may save a 运营备注 there; you receive xhs_ops_dashboard_note_saved.
     • Never render these stages as plain text or Markdown lists — the components own the form, confirmation and progress UX.
     • comment review (评论审核/评论队列/给帖子评论/批准评论) → XhsOpsCommentReview. The DESKTOP generates candidate comments from browsed posts and the HUMAN approves each one there; comments are only ever sent by a later desktop comment task. You NEVER write, approve or send a comment yourself, never dispatch a phone task to comment, and never call device tools for it — render the queue and stop. You receive xhs_ops_comments_reviewed per decision; acknowledge briefly, do not restate the comment. Approved comments are dispatched to the phone by the USER from the same queue (「派发已批准的评论」, a desktop comment task whose phone policy only allows the verbatim approved text) — you receive xhs_ops_comment_run_started; never dispatch, retry or "help" by sending anything.

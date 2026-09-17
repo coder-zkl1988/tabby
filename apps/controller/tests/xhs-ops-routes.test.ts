@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ControllerContainer } from "../src/app/container.js";
 import { registerXhsOpsRoutes } from "../src/routes/xhs-ops-routes.js";
+import { ImageGenerationFailedError } from "../src/services/media-generation-service.js";
 import { XhsOpsCommentService } from "../src/services/xhs-ops-comment-service.js";
 import { XhsOpsProfileService } from "../src/services/xhs-ops-profile-service.js";
 import { XhsOpsRunService } from "../src/services/xhs-ops-run-service.js";
@@ -14,6 +15,94 @@ import type { ControllerBindings } from "../src/types.js";
 
 const tempDir = mkdtempSync(join(tmpdir(), "xhs-ops-routes-"));
 const store = new XhsOpsStore(join(tempDir, "xhs-ops.json"));
+const fixtureImage = join(tempDir, "profile.png");
+writeFileSync(fixtureImage, "fixture");
+const profile = {
+  summary: "亲子家庭",
+  base: { ageRange: "25–40", genderRatio: "不限", regions: ["北京"] },
+  verticalInterests: ["亲子酒店"],
+  generalInterests: ["咖啡", "摄影"],
+};
+async function prepareAccount(accountId: string, verify = false) {
+  const account = await store.getAccount(accountId);
+  if (!account) throw new Error("missing fixture");
+  const initial = await store.getProject(account.projectId);
+  if (!initial) throw new Error("missing project");
+  const project = await store.updateProject(initial.id, {
+    business: { industry: "旅行", product: "亲子酒店" },
+    audience: { ageRange: "25–40", genderRatio: "不限", regions: ["北京"] },
+  });
+  if (!project) throw new Error("missing project");
+  const confirmed = await store.confirmProfile(project.id, {
+    profile,
+    expectedUpdatedAt: project.updatedAt,
+  });
+  const patched = await store.updateAccount(account.id, {
+    positioning: "周末亲子生活",
+    persona: {
+      age: "32",
+      gender: "女",
+      region: "北京",
+      occupation: "设计师",
+      lifeStatus: "亲子家庭",
+    },
+    personaTags: { vertical: ["亲子酒店"], general: ["咖啡", "摄影"] },
+    platformAccountId: `test-${accountId}`,
+    interestPool: {
+      core: account.interestPool.core.length
+        ? account.interestPool.core
+        : ["亲子酒店"],
+      extended: ["周边游"],
+      general: ["咖啡", "摄影"],
+    },
+    profileDraft: {
+      ...account.profileDraft,
+      gender: "女",
+      birthday: "1994-01-01",
+      region: "北京",
+      interestTags: ["亲子", "咖啡"],
+    },
+  });
+  if (!patched) throw new Error("missing account");
+  await store.confirmPersonas(project.id, {
+    expectedUpdatedAt: confirmed.updatedAt,
+    accounts: [{ accountId, expectedUpdatedAt: patched.updatedAt }],
+    distributionReviewed: true,
+    reviewNote: "已核对测试人设分布",
+  });
+  if (verify) {
+    const ready = await store.updateAccount(accountId, {
+      profileDraft: {
+        ...patched.profileDraft,
+        nickname: account.label,
+        bio: "亲子生活",
+        avatarPath: fixtureImage,
+        coverPath: fixtureImage,
+        avatarCandidates: [fixtureImage],
+        coverCandidates: [fixtureImage],
+      },
+    });
+    if (!ready) throw new Error("missing fixture");
+    const reviewed = await store.confirmProfileDraft(accountId);
+    if (!reviewed) throw new Error("missing fixture");
+    await store.updateAccount(
+      accountId,
+      {},
+      {
+        profileApplyResult: {
+          expectedProfileDraft: reviewed.profileDraft,
+          expectedPlatformAccountId: reviewed.platformAccountId,
+          appliedAt: new Date().toISOString(),
+          applyStatus: "applied",
+          applyResult: "fixture verified",
+          verifiedAt: new Date().toISOString(),
+          verifiedAccountId: reviewed.platformAccountId,
+          verificationTaskId: "fixture-verification",
+        },
+      },
+    );
+  }
+}
 const runService = new XhsOpsRunService({
   store,
   // 路由冒烟不执行 run；三个方法按接口签名给桩即可。
@@ -54,7 +143,7 @@ const commentService = new XhsOpsCommentService({
   },
 });
 
-function buildApp() {
+function buildApp(overrides: Partial<ControllerContainer> = {}) {
   const app = new OpenAPIHono<ControllerBindings>();
   registerXhsOpsRoutes(app, {
     xhsOpsStore: store,
@@ -62,6 +151,7 @@ function buildApp() {
     xhsOpsProfileService: profileService,
     xhsOpsScheduler: scheduler,
     xhsOpsCommentService: commentService,
+    ...overrides,
   } as ControllerContainer);
   return app;
 }
@@ -71,6 +161,82 @@ afterAll(() => {
 });
 
 describe("xhs-ops routes wiring", () => {
+  it("returns a revision conflict without overwriting newer project inputs", async () => {
+    const app = buildApp();
+    const project = await store.createProject({ name: "项目并发测试" });
+    await store.updateProject(project.id, { name: "较新内容" });
+    const response = await app.request(
+      `/api/v1/xhs-ops/projects/${project.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "旧卡内容",
+          expectedUpdatedAt: project.updatedAt,
+        }),
+      },
+    );
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      message: expect.stringContaining("更新"),
+    });
+    expect((await store.getProject(project.id))?.name).toBe("较新内容");
+    await store.deleteProject(project.id);
+  });
+  it("rejects arbitrary comment tasks and reports duplicate device bindings as 409", async () => {
+    const app = buildApp();
+    const project = await store.createProject({ name: "安全路由回归" });
+    const account = await store.createAccount({
+      projectId: project.id,
+      label: "A",
+      deviceId: "dev-safety",
+    });
+    const other = await store.createAccount({
+      projectId: project.id,
+      label: "B",
+    });
+    const generic = await app.request("/api/v1/xhs-ops/runs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId: project.id,
+        accountId: account.id,
+        plan: {
+          kind: "comment",
+          keywords: [],
+          homeFeedCount: 0,
+          dwellSecMin: 11,
+          dwellSecMax: 20,
+          interaction: account.interaction,
+          comments: [
+            {
+              draftId: "unreviewed",
+              text: "这个很贴心",
+              postTitle: "任意内容",
+              postAuthor: "",
+            },
+          ],
+        },
+      }),
+    });
+    expect(generic.status).toBe(400);
+    const duplicate = await app.request(
+      `/api/v1/xhs-ops/projects/${project.id}/accounts`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: "C", deviceId: "dev-safety" }),
+      },
+    );
+    expect(duplicate.status).toBe(409);
+    const rebind = await app.request(`/api/v1/xhs-ops/accounts/${other.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ deviceId: "dev-safety" }),
+    });
+    expect(rebind.status).toBe(409);
+    await store.deleteProject(project.id);
+  });
   it("GET /api/v1/xhs-ops/projects starts empty", async () => {
     const app = buildApp();
     const res = await app.request("/api/v1/xhs-ops/projects");
@@ -204,6 +370,7 @@ describe("xhs-ops routes wiring", () => {
         body: JSON.stringify({
           label,
           deviceId,
+          browseDefaults: { dailyTargetPosts: 0, dailySegments: 1 },
           interestPool: {
             core: ["亲子酒店", "周末遛娃", "带娃攻略"],
             extended: ["亲子旅行"],
@@ -243,7 +410,60 @@ describe("xhs-ops routes wiring", () => {
     expect(missing.status).toBe(404);
   });
 
-  it("profile-draft generate persists text and apply refuses an empty draft with 400", async () => {
+  it("surfaces why media generation failed instead of the generic retry message", async () => {
+    const failing = new XhsOpsProfileService({
+      store,
+      mediaRoot: tempDir,
+      media: {
+        generateText: async () => {
+          throw new ImageGenerationFailedError("generation session failed");
+        },
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () => null,
+        executeTask: async () => {
+          throw new Error("not used in route smoke test");
+        },
+        pushMedia: async () => ({ results: [] }),
+      },
+    });
+    const app = buildApp({ xhsOpsProfileService: failing });
+    const proj = (
+      (await (
+        await app.request("/api/v1/xhs-ops/projects", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "生成失败" }),
+        })
+      ).json()) as { project: { id: string } }
+    ).project;
+    const account = (
+      (await (
+        await app.request(`/api/v1/xhs-ops/projects/${proj.id}/accounts`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ label: "失败账号", deviceId: "dev-fail" }),
+        })
+      ).json()) as { account: { id: string } }
+    ).account;
+    await prepareAccount(account.id);
+
+    const res = await app.request(
+      `/api/v1/xhs-ops/accounts/${account.id}/profile-draft/generate`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ parts: ["text"] }),
+      },
+    );
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { message: string }).message).toContain(
+      "模型服务不可用",
+    );
+  });
+
+  it("profile-draft generation invalidates review and confirmation requires all eight fields", async () => {
     const app = buildApp();
     const proj = (
       (await (
@@ -259,11 +479,12 @@ describe("xhs-ops routes wiring", () => {
         await app.request(`/api/v1/xhs-ops/projects/${proj.id}/accounts`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ label: "资料账号", deviceId: "dev-1" }),
+          body: JSON.stringify({ label: "资料账号", deviceId: "dev-profile" }),
         })
       ).json()) as { account: { id: string } }
     ).account;
 
+    await prepareAccount(account.id);
     const gen = await app.request(
       `/api/v1/xhs-ops/accounts/${account.id}/profile-draft/generate`,
       {
@@ -283,6 +504,69 @@ describe("xhs-ops routes wiring", () => {
       bio: "路由简介",
     });
 
+    const incompleteConfirm = await app.request(
+      `/api/v1/xhs-ops/accounts/${account.id}/profile-draft/confirm`,
+      { method: "POST" },
+    );
+    expect(incompleteConfirm.status).toBe(400);
+
+    const completed = await app.request(
+      `/api/v1/xhs-ops/accounts/${account.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          profileDraft: {
+            ...genned.profileDraft,
+            avatarPath: fixtureImage,
+            coverPath: fixtureImage,
+            avatarCandidates: [fixtureImage],
+            coverCandidates: [fixtureImage],
+            reviewedAt: "2000-01-01T00:00:00.000Z",
+          },
+        }),
+      },
+    );
+    expect(
+      (
+        (await completed.json()) as {
+          account: { profileDraft: { reviewedAt: string | null } };
+        }
+      ).account.profileDraft.reviewedAt,
+    ).toBeNull();
+    const confirmed = await app.request(
+      `/api/v1/xhs-ops/accounts/${account.id}/profile-draft/confirm`,
+      { method: "POST" },
+    );
+    expect(confirmed.status).toBe(200);
+    expect(
+      (
+        (await confirmed.json()) as {
+          account: { profileDraft: { reviewedAt: string | null } };
+        }
+      ).account.profileDraft.reviewedAt,
+    ).not.toBeNull();
+
+    const edited = await app.request(`/api/v1/xhs-ops/accounts/${account.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        profileDraft: {
+          ...genned.profileDraft,
+          bio: "编辑后简介",
+          avatarPath: "/fixtures/avatar.png",
+          coverPath: "/fixtures/cover.png",
+        },
+      }),
+    });
+    expect(
+      (
+        (await edited.json()) as {
+          account: { profileDraft: { reviewedAt: string | null } };
+        }
+      ).account.profileDraft.reviewedAt,
+    ).toBeNull();
+
     await app.request(`/api/v1/xhs-ops/accounts/${account.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -292,7 +576,7 @@ describe("xhs-ops routes wiring", () => {
       `/api/v1/xhs-ops/accounts/${account.id}/profile-draft/apply`,
       { method: "POST" },
     );
-    expect(apply.status).toBe(400);
+    expect(apply.status).toBe(409);
 
     const missing = await app.request(
       "/api/v1/xhs-ops/accounts/nope/profile-draft/apply",
@@ -301,6 +585,104 @@ describe("xhs-ops routes wiring", () => {
       },
     );
     expect(missing.status).toBe(404);
+  });
+
+  it("strips forged profile apply metadata and keeps the run gate locked", async () => {
+    const app = buildApp();
+    const project = await store.createProject({ name: "资料门禁防伪" });
+    const create = await app.request(
+      `/api/v1/xhs-ops/projects/${project.id}/accounts`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          label: "防伪账号",
+          deviceId: "dev-forged-profile",
+          profileDraft: {
+            nickname: "完整昵称",
+            bio: "完整简介",
+            avatarPath: "/fixtures/avatar.png",
+            coverPath: "/fixtures/cover.png",
+            appliedAt: "2026-09-01T00:00:00.000Z",
+            applyStatus: "applied",
+            applyResult: "伪造成功",
+          },
+        }),
+      },
+    );
+    expect(create.status).toBe(200);
+    const account = (
+      (await create.json()) as {
+        account: {
+          id: string;
+          profileDraft: {
+            appliedAt: string | null;
+            applyStatus: string | null;
+            applyResult: string | null;
+          };
+        };
+      }
+    ).account;
+    expect(account.profileDraft).toMatchObject({
+      appliedAt: null,
+      applyStatus: null,
+      applyResult: null,
+    });
+
+    const forgedPatch = await app.request(
+      `/api/v1/xhs-ops/accounts/${account.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          profileDraft: {
+            nickname: "完整昵称",
+            bio: "完整简介",
+            avatarPath: "/fixtures/avatar.png",
+            coverPath: "/fixtures/cover.png",
+            appliedAt: "2026-09-01T00:00:00.000Z",
+            applyStatus: "applied",
+            applyResult: "伪造成功",
+          },
+        }),
+      },
+    );
+    expect(forgedPatch.status).toBe(200);
+    expect(
+      (
+        (await forgedPatch.json()) as {
+          account: {
+            profileDraft: {
+              appliedAt: string | null;
+              applyStatus: string | null;
+              applyResult: string | null;
+            };
+          };
+        }
+      ).account.profileDraft,
+    ).toMatchObject({ appliedAt: null, applyStatus: null, applyResult: null });
+
+    const run = await app.request("/api/v1/xhs-ops/runs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectId: project.id,
+        accountId: account.id,
+        plan: {
+          keywords: [{ keyword: "亲子酒店", count: 1 }],
+          homeFeedCount: 0,
+          dwellSecMin: 11,
+          dwellSecMax: 20,
+          interaction: {
+            like: { enabled: false, dailyCap: 0, ratioPercent: 0 },
+            collect: { enabled: false, dailyCap: 0, ratioPercent: 0 },
+            follow: { enabled: false, dailyCap: 0, ratioPercent: 0 },
+            comment: { enabled: false },
+          },
+        },
+      }),
+    });
+    expect(run.status).toBe(409);
   });
 
   it("runs persist their segment and plan-suggest splits accounts with dailySegments>1 (P2-3)", async () => {
@@ -321,7 +703,15 @@ describe("xhs-ops routes wiring", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             label: "分段账号",
-            deviceId: "dev-1",
+            deviceId: "dev-segments",
+            profileDraft: {
+              nickname: "分段账号",
+              bio: "天秤座 INFJ｜分段测试",
+              avatarPath: "/fixtures/avatar.png",
+              coverPath: "/fixtures/cover.png",
+              appliedAt: "2026-09-01T00:00:00.000Z",
+              applyStatus: "applied",
+            },
             interestPool: {
               core: ["亲子酒店", "周末遛娃", "带娃攻略", "周边游"],
               extended: [],
@@ -341,6 +731,12 @@ describe("xhs-ops routes wiring", () => {
       dailyTargetPosts: 40,
       dailySegments: 2,
     });
+    await prepareAccount(account.id, true);
+    const confirmed = await app.request(
+      `/api/v1/xhs-ops/accounts/${account.id}/profile-draft/confirm`,
+      { method: "POST" },
+    );
+    expect(confirmed.status).toBe(200);
 
     const suggest = (await (
       await app.request(`/api/v1/xhs-ops/projects/${proj.id}/plan-suggest`)
@@ -363,7 +759,7 @@ describe("xhs-ops routes wiring", () => {
           plan: {
             keywords: [{ keyword: "亲子酒店", count: 4 }],
             homeFeedCount: 0,
-            dwellSecMin: 10,
+            dwellSecMin: 11,
             dwellSecMax: 20,
             interaction: {
               like: { enabled: false, dailyCap: 0, ratioPercent: 0 },
@@ -478,7 +874,7 @@ describe("xhs-ops routes wiring", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             label: "评论账号",
-            deviceId: "dev-1",
+            deviceId: "dev-comments",
             interaction: {
               like: { enabled: false, dailyCap: 0, ratioPercent: 0 },
               collect: { enabled: false, dailyCap: 0, ratioPercent: 0 },
@@ -500,14 +896,14 @@ describe("xhs-ops routes wiring", () => {
     const run = await store.createRun({
       projectId: proj.id,
       accountId: account.id,
-      deviceId: "dev-1",
+      deviceId: "dev-comments",
       accountLabel: "评论账号",
       date: new Date().toLocaleDateString("sv-SE"),
       status: "completed",
       plan: {
         keywords: [{ keyword: "亲子酒店", count: 8 }],
         homeFeedCount: 0,
-        dwellSecMin: 10,
+        dwellSecMin: 11,
         dwellSecMax: 20,
         interaction: account.interaction as never,
       },
@@ -557,6 +953,14 @@ describe("xhs-ops routes wiring", () => {
               commentWorthy: false,
               summary: "",
             },
+            {
+              title: "亲子酒店泳池体验",
+              author: "旅行者",
+              action: "none",
+              commentsRead: 12,
+              commentWorthy: true,
+              summary: "",
+            },
           ],
         },
       ],
@@ -588,7 +992,7 @@ describe("xhs-ops routes wiring", () => {
       }>;
       skipped: string[];
     };
-    expect(generated.drafts).toHaveLength(1); // commentWorthy 且非 skip 的只有第一篇
+    expect(generated.drafts).toHaveLength(2); // commentWorthy 且非 skip
     expect(generated.drafts[0]?.candidates).toHaveLength(3);
     expect(generated.skipped[0]).toContain("没看完");
 
@@ -598,7 +1002,7 @@ describe("xhs-ops routes wiring", () => {
       drafts: Array<{ status: string }>;
       quotas: Array<{ cap: number; remaining: number; byBrowse: number }>;
     };
-    expect(list.drafts.map((d) => d.status)).toEqual(["pending"]);
+    expect(list.drafts.map((d) => d.status)).toEqual(["pending", "pending"]);
     // 8 篇浏览 → byBrowse 1 → cap = min(2, 5, 1) = 1
     expect(list.quotas[0]).toMatchObject({ byBrowse: 1, cap: 1, remaining: 1 });
 
@@ -646,16 +1050,21 @@ describe("xhs-ops routes wiring", () => {
     ).json()) as { quota: { remaining: number; approvedPending: number } };
     expect(quota.quota).toMatchObject({ approvedPending: 1, remaining: 0 });
 
-    // 第二篇（显式指定）生成后，配额已满 → 批准 409
-    const gen2 = (await (
+    // 显式指定不适合评论的帖子时不生成草稿
+    const skippedGen = (await (
       await app.request(`/api/v1/xhs-ops/runs/${run.id}/comments/generate`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ posts: [{ chunkIndex: 0, postIndex: 2 }] }),
       })
-    ).json()) as { drafts: Array<{ id: string }> };
+    ).json()) as { drafts: Array<{ id: string }>; skipped: string[] };
+    expect(skippedGen.drafts).toHaveLength(0);
+    expect(skippedGen.skipped[0]).toContain("不适合评论");
+
+    // 第二个草稿批准时配额已满 → 409
+    const gen2 = generated.drafts[1];
     const full = await app.request(
-      `/api/v1/xhs-ops/comments/${gen2.drafts[0]?.id}/review`,
+      `/api/v1/xhs-ops/comments/${gen2?.id}/review`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },

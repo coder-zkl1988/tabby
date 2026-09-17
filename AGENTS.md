@@ -259,6 +259,9 @@ See `ARCHITECTURE.md` for the full bird's-eye view. Key points:
 | Product model | `specs/PRODUCT_SENSE.md` |
 | Quality signals | `specs/QUALITY_SCORE.md` |
 | Product specs | `specs/product-specs/` |
+| KOC installation/login startup preparation | `docs/plans/2026-09-08-koc-startup-preparation.md` |
+| KOC mindmap and V0.1 requirements audit | `docs/plans/2026-09-09-koc-requirements-audit.md` |
+| KOC stage completion and verification | `docs/plans/2026-09-09-koc-completion-plan.md` |
 | Execution plans | `specs/exec-plans/` |
 | Documentation sync | `skills/localdev/sync-specs/SKILL.md` |
 | Nano Banana (image gen) | `skills/nexubot/nano-banana/SKILL.md` |

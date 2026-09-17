@@ -185,6 +185,70 @@ describe("bundled Tabby media runner", () => {
     },
   );
 
+  it("keeps the images already produced when a later candidate fails", async () => {
+    let started = 0;
+    const runTrustedScript: RunTrustedScript = vi.fn(async (input) => {
+      started += 1;
+      // Candidates 1-2 succeed; candidate 3 fails both of its attempts.
+      if (started > 2) {
+        throw new Error(
+          "Error from tabby-image gateway (524): <!DOCTYPE html>",
+        );
+      }
+      const filenameIndex = input.args.indexOf("--filename");
+      const filename = input.args[filenameIndex + 1];
+      if (!filename) throw new Error("missing filename fixture argument");
+      writeFileSync(filename, "png");
+    });
+    let seq = 0;
+    const runner = new BundledTabbyMediaRunner({
+      staticSkillsDir,
+      openclawStateDir,
+      genId: () => {
+        seq += 1;
+        return `partial-${seq}`;
+      },
+      runTrustedScript,
+      imageRetryDelayMs: 0,
+    });
+
+    const paths = await runner.generateImage({
+      botId: "bot-1",
+      prompt: "cat",
+      count: 3,
+      model: "tabby-image-pro",
+      timeoutMs: 10_000,
+    });
+
+    expect(paths).toHaveLength(2);
+    // 2 successes + both attempts of the failing third candidate.
+    expect(runTrustedScript).toHaveBeenCalledTimes(4);
+  });
+
+  it("throws when no candidate at all could be produced", async () => {
+    const runTrustedScript: RunTrustedScript = vi.fn(async () => {
+      throw new Error("Error from tabby-image gateway (524): <!DOCTYPE html>");
+    });
+    const runner = new BundledTabbyMediaRunner({
+      staticSkillsDir,
+      openclawStateDir,
+      genId: () => "none-image-id",
+      runTrustedScript,
+      imageRetryDelayMs: 0,
+    });
+
+    await expect(
+      runner.generateImage({
+        botId: "bot-1",
+        prompt: "cat",
+        count: 3,
+        timeoutMs: 10_000,
+      }),
+    ).rejects.toThrow("tabby-image 中转站响应超时");
+    // Gives up after the first candidate exhausts its retries.
+    expect(runTrustedScript).toHaveBeenCalledTimes(2);
+  });
+
   it("does not retry request validation failures", async () => {
     const runTrustedScript: RunTrustedScript = vi.fn(async () => {
       throw new Error("INVALID_SIZE: unsupported");

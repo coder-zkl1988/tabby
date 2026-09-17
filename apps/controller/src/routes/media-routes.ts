@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { GenerateImageRequest, GenerateVideoRequest } from "@nexu/shared";
 import {
   describeImageRequestSchema,
   describeImageResponseSchema,
@@ -16,6 +17,9 @@ import {
   generateVideoRequestSchema,
   generateVideoResponseSchema,
   imageGenerationJobSchema,
+  saveInboundImageRequestSchema,
+  saveInboundImageResponseSchema,
+  videoGenerationJobSchema,
 } from "@nexu/shared";
 import type { ControllerContainer } from "../app/container.js";
 import { logger } from "../lib/logger.js";
@@ -25,9 +29,9 @@ import {
   resolveMediaFileWithinRoot,
 } from "../lib/media-cache.js";
 import {
-  ImageGenerationJobService,
-  ImageGenerationQueueFullError,
-} from "../services/image-generation-job-service.js";
+  MediaGenerationJobService,
+  MediaGenerationQueueFullError,
+} from "../services/media-generation-job-service.js";
 import {
   ImageGenerationFailedError,
   InvalidMediaReferenceError,
@@ -109,9 +113,17 @@ export function registerMediaRoutes(
   app: OpenAPIHono<ControllerBindings>,
   container: ControllerContainer,
 ): void {
-  const imageGenerationJobs = new ImageGenerationJobService({
-    generateImage: (input) =>
+  const imageGenerationJobs = new MediaGenerationJobService({
+    label: "图片生成",
+    run: (input: GenerateImageRequest) =>
       container.mediaGenerationService.generateImage(input),
+  });
+  // Video takes minutes, so the canvas submits a job, persists its id, and can
+  // pick the poll back up after a page reload instead of losing the run.
+  const videoGenerationJobs = new MediaGenerationJobService({
+    label: "视频生成",
+    run: (input: GenerateVideoRequest) =>
+      container.mediaGenerationService.generateVideo(input),
   });
 
   // The desktop uses this task API so slow image generation no longer keeps a
@@ -148,7 +160,7 @@ export function registerMediaRoutes(
       try {
         return c.json(imageGenerationJobs.submit(c.req.valid("json")), 202);
       } catch (error) {
-        if (error instanceof ImageGenerationQueueFullError) {
+        if (error instanceof MediaGenerationQueueFullError) {
           return c.json({ message: error.message }, 429);
         }
         throw error;
@@ -247,6 +259,75 @@ export function registerMediaRoutes(
         }
         return c.json(mediaGenerationFailure(error), 502);
       }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/media/video-jobs",
+      tags: ["Media"],
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: generateVideoRequestSchema },
+          },
+        },
+      },
+      responses: {
+        202: {
+          content: {
+            "application/json": { schema: videoGenerationJobSchema },
+          },
+          description: "Video generation job accepted",
+        },
+        429: {
+          content: {
+            "application/json": { schema: z.object({ message: z.string() }) },
+          },
+          description: "Video generation queue is full",
+        },
+      },
+    }),
+    (c) => {
+      try {
+        return c.json(videoGenerationJobs.submit(c.req.valid("json")), 202);
+      } catch (error) {
+        if (error instanceof MediaGenerationQueueFullError) {
+          return c.json({ message: error.message }, 429);
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/media/video-jobs/{jobId}",
+      tags: ["Media"],
+      request: {
+        params: z.object({ jobId: z.string().uuid() }),
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: videoGenerationJobSchema },
+          },
+          description: "Current video generation job state",
+        },
+        404: {
+          content: {
+            "application/json": { schema: z.object({ message: z.string() }) },
+          },
+          description: "Video generation job not found or expired",
+        },
+      },
+    }),
+    (c) => {
+      const job = videoGenerationJobs.get(c.req.valid("param").jobId);
+      if (!job) return c.json({ message: "视频生成任务不存在或已过期" }, 404);
+      return c.json(job, 200);
     },
   );
 
@@ -460,6 +541,51 @@ export function registerMediaRoutes(
           return c.json({ message: error.message }, 502);
         }
         return c.json(mediaGenerationFailure(error), 502);
+      }
+    },
+  );
+
+  // POST /api/v1/media/inbound-image — persist a canvas-composed PNG so it can
+  // be handed back as a `referenceImages` entry (those must be absolute paths
+  // under the media dir; a data URL is rejected).
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/media/inbound-image",
+      tags: ["Media"],
+      request: {
+        body: {
+          content: {
+            "application/json": { schema: saveInboundImageRequestSchema },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: saveInboundImageResponseSchema },
+          },
+          description: "Image saved into the inbound media dir",
+        },
+        400: {
+          content: {
+            "application/json": { schema: z.object({ message: z.string() }) },
+          },
+          description: "Invalid image data",
+        },
+      },
+    }),
+    async (c) => {
+      const input = c.req.valid("json");
+      try {
+        const result =
+          await container.mediaGenerationService.saveInboundImage(input);
+        return c.json(result, 200);
+      } catch (error) {
+        if (error instanceof InvalidMediaReferenceError) {
+          return c.json({ message: error.message }, 400);
+        }
+        throw error;
       }
     },
   );

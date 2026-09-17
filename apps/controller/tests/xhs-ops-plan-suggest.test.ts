@@ -139,15 +139,21 @@ describe("suggestPlan (P1-4 当日计划确定性生成)", () => {
 
 describe("computeChunkQuota with ratioPercent (P1-4 触发比例生效)", () => {
   const config = account().interaction;
-  it("ratio caps the per-chunk allowance below the daily share", () => {
-    // like: cap 5 / 4 chunks → share 2；ratio 10% × 5 篇 → 1
-    const q = computeChunkQuota(
+  it("unlocks the ratio budget from cumulative planned posts without per-chunk ceil inflation", () => {
+    const first = computeChunkQuota(
       config,
       { like: 0, collect: 0, follow: 0 },
       4,
       5,
     );
-    expect(q.like).toEqual({ enabled: true, max: 1 });
+    const second = computeChunkQuota(
+      config,
+      { like: 0, collect: 0, follow: 0 },
+      4,
+      10,
+    );
+    expect(first.like).toMatchObject({ enabled: false, max: 0 });
+    expect(second.like).toMatchObject({ enabled: true, max: 1 });
   });
   it("ratio 0 disables interaction for the chunk even when enabled", () => {
     const zero = {
@@ -156,12 +162,12 @@ describe("computeChunkQuota with ratioPercent (P1-4 触发比例生效)", () => 
     };
     expect(
       computeChunkQuota(zero, { like: 0, collect: 0, follow: 0 }, 2, 5).like,
-    ).toEqual({ enabled: false, max: 0 });
+    ).toMatchObject({ enabled: false, max: 0 });
   });
   it("without plannedCount the legacy share/remaining rule still applies", () => {
     expect(
       computeChunkQuota(config, { like: 4, collect: 0, follow: 0 }, 4).like,
-    ).toEqual({ enabled: true, max: 1 });
+    ).toMatchObject({ enabled: true, max: 1 });
   });
 });
 
@@ -186,14 +192,75 @@ describe("suggestDailyPlans (P2-3 当日容量拆分，可选能力)", () => {
     const words = plans.map((p) => p.keywords.map((k) => k.keyword).join(","));
     expect(words[0]).not.toBe(words[1]); // 第 2 段视作下一轮，核心词轮换
     for (const p of plans) {
-      // 40 ÷ 2 = 20 篇/段；搜索占比 80% → 搜索 16 → 每词 ceil(16/5)=4 → 20 篇，首页补 0
-      expect(p.keywords.every((k) => k.count === 4)).toBe(true);
+      // 40 ÷ 2 = 20 篇/段；搜索占比 80% → 搜索 16（4+3+3+3+3）+ 首页 4。
+      expect(p.keywords.map((k) => k.count)).toEqual([4, 3, 3, 3, 3]);
+      expect(p.homeFeedCount).toBe(4);
       expect(
         p.keywords.reduce((n, k) => n + k.count, 0) + p.homeFeedCount,
       ).toBe(20);
       expect(p.rationale[0]).toContain("第 ");
       expect(p.rationale.join(" ")).toContain("日目标 40 篇 ÷ 2 段");
     }
+  });
+
+  it("fills the default 90-post daily target exactly across two segments", () => {
+    const acct = account({
+      browseDefaults: { ...browse, dailyTargetPosts: 90, dailySegments: 2 },
+    });
+
+    const plans = suggestDailyPlans(acct, [], "2026-09-05");
+
+    expect(
+      plans.map(
+        (plan) =>
+          plan.keywords.reduce((sum, keyword) => sum + keyword.count, 0) +
+          plan.homeFeedCount,
+      ),
+    ).toEqual([45, 45]);
+    expect(plans.every((plan) => plan.homeFeedCount === 9)).toBe(true);
+  });
+
+  it("uses additional interest words when the configured search target needs them", () => {
+    const acct = account({
+      browseDefaults: {
+        ...browse,
+        dailyTargetPosts: 96,
+        dailySegments: 2,
+        searchRatioPercent: 100,
+      },
+    });
+
+    const plans = suggestDailyPlans(acct, [], "2026-09-05");
+
+    expect(plans[0]?.keywords).toHaveLength(6);
+    expect(
+      plans[0]?.keywords.reduce((sum, keyword) => sum + keyword.count, 0),
+    ).toBe(48);
+  });
+
+  it("rejects a target that cannot fit instead of silently planning fewer posts", () => {
+    const acct = account({
+      interestPool: { core: ["亲子酒店"], extended: [], general: [] },
+      browseDefaults: { ...browse, dailyTargetPosts: 90, dailySegments: 2 },
+    });
+
+    expect(() => suggestDailyPlans(acct, [], "2026-09-05")).toThrow(
+      "请补充兴趣池或增加每日分段",
+    );
+    expect(() =>
+      suggestDailyPlans(
+        account({
+          browseDefaults: {
+            ...browse,
+            dailyTargetPosts: 90,
+            dailySegments: 2,
+            searchRatioPercent: 0,
+          },
+        }),
+        [],
+        "2026-09-05",
+      ),
+    ).toThrow("请提高搜索占比或增加每日分段");
   });
 
   it("skips segments already planned/running/completed today; cancelled, failed and interrupted stay open", () => {
@@ -227,11 +294,61 @@ describe("suggestDailyPlans (P2-3 当日容量拆分，可选能力)", () => {
       browseDefaults: { ...browse, dailyTargetPosts: 30, dailySegments: 1 },
     });
     const [plan] = suggestDailyPlans(acct, [], "2026-09-05");
-    // 30 篇 × 80% = 24 搜索 → 每词 ceil(24/5)=5 → 25；首页 = 30-25 = 5
+    // 30 篇 × 80% = 24 搜索（5+5+5+5+4）+ 首页 6。
     expect(plan?.segment).toBeNull();
-    expect(plan?.keywords.reduce((n, k) => n + k.count, 0)).toBe(25);
-    expect(plan?.homeFeedCount).toBe(5);
+    expect(plan?.keywords.map((k) => k.count)).toEqual([5, 5, 5, 5, 4]);
+    expect(plan?.homeFeedCount).toBe(6);
     expect(plan?.rationale.join(" ")).toContain("本次目标 30 篇");
+  });
+
+  it("keeps an odd daily target exact across segments instead of rounding every segment up", () => {
+    const acct = account({
+      browseDefaults: { ...browse, dailyTargetPosts: 41, dailySegments: 2 },
+    });
+
+    const plans = suggestDailyPlans(acct, [], "2026-09-05");
+    const totals = plans.map(
+      (plan) =>
+        plan.keywords.reduce((sum, keyword) => sum + keyword.count, 0) +
+        plan.homeFeedCount,
+    );
+
+    expect(totals).toEqual([21, 20]);
+    expect(totals.reduce((sum, total) => sum + total, 0)).toBe(41);
+  });
+
+  it("supports home-only at 0% and search-only at 100%", () => {
+    const atRatio = (searchRatioPercent: number) =>
+      suggestDailyPlans(
+        account({
+          browseDefaults: {
+            ...browse,
+            dailyTargetPosts: 10,
+            searchRatioPercent,
+          },
+        }),
+        [],
+        "2026-09-05",
+      )[0];
+
+    expect(atRatio(0)).toMatchObject({ keywords: [], homeFeedCount: 10 });
+    expect(atRatio(100)).toMatchObject({ homeFeedCount: 0 });
+    expect(
+      atRatio(100)?.keywords.reduce((sum, keyword) => sum + keyword.count, 0),
+    ).toBe(10);
+  });
+
+  it("does not move an unfillable search budget into the home-feed budget", () => {
+    expect(() =>
+      suggestDailyPlans(
+        account({
+          interestPool: { core: ["亲子酒店"], extended: [], general: [] },
+          browseDefaults: { ...browse, dailyTargetPosts: 20 },
+        }),
+        [],
+        "2026-09-05",
+      ),
+    ).toThrow("本段搜索目标 16 篇至少需要 2 个兴趣词");
   });
 
   it("chunkMaxSteps gives home-feed chunks more headroom than search, capped at the phone's 100", () => {

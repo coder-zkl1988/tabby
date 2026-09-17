@@ -1,4 +1,5 @@
 import { Switch } from "@/components/ui/switch";
+import { type XhsOpsProject, xhsOpsAccountNurtureIssues } from "@nexu/shared";
 import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import {
   type MutableRefObject,
@@ -9,6 +10,11 @@ import {
   useState,
 } from "react";
 import type { CustomComponentProps } from "../registry";
+import {
+  XhsOpsPreparationStatus,
+  getRunPreparation,
+} from "./XhsOpsPreparationStatus";
+import { XhsOpsProfileMaterialContent } from "./XhsOpsProfileMaterial";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import { localDateString } from "./xhs-ops-dashboard-data";
 import { ProjectPicker, useProjectResolution } from "./xhs-ops-project-picker";
@@ -41,6 +47,7 @@ import {
   PrimaryButton,
   SecondaryButton,
   SectionTitle,
+  Skeleton,
   StatusDot,
   anomalyLabel,
   chunkStatusLabel,
@@ -221,6 +228,17 @@ export function XhsOpsRunPlanner({
     null,
   );
   const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [accountsReload, setAccountsReload] = useState(0);
+  const [project, setProject] = useState<XhsOpsProject | null>(null);
+  const blockingAccounts = accounts
+    ? [...accounts.values()]
+        .filter((account) => Boolean(account.deviceId))
+        .map((account) => ({
+          account,
+          issues: xhsOpsAccountNurtureIssues(account, project),
+        }))
+        .filter((entry) => entry.issues.length > 0)
+    : [];
   const firedRef = useRef<Set<string> | null>(null);
   if (firedRef.current === null) firedRef.current = loadFiredRunIds();
 
@@ -233,6 +251,7 @@ export function XhsOpsRunPlanner({
   const [autoError, setAutoError] = useState<string | null>(null);
   useEffect(() => {
     if (plans.length > 0 || !projectId) return;
+    if (accounts === null) return;
     let cancelled = false;
     setAutoPlans(null);
     xhsOpsApi
@@ -268,7 +287,7 @@ export function XhsOpsRunPlanner({
     return () => {
       cancelled = true;
     };
-  }, [plansKey, projectId, plans.length]);
+  }, [projectId, plans.length, accounts]);
   const effectivePlans = plans.length > 0 ? plans : (autoPlans ?? []);
 
   // P2-3 串行分段：第 k 段要等第 k-1 段结束才可开始；默认自动接续。
@@ -289,27 +308,80 @@ export function XhsOpsRunPlanner({
       }),
     );
 
+  // Suggested plans omit segments that already ran today. Rebuild predecessor
+  // completion from run history so reopening the planner neither deadlocks a
+  // later segment nor treats a failed/cancelled/interrupted segment as success.
   useEffect(() => {
+    if (!projectId || !hasSegments) return;
+    let cancelled = false;
+    const refreshFinishedSegments = async () => {
+      try {
+        const runs = await xhsOpsApi.listRuns({ projectId });
+        if (cancelled) return;
+        const today = localDateString(new Date());
+        const latestBySegment = new Map<string, XhsOpsRun>();
+        for (const run of runs) {
+          if (run.date !== today || run.segment === null) continue;
+          const key = planKey({
+            accountId: run.accountId,
+            segment: run.segment,
+          });
+          if (!latestBySegment.has(key)) latestBySegment.set(key, run);
+        }
+        const completed = new Set(
+          [...latestBySegment.entries()]
+            .filter(([, run]) => run.status === "completed")
+            .map(([key]) => key),
+        );
+        setFinishedKeys((previous) => {
+          if (
+            previous.size === completed.size &&
+            [...previous].every((key) => completed.has(key))
+          ) {
+            return previous;
+          }
+          return completed;
+        });
+      } catch {
+        // Individual cards still load their own history and surface API errors.
+      }
+    };
+    void refreshFinishedSegments();
+    const timer = setInterval(() => {
+      void refreshFinishedSegments();
+    }, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [projectId, hasSegments]);
+
+  useEffect(() => {
+    void accountsReload;
     if (!projectId) return;
     let cancelled = false;
-    xhsOpsApi
-      .listAccounts(projectId)
-      .then((list) => {
+    Promise.all([
+      xhsOpsApi.getProject(projectId),
+      xhsOpsApi.listAccounts(projectId),
+    ])
+      .then(([nextProject, list]) => {
         if (cancelled) return;
+        setProject(nextProject);
         setAccounts(new Map(list.map((a) => [a.id, a])));
         setAccountsError(null);
       })
       .catch((err) => {
         if (cancelled) return;
+        setProject(null);
         setAccounts(new Map());
         setAccountsError(
-          describeXhsOpsError(err, "账号信息加载失败，将使用默认浏览配置"),
+          describeXhsOpsError(err, "项目或账号信息加载失败，无法确认养号条件"),
         );
       });
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, accountsReload]);
 
   if (!projectId) {
     return (
@@ -324,39 +396,66 @@ export function XhsOpsRunPlanner({
     );
   }
 
-  if (plans.length === 0 && autoPlans === null) {
-    return (
-      <CardShell testId="run-planner" title="今日浏览计划">
-        <HintLine>正在按各账号兴趣池生成今日计划…</HintLine>
-      </CardShell>
-    );
-  }
-
-  if (effectivePlans.length === 0) {
-    return (
-      <CardShell testId="run-planner" title="今日浏览计划">
-        <ErrorLine
-          message={
-            autoError ??
-            "没有可执行的计划：项目下没有已绑定手机的账号、plans 缺少 accountId，或今日各段已全部执行（复盘请打开看板）"
-          }
-        />
-      </CardShell>
-    );
-  }
-
   if (accounts === null) {
     return (
       <CardShell testId="run-planner" title="今日浏览计划">
-        <HintLine>正在加载账号信息…</HintLine>
+        <Skeleton rows={2} label="正在加载账号信息" />
+      </CardShell>
+    );
+  }
+
+  if (accountsError) {
+    return (
+      <CardShell testId="run-planner" title="今日浏览计划">
+        <ErrorLine message={accountsError} />
+        <SecondaryButton
+          onClick={() => setAccountsReload((value) => value + 1)}
+        >
+          重新加载账号
+        </SecondaryButton>
+      </CardShell>
+    );
+  }
+
+  if (plans.length === 0 && autoPlans === null) {
+    return (
+      <CardShell testId="run-planner" title="今日浏览计划">
+        <Skeleton rows={3} label="正在按各账号兴趣池生成今日计划" />
       </CardShell>
     );
   }
 
   return (
-    <div className="flex w-full max-w-[720px] flex-col gap-3">
+    <div
+      data-testid="run-planner"
+      className="flex w-full max-w-[720px] flex-col gap-3"
+    >
       {accountsError ? <ErrorLine message={accountsError} /> : null}
-      <ScheduleBar projectId={projectId} />
+      {autoError ? <ErrorLine message={autoError} /> : null}
+      {blockingAccounts.length > 0 ? (
+        <NurtureGate
+          projectId={projectId}
+          entries={blockingAccounts}
+          onAction={(name, payload) => {
+            onAction?.(name, payload);
+            setAccountsReload((value) => value + 1);
+          }}
+          onAccountChange={(updated) =>
+            setAccounts((current) => {
+              if (!current) return current;
+              const next = new Map(current);
+              next.set(updated.id, updated);
+              return next;
+            })
+          }
+        />
+      ) : null}
+      <HintLine>
+        手机任务开始后以本卡进度为准；对话助手通知失败不会中断手机执行。
+      </HintLine>
+      {blockingAccounts.length === 0 ? (
+        <ScheduleBar projectId={projectId} />
+      ) : null}
       {hasSegments ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2/40 px-3 py-1.5 text-[12px]">
           <span className="text-text-secondary">
@@ -372,6 +471,9 @@ export function XhsOpsRunPlanner({
           </div>
         </div>
       ) : null}
+      {effectivePlans.length === 0 && blockingAccounts.length === 0 ? (
+        <EmptyPlanHistory projectId={projectId} />
+      ) : null}
       {effectivePlans.map((plan) => {
         const key = planKey(plan);
         return (
@@ -385,6 +487,11 @@ export function XhsOpsRunPlanner({
               projectId={projectId}
               plan={plan}
               account={accounts.get(plan.accountId)}
+              nurtureIssues={
+                blockingAccounts.find(
+                  ({ account }) => account.id === plan.accountId,
+                )?.issues ?? []
+              }
               onAction={onAction}
               firedRef={firedRef as MutableRefObject<Set<string>>}
               locked={isLocked(plan)}
@@ -401,6 +508,168 @@ export function XhsOpsRunPlanner({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function EmptyPlanHistory({ projectId }: { projectId: string }) {
+  const [runs, setRuns] = useState<XhsOpsRun[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void xhsOpsApi
+      .listRuns({ projectId })
+      .then((next) => {
+        if (!cancelled) {
+          setError(null);
+          setRuns(next.slice(0, RECENT_RUNS_LIMIT));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(describeXhsOpsError(err, "运行历史加载失败"));
+          setRuns([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  if (runs === null)
+    return error ? (
+      <ErrorLine message={error} />
+    ) : (
+      <Skeleton rows={2} label="正在加载运行历史" />
+    );
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-border px-2.5 py-2">
+      {error ? <ErrorLine message={error} /> : null}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] text-text-secondary">
+          {error
+            ? "运行历史加载失败"
+            : runs.length > 0
+              ? `最近 ${runs.length} 次运行`
+              : "今日没有可执行的计划"}
+        </span>
+        {runs.length > 0 ? (
+          <button
+            type="button"
+            className="text-[12px] text-text-secondary hover:text-text-primary"
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? "收起" : "展开"}
+          </button>
+        ) : null}
+      </div>
+      {open && runs.length > 0 ? (
+        <div className="flex flex-col divide-y divide-border border-t border-border">
+          {runs.map((run) => (
+            <div
+              key={run.id}
+              className="flex items-center gap-2 py-1.5 text-[12px]"
+            >
+              <span className="w-20 shrink-0 text-text-secondary">
+                {run.date}
+              </span>
+              <span
+                className={`w-12 shrink-0 ${runStatusTextClass(run.status)}`}
+              >
+                {runStatusLabel(run.status)}
+              </span>
+              <span className="shrink-0 text-text-secondary">
+                {run.summary?.browsedTotal ?? 0}/
+                {run.summary?.plannedTotal ?? 0} 篇
+              </span>
+              <span className="min-w-0 flex-1 truncate text-text-secondary">
+                {run.error ?? run.notes ?? ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function NurtureGate({
+  projectId,
+  entries,
+  onAction,
+  onAccountChange,
+}: {
+  projectId: string;
+  entries: Array<{ account: XhsOpsAccount; issues: string[] }>;
+  onAction: NonNullable<CustomComponentProps["onAction"]>;
+  onAccountChange: (account: XhsOpsAccount) => void;
+}) {
+  const needsProfile = entries.some(({ issues }) =>
+    issues.some((issue) => issue.includes("目标用户画像")),
+  );
+  const needsPersona = entries.some(({ issues }) =>
+    issues.some((issue) => issue.includes("人设")),
+  );
+  const materialAccountIds = entries
+    .filter(({ issues }) =>
+      issues.some(
+        (issue) =>
+          issue.includes("八项账号资料") || issue.includes("手机账号配置"),
+      ),
+    )
+    .map(({ account }) => account.id);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] p-3">
+      <div className="text-[12px] font-medium text-[var(--color-warning-ink)]">
+        养号条件尚未完成。完成对应核对和手机资料生效验证后才可开始新任务。
+      </div>
+      <div className="flex flex-col gap-1 text-[12px] text-text-secondary">
+        {entries.map(({ account, issues }) => (
+          <div key={account.id}>
+            <span className="font-medium text-text-primary">
+              {account.label}：
+            </span>
+            {issues.join("；")}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {needsProfile ? (
+          <SecondaryButton
+            onClick={() =>
+              onAction("xhs_ops_profile_review_requested", {
+                projectId,
+                component: "XhsOpsProfileCard",
+              })
+            }
+          >
+            去确认目标画像
+          </SecondaryButton>
+        ) : null}
+        {needsPersona ? (
+          <SecondaryButton
+            onClick={() =>
+              onAction("xhs_ops_persona_review_requested", {
+                projectId,
+                component: "XhsOpsAccountPlanner",
+              })
+            }
+          >
+            去复核账号人设
+          </SecondaryButton>
+        ) : null}
+      </div>
+      {materialAccountIds.length > 0 ? (
+        <XhsOpsProfileMaterialContent
+          projectId={projectId}
+          accountIds={materialAccountIds}
+          onAction={onAction}
+          onAccountChange={onAccountChange}
+        />
+      ) : null}
     </div>
   );
 }
@@ -449,38 +718,40 @@ function ScheduleBar({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col gap-1 rounded-md border border-border bg-surface-2/40 px-3 py-1.5 text-[12px]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-text-primary">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex shrink-0 items-center gap-2 text-text-primary">
           <Switch
             checked={schedule.enabled}
             onCheckedChange={(enabled) => void save({ ...schedule, enabled })}
             aria-label="每日自动执行"
             disabled={state === "saving"}
           />
-          <span>每日自动执行</span>
-          <input
-            type="time"
-            className={`${inputClass} w-[92px]`}
-            value={schedule.time}
-            aria-label="自动执行时间"
-            disabled={state === "saving"}
-            onChange={(e) => {
-              const time = e.target.value;
-              if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
-                void save({ ...schedule, time });
-              }
-            }}
-          />
-          <span className="text-text-tertiary">
-            到点后桌面自动按各账号兴趣池生成当日计划并派发；同一手机上的账号排队串行
-          </span>
+          <span className="whitespace-nowrap">每日自动执行</span>
+          <div className="w-28 shrink-0">
+            <input
+              type="time"
+              className={inputClass}
+              value={schedule.time}
+              aria-label="自动执行时间"
+              disabled={state === "saving"}
+              onChange={(e) => {
+                const time = e.target.value;
+                if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+                  void save({ ...schedule, time });
+                }
+              }}
+            />
+          </div>
         </div>
-        <span className="text-[11px] text-text-tertiary">
+        <span className="min-w-[220px] flex-1 text-text-secondary">
+          到点后按各账号兴趣池生成计划；不同手机并行执行，同一手机上的任务排队串行
+        </span>
+        <span className="text-[12px] text-text-secondary">
           {state === "saving" ? "保存中…" : state === "saved" ? "已保存" : ""}
         </span>
       </div>
       {schedule.lastResult ? (
-        <div className="text-[11px] text-text-tertiary">
+        <div className="text-[12px] text-text-secondary">
           最近：{schedule.lastResult}
         </div>
       ) : null}
@@ -501,24 +772,76 @@ function validatePlan(
   dwellMin: number,
   dwellMax: number,
 ): string | null {
-  if (keywords.length === 0) return "至少填写一个关键词";
+  if (keywords.length === 0 && homeFeedCount === 0) {
+    return "关键词和首页篇数不能同时为空";
+  }
   if (keywords.length > 8) return "关键词最多 8 个";
   if (keywords.some((k) => k.keyword.length > 40)) return "关键词不超过 40 字";
   if (keywords.some((k) => k.count < 1 || k.count > 8)) {
     return "每个关键词浏览 1–8 篇";
   }
   if (homeFeedCount < 0 || homeFeedCount > 12) return "首页篇数为 0–12";
-  if (dwellMin < 5 || dwellMin > 60) return "最短停留为 5–60 秒";
+  if (dwellMin < 11 || dwellMin > 60) return "最短停留为 11–60 秒";
   if (dwellMax < dwellMin || dwellMax > 120) {
     return "最长停留需不小于最短停留且不超过 120 秒";
   }
   return null;
 }
 
+function runsForPlan(
+  runs: XhsOpsRun[],
+  segment: XhsOpsRunSegment | null,
+): XhsOpsRun[] {
+  const today = localDateString(new Date());
+  return runs.filter(
+    (candidate) =>
+      (candidate.plan.kind ?? "browse") === "browse" &&
+      candidate.date === today &&
+      candidate.segment?.index === segment?.index &&
+      candidate.segment?.count === segment?.count,
+  );
+}
+
+function activeRunForPlan(runs: XhsOpsRun[]): XhsOpsRun | undefined {
+  return (
+    runs.find(hasUnconfirmedDeviceTask) ??
+    runs.find((candidate) => candidate.status === "running") ??
+    runs.find((candidate) => isRunQueued(candidate))
+  );
+}
+
+function hasUnconfirmedDeviceTask(run: XhsOpsRun): boolean {
+  const preparationUnconfirmed =
+    run.preparation?.status === "running" &&
+    (Boolean(run.preparation.taskId) ||
+      run.preparation.reasonCode === "dispatch_failed" ||
+      run.preparation.reason?.includes("待核验"));
+  return (
+    preparationUnconfirmed ||
+    run.chunks.some(
+      (chunk) =>
+        chunk.status === "running" &&
+        (Boolean(chunk.taskId) || chunk.error?.includes("待核验")),
+    ) ||
+    (run.status === "running" && Boolean(run.error?.includes("待核验")))
+  );
+}
+
+function isAdoptableActiveRun(run: XhsOpsRun): boolean {
+  return run.status === "running" || isRunQueued(run);
+}
+
+function errorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object" || !("status" in error)) return null;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : null;
+}
+
 function RunPlanCard({
   projectId,
   plan,
   account,
+  nurtureIssues,
   onAction,
   firedRef,
   locked = false,
@@ -528,6 +851,7 @@ function RunPlanCard({
   projectId: string;
   plan: PlanInput;
   account: XhsOpsAccount | undefined;
+  nurtureIssues: string[];
   onAction: CustomComponentProps["onAction"];
   firedRef: MutableRefObject<Set<string>>;
   /** P2-3：上一段还没结束，本段不可开始。 */
@@ -568,8 +892,14 @@ function RunPlanCard({
   );
   const [recent, setRecent] = useState<XhsOpsRun[]>([]);
   const [recentOpen, setRecentOpen] = useState(false);
+  const [historyState, setHistoryState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyReload, setHistoryReload] = useState(0);
   /** Runs this card started or adopted while active — only these may fire finished. */
   const trackedRef = useRef<Set<string>>(new Set());
+  const startInFlightRef = useRef(false);
   const onFinishedRef = useRef(onFinished);
   onFinishedRef.current = onFinished;
 
@@ -587,31 +917,42 @@ function RunPlanCard({
   // On mount: load history; if the newest run is still active (page reload
   // mid-run, or the agent re-rendered the planner), adopt it and keep polling.
   useEffect(() => {
+    void historyReload;
     let cancelled = false;
     void (async () => {
-      const runs = await refreshRecent();
+      setHistoryState("loading");
+      setHistoryError(null);
+      const runs = await xhsOpsApi
+        .listRuns({ projectId, accountId })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setHistoryState("error");
+            setHistoryError(describeXhsOpsError(err, "运行历史加载失败"));
+          }
+          return null;
+        });
       if (cancelled || !runs) return;
-      // 分段卡只认今天同段序的 run，否则两张卡会抢同一个 run。
-      const mine = segment
-        ? runs.filter(
-            (r) =>
-              r.date === localDateString(new Date()) &&
-              r.segment?.index === segment.index &&
-              r.segment?.count === segment.count,
-          )
-        : runs;
-      const active = mine.find((r) => isRunActive(r.status));
+      setRecent(runs.slice(0, RECENT_RUNS_LIMIT));
+      setHistoryState("ready");
+      const mine = runsForPlan(runs, segment);
+      const active = activeRunForPlan(mine);
       if (active) {
-        trackedRef.current.add(active.id);
+        if (isRunActive(active.status)) trackedRef.current.add(active.id);
         setRun(active);
+        setPendingRun(null);
         setNotes(active.notes ?? "");
         return;
       }
-      if (segment) {
-        const done = mine.find((r) => r.status !== "cancelled");
-        if (done) {
-          setRun(done);
-          setNotes(done.notes ?? "");
+      const latest = mine[0];
+      if (latest?.status === "planned" && !latest.queuedBehindRunId) {
+        setPendingRun(latest);
+        setRun(null);
+        return;
+      }
+      if (segment && latest) {
+        setRun(latest);
+        setNotes(latest.notes ?? "");
+        if (latest.status === "completed") {
           onFinishedRef.current?.();
         }
       }
@@ -619,7 +960,7 @@ function RunPlanCard({
     return () => {
       cancelled = true;
     };
-  }, [refreshRecent, segment]);
+  }, [projectId, accountId, segment, historyReload]);
 
   // Poll while the executor owns the run.
   const runId = run?.id ?? null;
@@ -649,7 +990,8 @@ function RunPlanCard({
 
   // Terminal transition → report once.
   useEffect(() => {
-    if (!run || isRunActive(run.status)) return;
+    if (!run || isRunActive(run.status) || hasUnconfirmedDeviceTask(run))
+      return;
     if (!trackedRef.current.has(run.id)) return;
     if (firedRef.current.has(run.id)) return;
     firedRef.current.add(run.id);
@@ -658,7 +1000,7 @@ function RunPlanCard({
       ...buildFinishedContext(run),
       segment: run.segment,
     });
-    onFinishedRef.current?.();
+    if (run.status === "completed") onFinishedRef.current?.();
     void refreshRecent();
   }, [run, onAction, firedRef, refreshRecent]);
 
@@ -667,6 +1009,7 @@ function RunPlanCard({
     .filter((k) => k.keyword.length > 0);
 
   const start = async () => {
+    if (startInFlightRef.current || historyState !== "ready") return;
     const validation = validatePlan(
       cleanKeywords,
       homeFeedCount,
@@ -685,15 +1028,58 @@ function RunPlanCard({
       setError("该账号未绑定设备，请先在账号配置中选择执行设备");
       return;
     }
+    startInFlightRef.current = true;
     setBusy("starting");
     setError(null);
+    let created: XhsOpsRun | null = null;
     try {
-      let created = pendingRun;
+      let freshRuns: XhsOpsRun[];
+      try {
+        freshRuns = await xhsOpsApi.listRuns({ projectId, accountId });
+      } catch (err) {
+        setHistoryState("error");
+        setHistoryError(
+          describeXhsOpsError(err, "运行历史加载失败，未创建新计划"),
+        );
+        setError("启动前无法确认已有任务，未创建新计划");
+        return;
+      }
+      setRecent(freshRuns.slice(0, RECENT_RUNS_LIMIT));
+      const mine = runsForPlan(freshRuns, segment);
+      const active = activeRunForPlan(mine);
+      if (active) {
+        trackedRef.current.add(active.id);
+        setPendingRun(null);
+        setRun(active);
+        setNotes(active.notes ?? "");
+        setHistoryState("ready");
+        return;
+      }
+      const [freshProject, freshAccounts] = await Promise.all([
+        xhsOpsApi.getProject(projectId),
+        xhsOpsApi.listAccounts(projectId),
+      ]);
+      const freshAccount = freshAccounts.find(
+        (candidate) => candidate.id === accountId,
+      );
+      const freshIssues = freshAccount
+        ? xhsOpsAccountNurtureIssues(freshAccount, freshProject)
+        : ["账号不存在或不属于当前项目"];
+      if (freshIssues.length > 0) {
+        setError(`养号条件尚未完成：${freshIssues.join("；")}`);
+        return;
+      }
+      created =
+        mine.find(
+          (candidate) =>
+            candidate.status === "planned" && !candidate.queuedBehindRunId,
+        ) ?? null;
       if (!created) {
         created = await xhsOpsApi.createRun({
           projectId,
           accountId,
           segment,
+          reuseActive: true,
           plan: {
             keywords: cleanKeywords,
             homeFeedCount,
@@ -706,9 +1092,33 @@ function RunPlanCard({
             },
           },
         });
+        if (isAdoptableActiveRun(created)) {
+          setPendingRun(null);
+          trackedRef.current.add(created.id);
+          setRun(created);
+          setNotes(created.notes ?? "");
+          setNotesState("idle");
+          return;
+        }
         setPendingRun(created);
       }
-      const started = await xhsOpsApi.startRun(created.id);
+      let started: XhsOpsRun;
+      try {
+        started = await xhsOpsApi.startRun(created.id);
+      } catch (err) {
+        if (errorStatus(err) === 409) {
+          const current = await xhsOpsApi.getRun(created.id).catch(() => null);
+          if (current && isAdoptableActiveRun(current)) {
+            setPendingRun(null);
+            trackedRef.current.add(current.id);
+            setRun(current);
+            setNotes(current.notes ?? "");
+            setNotesState("idle");
+            return;
+          }
+        }
+        throw err;
+      }
       setPendingRun(null);
       trackedRef.current.add(started.id);
       setRun(started);
@@ -722,11 +1132,12 @@ function RunPlanCard({
       });
     } catch (err) {
       setError(
-        pendingRun
+        created
           ? `计划已创建但启动失败：${describeXhsOpsError(err, "启动失败")}（再点一次「开始执行」重试启动）`
           : describeXhsOpsError(err, "启动失败"),
       );
     } finally {
+      startInFlightRef.current = false;
       setBusy("idle");
     }
   };
@@ -792,7 +1203,10 @@ function RunPlanCard({
     .join(" · ");
 
   const editing = !run;
-  const finished = run ? !isRunActive(run.status) : false;
+  const awaitingDeviceStop = run ? hasUnconfirmedDeviceTask(run) : false;
+  const finished = run
+    ? !isRunActive(run.status) && !awaitingDeviceStop
+    : false;
   const liveInteractions = run ? sumInteractions(run.chunks) : null;
   const liveBrowsed = run
     ? run.chunks.reduce((n, c) => n + (c.browsed ?? 0), 0)
@@ -804,7 +1218,9 @@ function RunPlanCard({
     busy === "idle" &&
     (!account || Boolean(account.deviceId)) &&
     editing &&
-    !locked;
+    !locked &&
+    historyState === "ready" &&
+    nurtureIssues.length === 0;
 
   // P2-3 自动接续：本段在本次挂载期间从"锁定"变为"可开始"且尚未派发 → 自动开始。
   const startRef = useRef(start);
@@ -819,11 +1235,27 @@ function RunPlanCard({
       wasLockedRef.current = true;
       return;
     }
-    if (wasLockedRef.current && !run && !pendingRun && busy === "idle") {
+    if (
+      wasLockedRef.current &&
+      historyState === "ready" &&
+      !run &&
+      !pendingRun &&
+      busy === "idle" &&
+      nurtureIssues.length === 0
+    ) {
       wasLockedRef.current = false;
       void startRef.current();
     }
-  }, [locked, autoStart, segment, run, pendingRun, busy]);
+  }, [
+    locked,
+    autoStart,
+    segment,
+    run,
+    pendingRun,
+    busy,
+    historyState,
+    nurtureIssues.length,
+  ]);
 
   return (
     <CardShell
@@ -833,27 +1265,33 @@ function RunPlanCard({
       actions={
         run ? (
           <span
-            className={`text-[12px] font-medium ${runStatusTextClass(run.status)}`}
+            className={`text-[12px] font-medium ${awaitingDeviceStop ? "text-[var(--color-warning-ink)]" : runStatusTextClass(run.status)}`}
           >
-            {isRunQueued(run) ? "排队中" : runStatusLabel(run.status)}
+            {awaitingDeviceStop
+              ? "等待手机停止确认"
+              : isRunQueued(run)
+                ? "排队中"
+                : runStatusLabel(run.status)}
           </span>
         ) : null
       }
       footer={
         <>
-          <div className="min-w-0 text-[11px] text-text-tertiary">
+          <div className="min-w-0 text-[12px] text-text-secondary">
             {editing
               ? `共 ${plannedTotal} 篇 · 关键词 ${cleanKeywords.length} 个 · 首页 ${homeFeedCount} 篇${locked && segment ? ` · 等待第 ${segment.index - 1} 段结束后${autoStart ? "自动开始" : "可开始"}` : ""}`
-              : run && isRunQueued(run)
-                ? "排队中：同一手机上还有任务在执行，结束后自动开始"
-                : run && runActive
-                  ? `已浏览 ${liveBrowsed}/${plannedTotal} · 赞 ${liveInteractions?.like ?? 0} 藏 ${liveInteractions?.collect ?? 0} 关 ${liveInteractions?.follow ?? 0}${run.startedAt ? ` · ${formatClock(run.startedAt)} 开始` : ""}`
-                  : run
-                    ? `${runStatusLabel(run.status)}${run.completedAt ? ` · ${formatClock(run.completedAt)}` : ""} · 用时 ${formatDurationMs(run.summary?.durationMs)}`
-                    : ""}
+              : awaitingDeviceStop
+                ? "手机仍可能继续执行，确认停止前不会向该设备派发后续任务"
+                : run && isRunQueued(run)
+                  ? "排队中：同一手机上还有任务在执行，结束后自动开始"
+                  : run && runActive
+                    ? `已浏览 ${liveBrowsed}/${plannedTotal} · 赞 ${liveInteractions?.like ?? 0} 藏 ${liveInteractions?.collect ?? 0} 关 ${liveInteractions?.follow ?? 0}${run.startedAt ? ` · ${formatClock(run.startedAt)} 开始` : ""}`
+                    : run
+                      ? `${runStatusLabel(run.status)}${run.completedAt ? ` · ${formatClock(run.completedAt)}` : ""} · 用时 ${formatDurationMs(run.summary?.durationMs)}`
+                      : ""}
           </div>
           <div className="flex items-center gap-2">
-            {editing ? (
+            {editing && nurtureIssues.length === 0 ? (
               <PrimaryButton
                 onClick={() => void start()}
                 disabled={!canStart}
@@ -872,7 +1310,7 @@ function RunPlanCard({
                     : "开始执行"}
               </PrimaryButton>
             ) : null}
-            {run && runActive ? (
+            {run && runActive && !awaitingDeviceStop ? (
               <SecondaryButton
                 onClick={() => void cancel()}
                 disabled={busy !== "idle"}
@@ -891,12 +1329,38 @@ function RunPlanCard({
       }
     >
       <ErrorLine message={error} />
+      <ErrorLine message={historyError} />
+      {awaitingDeviceStop ? (
+        <div className="rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] px-3 py-2 text-[12px] text-[var(--color-warning-ink)]">
+          手机任务尚未确认停止。请查看手机，确认任务结束后重启桌面端复核；在确认前本设备不会继续派发。
+        </div>
+      ) : null}
+      {historyState === "error" ? (
+        <SecondaryButton onClick={() => setHistoryReload((value) => value + 1)}>
+          重试加载运行历史
+        </SecondaryButton>
+      ) : null}
       {account && !account.deviceId ? (
         <ErrorLine message="该账号未绑定设备，无法执行。请先在账号配置中选择执行设备。" />
+      ) : null}
+      {editing && nurtureIssues.length > 0 ? (
+        <ErrorLine message={`养号条件尚未完成：${nurtureIssues.join("；")}`} />
       ) : null}
 
       {editing ? (
         <>
+          <HintLine>
+            开始后会自动检查小红书安装与登录状态；缺少 App
+            时从官方应用市场安装，需要手机号登录、验证码或风险验证时会暂停并等待人工处理。
+          </HintLine>
+          {browse.dailyTargetPosts > 0 ? (
+            <HintLine>
+              每日目标 {browse.dailyTargetPosts} 篇，分 {browse.dailySegments}{" "}
+              段执行
+              {segment ? `；当前为第 ${segment.index}/${segment.count} 段` : ""}
+              。
+            </HintLine>
+          ) : null}
           <div className="flex flex-col gap-1.5">
             <SectionTitle hint="每个关键词浏览 1–8 篇，最多 8 个关键词">
               搜索关键词
@@ -940,8 +1404,8 @@ function RunPlanCard({
                   <button
                     type="button"
                     aria-label="删除关键词"
-                    className="grid h-7 w-7 place-items-center rounded-md border border-border text-text-tertiary hover:text-red-600"
-                    disabled={keywords.length <= 1}
+                    className="grid h-7 w-7 place-items-center rounded-md border border-border text-text-secondary hover:text-[var(--color-error-ink)]"
+                    disabled={keywords.length <= 1 && homeFeedCount === 0}
                     onClick={() =>
                       setKeywords((list) => list.filter((_, i) => i !== index))
                     }
@@ -979,7 +1443,7 @@ function RunPlanCard({
             <Field label="单篇最短停留（秒）">
               <NumberInput
                 value={dwellMin}
-                min={5}
+                min={11}
                 max={60}
                 onChange={(v) => {
                   setDwellMin(v);
@@ -1004,7 +1468,7 @@ function RunPlanCard({
               onClick={() => setInteractionOpen((open) => !open)}
             >
               互动配置
-              <span className="font-normal text-text-tertiary">
+              <span className="font-normal text-text-secondary">
                 {(["like", "collect", "follow"] as const)
                   .filter((k) => interaction[k].enabled)
                   .map((k) => `${RULE_LABEL[k]}≤${interaction[k].dailyCap}`)
@@ -1035,7 +1499,7 @@ function RunPlanCard({
                           patchRule(name, { enabled })
                         }
                       />
-                      <label className="flex items-center gap-1 text-[11px] text-text-secondary">
+                      <div className="flex items-center gap-1 text-[12px] text-text-secondary">
                         本次上限
                         <NumberInput
                           value={rule.dailyCap}
@@ -1046,8 +1510,8 @@ function RunPlanCard({
                           ariaLabel={`${RULE_LABEL[name]}上限`}
                           onChange={(dailyCap) => patchRule(name, { dailyCap })}
                         />
-                      </label>
-                      <label className="flex items-center gap-1 text-[11px] text-text-secondary">
+                      </div>
+                      <div className="flex items-center gap-1 text-[12px] text-text-secondary">
                         比例 %
                         <NumberInput
                           value={rule.ratioPercent}
@@ -1060,7 +1524,7 @@ function RunPlanCard({
                             patchRule(name, { ratioPercent })
                           }
                         />
-                      </label>
+                      </div>
                     </div>
                   );
                 })}
@@ -1079,6 +1543,7 @@ function RunPlanCard({
           >
             执行进度
           </SectionTitle>
+          <XhsOpsPreparationStatus preparation={getRunPreparation(run)} />
           {pollError ? <HintLine>{pollError}</HintLine> : null}
           <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
             {run.chunks.map((chunk) => (
@@ -1097,29 +1562,29 @@ function RunPlanCard({
                   <span className="shrink-0 text-text-secondary">
                     {chunk.browsed}/{chunk.plannedCount} 篇
                   </span>
-                  <span className="shrink-0 text-text-tertiary">
+                  <span className="shrink-0 text-text-secondary">
                     赞 {chunk.interactions?.like ?? 0} 藏{" "}
                     {chunk.interactions?.collect ?? 0} 关{" "}
                     {chunk.interactions?.follow ?? 0}
                   </span>
                   {(chunk.anomalies?.length ?? 0) > 0 ? (
-                    <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 text-[11px] text-amber-700">
+                    <span className="shrink-0 rounded-full bg-[var(--color-warning-wash)] px-1.5 text-[12px] text-[var(--color-warning-ink)]">
                       异常 {chunk.anomalies.length}
                     </span>
                   ) : null}
-                  <span className="w-10 shrink-0 text-right text-[11px] text-text-tertiary">
+                  <span className="w-10 shrink-0 text-right text-[12px] text-text-secondary">
                     {chunkStatusLabel(chunk.status)}
                   </span>
                 </div>
                 {chunk.error ? (
-                  <div className="pl-4 text-[11px] text-red-600">
+                  <div className="pl-4 text-[12px] text-[var(--color-error-ink)]">
                     {chunk.error}
                   </div>
                 ) : null}
               </div>
             ))}
             {run.chunks.length === 0 ? (
-              <div className="px-2.5 py-2 text-[12px] text-text-tertiary">
+              <div className="px-2.5 py-2 text-[12px] text-text-secondary">
                 等待执行器生成任务块…
               </div>
             ) : null}
@@ -1144,7 +1609,7 @@ function RunPlanCard({
         <div className="flex flex-col gap-1">
           <button
             type="button"
-            className="flex items-center gap-1 self-start text-[11px] text-text-tertiary hover:text-text-primary"
+            className="flex items-center gap-1 self-start text-[12px] text-text-secondary hover:text-text-primary"
             onClick={() => setRecentOpen((open) => !open)}
           >
             最近 {recent.length} 次运行
@@ -1155,7 +1620,7 @@ function RunPlanCard({
               {recent.map((r) => (
                 <div
                   key={r.id}
-                  className="flex items-center gap-2 px-2.5 py-1.5 text-[11px]"
+                  className="flex items-center gap-2 px-2.5 py-1.5 text-[12px]"
                 >
                   <span className="w-20 shrink-0 text-text-secondary">
                     {r.date}
@@ -1169,15 +1634,15 @@ function RunPlanCard({
                     {r.summary?.browsedTotal ?? 0}/
                     {r.summary?.plannedTotal ?? 0} 篇
                   </span>
-                  <span className="shrink-0 text-text-tertiary">
+                  <span className="shrink-0 text-text-secondary">
                     赞 {r.summary?.interactions?.like ?? 0} 藏{" "}
                     {r.summary?.interactions?.collect ?? 0} 关{" "}
                     {r.summary?.interactions?.follow ?? 0}
                   </span>
-                  <span className="shrink-0 text-text-tertiary">
+                  <span className="shrink-0 text-text-secondary">
                     异常 {r.summary?.anomalyCount ?? 0}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-text-tertiary">
+                  <span className="min-w-0 flex-1 truncate text-text-secondary">
                     {r.notes}
                   </span>
                 </div>
@@ -1214,6 +1679,7 @@ function RunResult({
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-2">
       <SectionTitle>结果汇总</SectionTitle>
+      <XhsOpsPreparationStatus preparation={getRunPreparation(run)} />
       {run.error ? <ErrorLine message={run.error} /> : null}
       <div className="grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-4">
         <Stat
@@ -1244,7 +1710,7 @@ function RunResult({
                 key={i}
                 className="flex items-start gap-2"
               >
-                <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 text-[11px] text-amber-700">
+                <span className="shrink-0 rounded-full bg-[var(--color-warning-wash)] px-1.5 text-[12px] text-[var(--color-warning-ink)]">
                   {anomalyLabel(a.type)}
                 </span>
                 <span className="min-w-0 text-text-secondary">
@@ -1283,7 +1749,7 @@ function RunResult({
         />
         <div className="flex items-center justify-end gap-2">
           {notesState === "saved" ? (
-            <span className="text-[11px] text-text-tertiary">已保存</span>
+            <span className="text-[12px] text-text-secondary">已保存</span>
           ) : null}
           <SecondaryButton
             onClick={onSaveNotes}
@@ -1300,7 +1766,7 @@ function RunResult({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-surface-2/60 px-2 py-1.5">
-      <div className="text-[11px] text-text-tertiary">{label}</div>
+      <div className="text-[12px] text-text-secondary">{label}</div>
       <div className="text-[13px] font-medium text-text-primary">{value}</div>
     </div>
   );

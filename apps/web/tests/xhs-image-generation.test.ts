@@ -40,7 +40,9 @@ describe("XHS image generation", () => {
       model: "tabby-image-pro",
       quality: "high",
       aspectRatio: "3:4",
-      size: "2K",
+      // Tier + aspect resolve to fixed pixels through IMAGE_SIZE_TABLE, so the
+      // hint names one size instead of leaving the shape to the model.
+      size: "1536x2048",
       count: 2,
       transparentBackground: true,
     });

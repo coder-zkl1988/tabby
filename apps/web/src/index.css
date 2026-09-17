@@ -101,6 +101,31 @@
   --color-info-subtle: rgba(38, 87, 187, 0.08);
   --color-pink: #d999f7;
 
+  /* ── Status ink + wash — the four status meanings as *text* ──
+     The functional colors above are tuned as fills; used as text on
+     white they fall under 4.5:1 (--color-warning is ~1.7:1). These
+     ink variants are the readable text/mark colors, each paired with
+     the 10–12% wash it sits on. Status pills, status dots and any
+     colored label use these; never the raw fill color as text.
+     Replaces the Tailwind palette (emerald/sky/amber/red) that had
+     leaked into the a2ui business cards. */
+  --color-brand-ink: #1a7b8c;
+  --color-brand-wash: rgba(61, 185, 206, 0.12);
+  --color-success-ink: #00754a;
+  --color-warning-ink: #b45309;
+  --color-warning-wash: rgba(180, 83, 9, 0.1);
+  --color-error-ink: #d6491a;
+  --color-error-wash: rgba(248, 103, 47, 0.1);
+
+  /* Canvas connector stroke. --color-border (8% black) is invisible on the
+     canvas's own 8%-black dot grid, and connectors carry "who feeds whom". */
+  --color-canvas-edge: #b8bcc0;
+
+  /* Xiaohongshu channel identity. Not a status colour — it marks the
+     channel (icon, #topic chips, 发布) and never means error. */
+  --color-xhs: #bb0028;
+  --color-xhs-wash: #fff1f0;
+
   /* ── Toggle (exclusive — do not reuse for other components) ── */
   --color-toggle-on: #007aff;
 
@@ -862,4 +887,16 @@
   summary {
     cursor: pointer;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Canvas level-of-detail
+   Node bodies scale with the canvas transform, so below 0.6 their text is
+   under 8px — noise rather than information. Hide the body and keep the
+   node title, which is what identifies a card at thumbnail size. Screen
+   space chrome (dock, minimap, hover toolbar) is unaffected: it lives
+   outside the transform layer.
+   ═══════════════════════════════════════════════════════════════════ */
+[data-canvas-lod="low"] [data-canvas-node] [data-canvas-node-body] {
+  visibility: hidden;
 }

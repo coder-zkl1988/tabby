@@ -8,8 +8,8 @@ import type {
   XhsOpsRunPost,
 } from "@nexu/shared";
 import { logger } from "../lib/logger.js";
+import { XhsOpsError, localDateString } from "../lib/xhs-ops-common.js";
 import type { XhsOpsStore } from "../store/xhs-ops-store.js";
-import { XhsOpsError, localDateString } from "./xhs-ops-run-service.js";
 import { formatPersona } from "./xhs-ops-task-builder.js";
 
 /**
@@ -200,6 +200,7 @@ export class XhsOpsCommentService {
   private readonly store: XhsOpsStore;
   private readonly media: XhsOpsCommentMedia;
   private readonly now: () => number;
+  private readonly approvalLocks = new Map<string, Promise<void>>();
 
   constructor(deps: XhsOpsCommentServiceDeps) {
     this.store = deps.store;
@@ -213,6 +214,27 @@ export class XhsOpsCommentService {
 
   private today(): string {
     return localDateString(new Date(this.now()));
+  }
+
+  private async withAccountApprovalLock<T>(
+    accountId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.approvalLocks.get(accountId);
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.approvalLocks.set(accountId, current);
+    if (previous) await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.approvalLocks.get(accountId) === current) {
+        this.approvalLocks.delete(accountId);
+      }
+    }
   }
 
   /**
@@ -236,6 +258,7 @@ export class XhsOpsCommentService {
       postIndex: number;
       post: XhsOpsRunPost;
     }> = [];
+    const skipped: string[] = [];
     if (posts && posts.length > 0) {
       for (const p of posts) {
         const chunk = run.chunks.find((c) => c.index === p.chunkIndex);
@@ -245,6 +268,12 @@ export class XhsOpsCommentService {
             400,
             `帖子不存在：chunk ${p.chunkIndex} / post ${p.postIndex}`,
           );
+        }
+        if (!post.commentWorthy) {
+          skipped.push(
+            `${post.title.slice(0, 20) || `chunk ${p.chunkIndex}#${p.postIndex}`}：不适合评论`,
+          );
+          continue;
         }
         targets.push({
           chunkIndex: p.chunkIndex,
@@ -276,7 +305,6 @@ export class XhsOpsCommentService {
     );
 
     const drafts: XhsOpsCommentDraft[] = [];
-    const skipped: string[] = [];
     for (const t of targets) {
       const label =
         t.post.title.slice(0, 20) || `chunk ${t.chunkIndex}#${t.postIndex}`;
@@ -428,41 +456,52 @@ export class XhsOpsCommentService {
       if (!rejected) throw new XhsOpsError(404, "评论草稿不存在");
       return rejected;
     }
-    const text = (body.text ?? draft.candidates[0] ?? "").trim();
-    if (!text)
-      throw new XhsOpsError(400, "批准需要最终文案（没有候选时请手写）");
-    const project = await this.store.getProject(draft.projectId);
-    const reason = validateCommentText(
-      text,
-      project?.opsNotes.forbiddenTopics ?? [],
-    );
-    if (reason) throw new XhsOpsError(400, `文案不合规：${reason}`);
-    const quota = await this.quotaFor(draft.accountId);
-    if (!quota.enabled) {
-      throw new XhsOpsError(
-        409,
-        "该账号的评论开关未开启（账号配置 → 互动配置）",
+    return this.withAccountApprovalLock(draft.accountId, async () => {
+      const current = await this.store.getComment(commentId);
+      if (!current) throw new XhsOpsError(404, "评论草稿不存在");
+      if (current.status !== "pending") {
+        throw new XhsOpsError(409, `草稿已是 ${current.status}，不能重复审核`);
+      }
+      const text = (body.text ?? current.candidates[0] ?? "").trim();
+      if (!text)
+        throw new XhsOpsError(400, "批准需要最终文案（没有候选时请手写）");
+      const project = await this.store.getProject(current.projectId);
+      const reason = validateCommentText(
+        text,
+        project?.opsNotes.forbiddenTopics ?? [],
       );
-    }
-    if (quota.remaining <= 0) {
-      throw new XhsOpsError(
-        409,
-        `今日评论配额已用完（上限 ${quota.cap}：min(每日 ${quota.dailyCap}, 硬上限 ${XHS_COMMENT_HARD_CAP}, 今日浏览 ${quota.todayBrowsed} 篇 ÷ ${XHS_COMMENT_POSTS_PER_COMMENT}=${quota.byBrowse}）`,
+      if (reason) throw new XhsOpsError(400, `文案不合规：${reason}`);
+      const quota = await this.quotaFor(current.accountId);
+      if (!quota.enabled) {
+        throw new XhsOpsError(
+          409,
+          "该账号的评论开关未开启（账号配置 → 互动配置）",
+        );
+      }
+      if (quota.remaining <= 0) {
+        throw new XhsOpsError(
+          409,
+          `今日评论配额已用完（上限 ${quota.cap}：min(每日 ${quota.dailyCap}, 硬上限 ${XHS_COMMENT_HARD_CAP}, 今日浏览 ${quota.todayBrowsed} 篇 ÷ ${XHS_COMMENT_POSTS_PER_COMMENT}=${quota.byBrowse}）`,
+        );
+      }
+      const approved = await this.store.updateComment(commentId, (cur) => ({
+        ...cur,
+        status: "approved",
+        text,
+        reviewedAt: this.nowIso(),
+        reviewNote: body.note ?? cur.reviewNote,
+        updatedAt: this.nowIso(),
+      }));
+      if (!approved) throw new XhsOpsError(404, "评论草稿不存在");
+      logger.info(
+        {
+          commentId,
+          accountId: current.accountId,
+          remaining: quota.remaining - 1,
+        },
+        "xhs-ops: comment approved",
       );
-    }
-    const approved = await this.store.updateComment(commentId, (cur) => ({
-      ...cur,
-      status: "approved",
-      text,
-      reviewedAt: now,
-      reviewNote: body.note ?? cur.reviewNote,
-      updatedAt: now,
-    }));
-    if (!approved) throw new XhsOpsError(404, "评论草稿不存在");
-    logger.info(
-      { commentId, accountId: draft.accountId, remaining: quota.remaining - 1 },
-      "xhs-ops: comment approved",
-    );
-    return approved;
+      return approved;
+    });
   }
 }

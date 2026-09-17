@@ -37,6 +37,51 @@ const DEFAULT_HEALTH_TIMEOUT_MS = 5_000;
 const MIN_DEVICE_TASK_HARD_TIMEOUT_MS = 30 * 60_000;
 const MAX_DEVICE_TASK_HARD_TIMEOUT_MS = 24 * 60 * 60_000;
 const DEVICE_TASK_HARD_TIMEOUT_FACTOR = 6;
+const LOGIN_TASK_HISTORY_SUMMARY =
+  "Account login preparation (sensitive details redacted)";
+const LOGIN_TASK_RESULT_SUMMARY =
+  "Account login preparation result (sensitive details redacted)";
+const LOGIN_TASK_ERROR_SUMMARY =
+  "Account login preparation failed (sensitive details redacted)";
+const LOGIN_TASK_RESULT_STATUSES = new Set([
+  "completed",
+  "aborted",
+  "stuck",
+  "needs_takeover",
+  "blocked",
+  "error",
+]);
+const LOGIN_TASK_RESULT_ERROR_CODES = new Set([
+  "CALLER_DISCONNECTED",
+  "USER_CANCELLED",
+  "IDENTITY_BLOCKED",
+  "POLICY_BROWSER_INSTALL_FORBIDDEN",
+  "WECOM_AUDIT_INCOMPLETE",
+]);
+
+function isLoginTask(body: DeviceExecuteTaskBody): boolean {
+  return body.taskPolicy?.operationClass === "account.login";
+}
+
+function redactLoginTaskResult(result: TaskResult): TaskResult {
+  const status =
+    result.status && LOGIN_TASK_RESULT_STATUSES.has(result.status)
+      ? result.status
+      : undefined;
+  const errorCode =
+    result.errorCode && LOGIN_TASK_RESULT_ERROR_CODES.has(result.errorCode)
+      ? result.errorCode
+      : undefined;
+  return {
+    taskId: result.taskId,
+    success: result.success,
+    ...(status ? { status } : {}),
+    ...(errorCode ? { errorCode } : {}),
+    needsInteraction: result.needsInteraction,
+    totalSteps: result.totalSteps,
+    message: LOGIN_TASK_RESULT_SUMMARY,
+  };
+}
 
 export function deviceTaskHardTimeoutMs(idleTimeoutMs: number): number {
   return Math.min(
@@ -296,15 +341,16 @@ export class DeviceControlService {
       await this.appendHistory({
         deviceId,
         taskId: `failed-${dispatchedAt}`,
-        task: body.task,
+        task: isLoginTask(body) ? LOGIN_TASK_HISTORY_SUMMARY : body.task,
         maxSteps: body.maxSteps,
         dispatchedAt,
         completedAt: new Date().toISOString(),
         result: {
           taskId: `failed-${dispatchedAt}`,
           success: false,
-          message:
-            error instanceof DeviceControlTimeoutError
+          message: isLoginTask(body)
+            ? LOGIN_TASK_ERROR_SUMMARY
+            : error instanceof DeviceControlTimeoutError
               ? `transport timeout after ${error.timeoutMs}ms — the device may still be working: ${error.message}`
               : error instanceof Error
                 ? error.message
@@ -316,11 +362,11 @@ export class DeviceControlService {
     await this.appendHistory({
       deviceId,
       taskId: result.taskId,
-      task: body.task,
+      task: isLoginTask(body) ? LOGIN_TASK_HISTORY_SUMMARY : body.task,
       maxSteps: body.maxSteps,
       dispatchedAt,
       completedAt: new Date().toISOString(),
-      result,
+      result: isLoginTask(body) ? redactLoginTaskResult(result) : result,
     });
     return { result };
   }
@@ -350,6 +396,8 @@ export class DeviceControlService {
     return this.rpc<{ cancelled: boolean; message?: string }>(
       "device.cancel_task",
       { deviceId, taskId: body.taskId },
+      // Leave transport headroom while the plugin waits for a terminal receipt.
+      35_000,
     );
   }
 

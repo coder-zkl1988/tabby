@@ -277,6 +277,20 @@ describe("canvas persistence", () => {
             content: "http://localhost/img/x.png",
           },
         },
+        {
+          id: "node-job",
+          type: "video",
+          title: "有任务",
+          position: { x: 300, y: 0 },
+          size: { width: 420, height: 260 },
+          metadata: {
+            task: {
+              status: "generating",
+              retry: { kind: "video", prompt: "a river" },
+              job: { kind: "video", jobId: "job-1" },
+            },
+          },
+        },
       ],
       connections: [],
     };
@@ -293,6 +307,15 @@ describe("canvas persistence", () => {
     expect(genNode?.metadata.task?.retry).toEqual({
       kind: "image",
       prompt: "a cat",
+    });
+
+    // A job-backed task stays generating — the run is still alive on the
+    // controller, and canvas-generation's resume re-attaches to the poll.
+    const jobNode = state.nodes.find((n) => n.id === "node-job");
+    expect(jobNode?.metadata.task?.status).toBe("generating");
+    expect(jobNode?.metadata.task?.job).toEqual({
+      kind: "video",
+      jobId: "job-1",
     });
 
     // Node with error task → unchanged

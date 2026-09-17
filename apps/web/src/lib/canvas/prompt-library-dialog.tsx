@@ -199,7 +199,7 @@ export function PromptLibraryDialog({ nodeId }: { nodeId: string }) {
         >
           {loading ? (
             <div className="flex h-36 items-center justify-center">
-              <div className="size-6 animate-spin rounded-full border-2 border-border border-t-sky-500" />
+              <div className="size-6 animate-spin rounded-full border-2 border-border border-t-[var(--color-brand-primary)]" />
             </div>
           ) : items.length === 0 ? (
             <p className="py-10 text-center text-xs text-text-tertiary">
@@ -218,7 +218,7 @@ export function PromptLibraryDialog({ nodeId }: { nodeId: string }) {
           )}
           {loadingMore ? (
             <div className="flex justify-center py-3">
-              <div className="size-4 animate-spin rounded-full border-2 border-border border-t-sky-500" />
+              <div className="size-4 animate-spin rounded-full border-2 border-border border-t-[var(--color-brand-primary)]" />
             </div>
           ) : null}
         </div>
@@ -329,7 +329,7 @@ function PromptCard({
             <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 bg-surface-2 text-[11px] text-text-tertiary">
               {generating ? (
                 <>
-                  <div className="size-4 animate-spin rounded-full border-2 border-border border-t-sky-500" />
+                  <div className="size-4 animate-spin rounded-full border-2 border-border border-t-[var(--color-brand-primary)]" />
                   <span>生成预览中…</span>
                 </>
               ) : (

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getApiV1Devices } from "../../../../lib/api/sdk.gen";
 import { A2UIRenderer } from "../a2ui-renderer";
+import { StatusPill, type StatusTone } from "../a2ui-status";
 import type { A2UIComponent, A2UIMessage } from "../a2ui-types";
 import type { CustomComponentProps } from "./registry";
 import {
@@ -45,14 +46,17 @@ const STATUS_LABEL: Record<RowStatus, string> = {
   unknown: "待确认",
   error: "失败",
 };
-const STATUS_COLOR: Record<RowStatus, string> = {
-  idle: "var(--color-text-tertiary, #999)",
-  waiting: "#185FA5",
-  pushing: "#185FA5",
-  publishing: "#185FA5",
-  success: "#0F6E56",
-  unknown: "#8A5A00",
-  error: "#A32D2D",
+const STATUS_TONE: Record<RowStatus, StatusTone> = {
+  idle: "idle",
+  // 等待设备 is waiting on a queue outside this row; 待确认 is a result
+  // that needs a human look. XHSEditor — which this table renders inline
+  // beneath the row — maps `unknown` the same way.
+  waiting: "waiting",
+  pushing: "running",
+  publishing: "running",
+  success: "done",
+  unknown: "blocked",
+  error: "failed",
 };
 
 /** Build an inline XHSEditor surface bound to this batch's shared store. */
@@ -258,13 +262,33 @@ export function XHSBatchTable({ comp, onAction }: CustomComponentProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "10px 14px",
-          borderBottom: "0.5px solid var(--color-border)",
+          gap: 12,
+          padding: "14px 20px",
+          borderBottom: "1px solid var(--color-border-subtle)",
         }}
       >
-        <span style={{ fontSize: 14, fontWeight: 500 }}>
-          批量发布 · {posts.length} 篇
-        </span>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              lineHeight: 1.4,
+              color: "var(--color-text-heading)",
+            }}
+          >
+            批量发布
+          </div>
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            {posts.length} 篇
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
             type="button"
@@ -275,13 +299,18 @@ export function XHSBatchTable({ comp, onAction }: CustomComponentProps) {
               posts.length === 0 || batchPublishing || !hasPublishablePosts
             }
             style={{
-              padding: "5px 14px",
-              borderRadius: 6,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 36,
+              padding: "0 20px",
+              borderRadius: 8,
               border: "none",
-              background: "#bb0028",
+              background: "var(--color-xhs)",
               color: "#fff",
               fontSize: 13,
-              fontWeight: 500,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
               cursor: batchPublishing ? "not-allowed" : "pointer",
             }}
           >
@@ -400,16 +429,9 @@ export function XHSBatchTable({ comp, onAction }: CustomComponentProps) {
                 </option>
               ))}
             </select>
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: STATUS_COLOR[post.status],
-                whiteSpace: "nowrap",
-              }}
-            >
+            <StatusPill tone={STATUS_TONE[post.status]}>
               {STATUS_LABEL[post.status]}
-            </span>
+            </StatusPill>
             {expandedPostId === post.id ? (
               <ChevronUp size={15} aria-hidden="true" />
             ) : (

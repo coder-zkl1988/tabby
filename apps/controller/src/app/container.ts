@@ -79,7 +79,10 @@ import { TemplateService } from "../services/template-service.js";
 import { XhsOpsCommentService } from "../services/xhs-ops-comment-service.js";
 import { XhsOpsProfileService } from "../services/xhs-ops-profile-service.js";
 import { XhsOpsRunService } from "../services/xhs-ops-run-service.js";
-import { XhsOpsScheduler } from "../services/xhs-ops-scheduler.js";
+import {
+  XHS_OPS_SCHEDULER_INTERVAL_MS,
+  XhsOpsScheduler,
+} from "../services/xhs-ops-scheduler.js";
 import { ArtifactsStore } from "../store/artifacts-store.js";
 import { CompiledOpenClawStore } from "../store/compiled-openclaw-store.js";
 import { DeviceNameStore } from "../store/device-name-store.js";
@@ -813,6 +816,12 @@ export async function createContainer(): Promise<ControllerContainer> {
     wsClient,
     quotaFallbackService,
   );
+  const xhsOpsProfileService = new XhsOpsProfileService({
+    store: xhsOpsStore,
+    media: mediaGenerationService,
+    deviceControl: deviceControlService,
+    mediaRoot: path.resolve(env.openclawStateDir, "media"),
+  });
 
   return {
     env,
@@ -863,12 +872,7 @@ export async function createContainer(): Promise<ControllerContainer> {
     deviceControlService,
     xhsOpsStore,
     xhsOpsRunService,
-    xhsOpsProfileService: new XhsOpsProfileService({
-      store: xhsOpsStore,
-      media: mediaGenerationService,
-      deviceControl: deviceControlService,
-      mediaRoot: path.resolve(env.openclawStateDir, "media"),
-    }),
+    xhsOpsProfileService,
     xhsOpsScheduler,
     xhsOpsCommentService: new XhsOpsCommentService({
       store: xhsOpsStore,
@@ -886,14 +890,36 @@ export async function createContainer(): Promise<ControllerContainer> {
     scheduleService,
     runtimeState,
     startBackgroundLoops: () => {
-      // 控制器重启后，把上次残留 running 的养号 run 标记为 interrupted，
-      // 运营侧才不会看到永远卡在执行中的 run。
+      // 控制器重启后恢复残留 run；只有手机停止已确认的任务才会收口，
+      // 无法确认的手机任务继续保持隔离，避免重复派发。
       void xhsOpsRunService.recoverInterruptedRuns().catch((err) => {
         logger.warn(
           { error: err instanceof Error ? err.message : String(err) },
           "xhs-ops: recoverInterruptedRuns failed",
         );
       });
+      let isReconcilingProfileOperations = false;
+      const reconcileProfileOperations = () => {
+        if (isReconcilingProfileOperations) return;
+        isReconcilingProfileOperations = true;
+        void xhsOpsProfileService
+          .reconcileRunningOperations()
+          .catch((err) => {
+            logger.warn(
+              { error: err instanceof Error ? err.message : String(err) },
+              "xhs-ops: reconcile profile operations failed",
+            );
+          })
+          .finally(() => {
+            isReconcilingProfileOperations = false;
+          });
+      };
+      reconcileProfileOperations();
+      const profileOperationReconcileInterval = setInterval(
+        reconcileProfileOperations,
+        XHS_OPS_SCHEDULER_INTERVAL_MS,
+      );
+      profileOperationReconcileInterval.unref?.();
       let isRefreshingNexuOfficialModels = false;
       const stopHealthLoop = startHealthLoop({
         env,
@@ -947,6 +973,7 @@ export async function createContainer(): Promise<ControllerContainer> {
         stopAnalyticsLoop();
         stopChannelHealthWatchdog();
         clearInterval(nexuOfficialModelRefreshInterval);
+        clearInterval(profileOperationReconcileInterval);
         skillhubService.dispose();
         devicePollingService.dispose();
         xhsOpsScheduler.stop();

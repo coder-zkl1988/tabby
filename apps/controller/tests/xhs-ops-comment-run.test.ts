@@ -7,6 +7,7 @@ import type {
   XhsOpsRunPlan,
 } from "@nexu/shared";
 import { afterAll, describe, expect, it } from "vitest";
+import { XhsOpsCommentService } from "../src/services/xhs-ops-comment-service.js";
 import {
   XhsOpsRunService,
   buildRunChunks,
@@ -97,7 +98,7 @@ describe("comment task template + COMMENT_JSON (P3-1 D2)", () => {
         'COMMENT_JSON:{"status":"sent"}\n[回执] 各应用生效点击: com.xingin.xhs=0',
     });
     expect(fake.status).toBe("failed");
-    expect(fake.anomalies[0]?.detail).toContain("不予采信");
+    expect(fake.anomalies[0]?.detail).toContain("待核验");
 
     const failed = interpretCommentTaskResult({
       taskId: "t",
@@ -196,6 +197,37 @@ describe("XhsOpsRunService.createCommentRun + execution", () => {
       deviceName: "dev-1",
       interaction,
     });
+    await store.createRun({
+      projectId: project.id,
+      accountId: account.id,
+      deviceId: "dev-1",
+      accountLabel: account.label,
+      date: "2026-09-06",
+      status: "completed",
+      plan: {
+        keywords: [{ keyword: "k", count: 8 }],
+        homeFeedCount: 8,
+        dwellSecMin: 10,
+        dwellSecMax: 20,
+        interaction,
+      },
+      segment: null,
+      queuedBehindRunId: null,
+      chunks: [],
+      notes: "",
+      error: null,
+      startedAt: new Date(2026, 8, 6, 12).toISOString(),
+      completedAt: new Date(2026, 8, 6, 13).toISOString(),
+      summary: {
+        plannedTotal: 16,
+        browsedTotal: 16,
+        searchBrowsed: 8,
+        homeBrowsed: 8,
+        interactions: { like: 0, collect: 0, follow: 0 },
+        anomalyCount: 0,
+        durationMs: 1000,
+      },
+    });
     const draft = async (
       title: string,
       text: string,
@@ -212,7 +244,8 @@ describe("XhsOpsRunService.createCommentRun + execution", () => {
         candidates: [text],
         text: status === "approved" ? text : null,
         status,
-        reviewedAt: null,
+        reviewedAt:
+          status === "approved" ? new Date(2026, 8, 6, 13).toISOString() : null,
         reviewNote: "",
         sentRunId: null,
         sentAt: null,
@@ -291,6 +324,40 @@ describe("XhsOpsRunService.createCommentRun + execution", () => {
     await expect(
       svc.createCommentRun({ projectId: project.id, accountId: account.id }),
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("serializes approvals per account so concurrent reviews cannot exceed quota", async () => {
+    const { store, account, draft } = await seed("approval-race.json");
+    await store.updateAccount(account.id, {
+      interaction: {
+        ...interaction,
+        comment: { enabled: true, dailyCap: 1 },
+      },
+    });
+    const first = await draft("A", "第一条", "pending");
+    const second = await draft("B", "第二条", "pending");
+    const service = new XhsOpsCommentService({
+      store,
+      media: { generateText: async () => ({ text: "" }) },
+      now: () => new Date("2026-09-06T14:00:00.000Z").getTime(),
+    });
+
+    const results = await Promise.allSettled([
+      service.review(first.id, { decision: "approved" }),
+      service.review(second.id, { decision: "approved" }),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+    const statuses = await Promise.all(
+      [first.id, second.id].map(
+        async (id) => (await store.getComment(id))?.status,
+      ),
+    );
+    expect(statuses.filter((status) => status === "approved")).toHaveLength(1);
   });
 
   it("executes one comment per chunk with an allowlisted policy and writes sent/failed back to the drafts", async () => {

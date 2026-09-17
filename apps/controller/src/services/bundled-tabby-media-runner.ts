@@ -174,6 +174,7 @@ export class BundledTabbyMediaRunner implements TabbyMediaRunner {
 
   async generateImage(input: TabbyImageGenerationInput): Promise<string[]> {
     const paths: string[] = [];
+    let lastError: unknown;
     for (let index = 0; index < input.count; index += 1) {
       const filename = this.outputPath(
         input.botId,
@@ -193,9 +194,21 @@ export class BundledTabbyMediaRunner implements TabbyMediaRunner {
           ? { transparentBackground: input.transparentBackground }
           : {}),
       });
-      await this.runImageWithRetry(args, input.timeoutMs);
-      await access(filename);
-      paths.push(filename);
+      try {
+        await this.runImageWithRetry(args, input.timeoutMs);
+        await access(filename);
+        paths.push(filename);
+      } catch (error) {
+        // Return the images already produced instead of discarding them: a
+        // flaky relay makes every extra image an independent coin flip, and
+        // each failure costs both retries' worth of wall time. Callers persist
+        // what came back and top up the remainder on the next run.
+        lastError = error;
+        break;
+      }
+    }
+    if (paths.length === 0) {
+      throw lastError;
     }
     return paths;
   }

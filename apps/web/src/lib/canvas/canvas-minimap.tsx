@@ -19,7 +19,12 @@
 
 import { useRef, useState } from "react";
 import { isHiddenBatchChild } from "./canvas-batch";
-import { getCanvasState, setViewport, useCanvas } from "./canvas-store";
+import {
+  type CanvasNode,
+  getCanvasState,
+  setViewport,
+  useCanvas,
+} from "./canvas-store";
 import { useCanvasUiPrefs } from "./canvas-ui-prefs";
 import {
   minimapLayout,
@@ -37,30 +42,20 @@ const MINI_H = 132;
  */
 const EMPTY_WORLD_BOUNDS = { x: -500, y: -500, width: 1000, height: 1000 };
 
-/** Color of each node type in the minimap (Tailwind JIT-safe class literals). */
-function nodeRectClass(type: string): string {
-  switch (type) {
-    case "image":
-      return "bg-sky-400/70";
-    case "text":
-      return "bg-amber-400/70";
-    case "video":
-      return "bg-emerald-400/70";
-    case "audio":
-      return "bg-teal-400/70";
-    case "config":
-      return "bg-violet-400/70";
-    case "a2ui":
-      return "bg-slate-400/70";
-    case "team-step":
-      return "bg-rose-400/70";
-    case "xhs":
-      return "bg-red-400/70";
-    case "phone":
-      return "bg-cyan-400/70";
-    default:
-      return "bg-slate-400/70";
+/**
+ * Minimap blocks carry *state*, not type. Nine unlabelled hues asked the
+ * reader to memorise a legend that was never shown, and reserved brand
+ * teal for "audio" — the colour that now means selected / in progress
+ * everywhere else on the canvas.
+ */
+function nodeRectClass(node: CanvasNode, selected: boolean): string {
+  if (selected) return "bg-[var(--color-brand-primary)]";
+  if (node.metadata.task?.status === "generating") {
+    return "bg-[var(--color-brand-primary)]/60 animate-pulse";
   }
+  if (node.metadata.task?.status === "error")
+    return "bg-[var(--color-error)]/70";
+  return "bg-[var(--color-neutral-300)]";
 }
 
 export function CanvasMinimap({
@@ -68,7 +63,7 @@ export function CanvasMinimap({
 }: {
   getContainerSize: () => { width: number; height: number };
 }) {
-  const { nodes, viewport } = useCanvas();
+  const { nodes, viewport, selectedNodeIds } = useCanvas();
   const { minimapVisible } = useCanvasUiPrefs();
   const [isDragging, setIsDragging] = useState(false);
   // Layout snapshot taken at drag start — see the header note on freezing.
@@ -76,6 +71,7 @@ export function CanvasMinimap({
 
   // Only render visible nodes (skip hidden batch children)
   const visibleNodes = nodes.filter((n) => !isHiddenBatchChild(n, nodes));
+  const selectedIds = new Set(selectedNodeIds);
 
   if (!minimapVisible) {
     return null;
@@ -189,7 +185,7 @@ export function CanvasMinimap({
           <div
             key={node.id}
             data-canvas-minimap-node={node.id}
-            className={`absolute rounded-[1px] ${nodeRectClass(node.type)}`}
+            className={`absolute rounded-[1px] ${nodeRectClass(node, selectedIds.has(node.id))}`}
             style={{ left, top, width, height }}
           />
         );
@@ -198,7 +194,7 @@ export function CanvasMinimap({
       {/* Viewport outline */}
       <div
         data-canvas-minimap-viewport="true"
-        className="pointer-events-none absolute rounded-[2px] border border-sky-400 bg-sky-400/10"
+        className="pointer-events-none absolute rounded-[2px] border-[1.5px] border-[var(--color-text-primary)] bg-[var(--color-accent-subtle)]"
         style={{
           left: vp.left,
           top: vp.top,

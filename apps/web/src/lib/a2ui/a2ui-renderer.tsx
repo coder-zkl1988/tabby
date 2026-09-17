@@ -108,11 +108,7 @@ class A2UIErrorBoundary extends Component<
 
   render() {
     if (this.state.error) {
-      return (
-        <div className="a2ui-error rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
-          Failed to render interactive UI
-        </div>
-      );
+      return <div className="a2ui-error">Failed to render interactive UI</div>;
     }
     return this.props.children;
   }

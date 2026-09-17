@@ -456,7 +456,7 @@ export function SplitDialog({
                 data-canvas-split-confirm="true"
                 disabled={totalPieces === 1}
                 onClick={handleConfirm}
-                className="ml-auto flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="ml-auto flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Grid3x3 size={14} />
                 拆分为 {totalPieces} 个节点

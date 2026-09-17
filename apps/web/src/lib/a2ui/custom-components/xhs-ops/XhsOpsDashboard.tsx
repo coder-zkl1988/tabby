@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomComponentProps } from "../registry";
+import {
+  XhsOpsPreparationStatus,
+  getRunPreparation,
+} from "./XhsOpsPreparationStatus";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import {
   DASHBOARD_DAY_OPTIONS,
@@ -34,11 +38,13 @@ import {
 } from "./xhs-ops-types";
 import {
   CardShell,
+  EmptyState,
   ErrorLine,
-  HintLine,
   SecondaryButton,
   SectionTitle,
+  Skeleton,
   StatusDot,
+  StatusMark,
   anomalyLabel,
   chunkStatusLabel,
   formatClock,
@@ -156,6 +162,13 @@ export function XhsOpsDashboard({
     return row?.cells.find((c) => c.date === selected.date) ?? null;
   }, [rows, selected]);
 
+  const toggleSelected = (accountId: string, date: string) =>
+    setSelected((prev) =>
+      prev && prev.accountId === accountId && prev.date === date
+        ? null
+        : { accountId, date },
+    );
+
   const replaceRun = (next: XhsOpsRun) =>
     setRuns((prev) =>
       prev ? prev.map((r) => (r.id === next.id ? next : r)) : prev,
@@ -180,10 +193,10 @@ export function XhsOpsDashboard({
               key={d}
               type="button"
               onClick={() => setDays(d)}
-              className={`h-6 rounded-md border px-2 text-[11px] ${
+              className={`h-7 rounded-md border px-3 text-[12px] ${
                 days === d
-                  ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-text-primary"
-                  : "border-border text-text-secondary hover:bg-surface-2"
+                  ? "border-[var(--color-brand-primary)] bg-[var(--color-brand-wash)] font-medium text-[var(--color-brand-ink)]"
+                  : "border-border-strong bg-surface-1 text-text-secondary hover:border-[var(--color-accent)]"
               }`}
             >
               {d} 天
@@ -206,22 +219,48 @@ export function XhsOpsDashboard({
           purpose="复盘"
         />
       ) : loading ? (
-        <HintLine>正在加载运行记录…</HintLine>
+        <Skeleton rows={3} label="正在加载运行记录" />
       ) : null}
 
       {projectId && !loading ? (
-        <>
-          <div className="grid grid-cols-2 gap-2 text-[12px] sm:grid-cols-5">
+        <div className="@container flex flex-col gap-4">
+          {/* 达成率 leads at 1.4fr: it is the one number that answers "is
+              the plan being met", and five equal tiles made 异常 read as
+              exactly as important as 运行次数. All five stay — the ratio
+              carries the ranking, not omission. Under 480px the row breaks
+              to 达成率 + a 2×2 block instead of five ~50px columns. */}
+          <div className="grid grid-cols-2 gap-2 @min-[480px]:grid-cols-[1.4fr_1fr_1fr_1fr_1fr] @min-[480px]:gap-3">
+            <div className="col-span-2 flex flex-col gap-2 rounded-[10px] border border-border-subtle bg-surface-1 px-3.5 py-3 @min-[480px]:col-span-1">
+              <span className="text-[12px] text-text-secondary">达成率</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-mono text-[24px] font-bold leading-none text-text-heading">
+                  {totals.planned > 0
+                    ? `${Math.round((totals.browsed / totals.planned) * 100)}%`
+                    : "—"}
+                </span>
+                <span className="text-[12px] text-text-secondary">
+                  {totals.browsed} / {totals.planned}
+                </span>
+              </div>
+              <span className="h-1 overflow-hidden rounded-sm bg-surface-3">
+                <span
+                  className="block h-1 bg-[var(--color-brand-primary)]"
+                  style={{
+                    width: `${
+                      totals.planned > 0
+                        ? Math.min(
+                            100,
+                            Math.round((totals.browsed / totals.planned) * 100),
+                          )
+                        : 0
+                    }%`,
+                  }}
+                />
+              </span>
+            </div>
             <Stat label="运行次数" value={String(totals.runs)} />
-            <Stat
-              label="计划 / 实际"
-              value={`${totals.planned} / ${totals.browsed}`}
-            />
             <Stat label="首页推荐" value={String(totals.home)} />
-            <Stat
-              label="互动（赞+藏+关）"
-              value={String(totals.interactions)}
-            />
+            <Stat label="互动" value={String(totals.interactions)} />
             <Stat
               label="异常"
               value={String(totals.anomalies)}
@@ -229,29 +268,37 @@ export function XhsOpsDashboard({
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <SectionTitle hint="每格 = 实际/计划 浏览篇数；点格子看当日明细并补运营备注">
+          <div className="flex flex-col gap-2">
+            <SectionTitle hint="实际/计划 与首页推荐数；点格子看当日明细">
               账号 × 日期
             </SectionTitle>
             {rows.length === 0 ? (
-              <HintLine>
+              <EmptyState>
                 {runsInRange.length === 0
                   ? "所选范围内没有运行记录；先在「今日浏览计划」里执行一次。"
                   : "没有可展示的账号。"}
-              </HintLine>
+              </EmptyState>
             ) : (
-              <MatrixTable
-                rows={rows}
-                dates={dates}
-                selected={selected}
-                onSelect={(accountId, date) =>
-                  setSelected((prev) =>
-                    prev && prev.accountId === accountId && prev.date === date
-                      ? null
-                      : { accountId, date },
-                  )
-                }
-              />
+              <>
+                {/* Two layouts, one data set. Narrow drops the table (its
+                    min-w-max scroll hides today's column in a sidebar) for
+                    per-account day strips that always fit. */}
+                <div className="@min-[480px]:hidden">
+                  <MatrixStrips
+                    rows={rows}
+                    selected={selected}
+                    onSelect={toggleSelected}
+                  />
+                </div>
+                <div className="hidden @min-[480px]:block">
+                  <MatrixTable
+                    rows={rows}
+                    dates={dates}
+                    selected={selected}
+                    onSelect={toggleSelected}
+                  />
+                </div>
+              </>
             )}
           </div>
 
@@ -277,7 +324,7 @@ export function XhsOpsDashboard({
               <ul className="flex flex-col gap-0.5 text-[12px]">
                 {anomalies.map((a) => (
                   <li key={a.type} className="flex items-start gap-2">
-                    <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 text-[11px] text-amber-700">
+                    <span className="shrink-0 rounded-full bg-[var(--color-warning-wash)] px-1.5 text-[12px] text-[var(--color-warning-ink)]">
                       {anomalyLabel(a.type)} × {a.count}
                     </span>
                     {a.latest ? (
@@ -298,7 +345,7 @@ export function XhsOpsDashboard({
             showAll={showAllObservations}
             onToggle={() => setShowAllObservations((v) => !v)}
           />
-        </>
+        </div>
       ) : null}
     </CardShell>
   );
@@ -309,6 +356,146 @@ export { pickProjectByName };
 
 // ── Matrix ────────────────────────────────────────────────────
 
+/** Beyond this many accounts the roomy row stops fitting on one screen. */
+const MATRIX_COMPACT_ABOVE_ROWS = 6;
+
+/**
+ * Attainment answers "did the day hit its plan", but a failed run that
+ * still met the number is not a green day — `cell.status` is the
+ * severity-ranked worst status of the day, so failure outranks the count.
+ */
+function cellBarClass(cell: DashboardCell): string {
+  if (cell.status === "failed") return "bg-[var(--color-error)]";
+  if (cell.status === "running") {
+    return "bg-[var(--color-brand-primary)] animate-pulse";
+  }
+  if (cell.status === "cancelled" || cell.status === "interrupted") {
+    return "bg-[var(--color-warning-ink)]";
+  }
+  if (cell.planned > 0 && cell.browsed >= cell.planned) {
+    return "bg-[var(--color-success)]";
+  }
+  return "bg-[var(--color-warning-ink)]";
+}
+
+/** The day's status name, back in the tooltip the StatusDot used to carry. */
+function cellTitle(cell: DashboardCell): string {
+  if (cell.runs.length === 0) return "无运行";
+  const status = cell.status ? `${runStatusLabel(cell.status)} · ` : "";
+  return `${status}${cell.browsed}/${cell.planned} · 首页 ${cell.home} · 互动 ${cell.interactions} · 异常 ${cell.anomalies}`;
+}
+
+/**
+ * Narrow layout (< 480px container: a dragged-down sidebar, a canvas node).
+ * The wide table's `min-w-max` scroll puts today's column and 合计 outside
+ * the viewport exactly when the sidebar is narrow, so here each account
+ * becomes a row of day cells that always fit: totals move up to the
+ * account line, and 首 N per day moves behind the tap.
+ */
+function MatrixStrips({
+  rows,
+  selected,
+  onSelect,
+}: {
+  rows: DashboardRow[];
+  selected: { accountId: string; date: string } | null;
+  onSelect: (accountId: string, date: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {rows.map((row) => (
+        <div key={row.accountId} className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <StatusMark
+                tone={row.bound && row.exists ? "done" : "idle"}
+                title={!row.exists ? "已删除" : row.bound ? "已绑定" : "未绑定"}
+              />
+              <span
+                className="truncate text-[13px] font-medium text-text-primary"
+                title={row.label}
+              >
+                {row.label}
+              </span>
+            </div>
+            <span className="shrink-0 font-mono text-[12px] text-text-secondary">
+              {row.totals.browsed}/{row.totals.planned} · 首 {row.totals.home} ·
+              互 {row.totals.interactions}
+            </span>
+          </div>
+          <div
+            className="grid gap-1"
+            style={{
+              gridTemplateColumns: `repeat(${row.cells.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {row.cells.map((cell) => {
+              const isSel =
+                selected?.accountId === row.accountId &&
+                selected?.date === cell.date;
+              const empty = cell.runs.length === 0;
+              const pct =
+                cell.planned > 0
+                  ? Math.min(
+                      100,
+                      Math.round((cell.browsed / cell.planned) * 100),
+                    )
+                  : 0;
+              return (
+                <button
+                  key={cell.date}
+                  type="button"
+                  disabled={empty}
+                  onClick={() => onSelect(row.accountId, cell.date)}
+                  title={cellTitle(cell)}
+                  className={`flex flex-col items-center gap-[3px] rounded ${
+                    isSel ? "bg-[var(--color-brand-subtle)]" : ""
+                  }`}
+                >
+                  <span className="font-mono text-[12px] font-medium text-text-primary">
+                    {empty ? (
+                      <span className="text-text-secondary">—</span>
+                    ) : (
+                      cell.browsed
+                    )}
+                  </span>
+                  <span className="h-[3px] w-full overflow-hidden rounded-sm bg-surface-3">
+                    {empty ? null : (
+                      <span
+                        className={`block h-[3px] ${cellBarClass(cell)}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    )}
+                  </span>
+                  <span
+                    className={`font-mono text-[12px] ${
+                      cell.anomalies > 0
+                        ? "text-[var(--color-warning-ink)]"
+                        : "text-text-secondary"
+                    }`}
+                  >
+                    {shortDate(cell.date).slice(-2)}
+                    {cell.anomalies > 0 ? " 异" : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The question this grid answers is "is the recommend feed drifting toward
+ * the target interests", so 首页推荐数 has to stay visible in the cell —
+ * it cannot move behind a click. 互动 does move out (the keyword table
+ * already sums it), which buys the room for the completion bar.
+ *
+ * Rows run ~56px so a day is scannable; past six accounts that no longer
+ * fits a screen, and the grid falls back to a 36px compact row.
+ */
 function MatrixTable({
   rows,
   dates,
@@ -320,97 +507,163 @@ function MatrixTable({
   selected: { accountId: string; date: string } | null;
   onSelect: (accountId: string, date: string) => void;
 }) {
+  const compact = rows.length > MATRIX_COMPACT_ABOVE_ROWS;
+  const cellPad = compact ? "px-2 py-1.5" : "px-2.5 py-2";
+  const edgePad = compact ? "px-2.5 py-1.5" : "px-3 py-2";
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-max border-collapse text-[11px]">
-        <thead>
-          <tr className="bg-surface-2/60 text-text-tertiary">
-            <th className="sticky left-0 z-10 bg-surface-2/95 px-2 py-1 text-left font-medium">
-              账号
-            </th>
-            {dates.map((d) => (
-              <th key={d} className="px-1.5 py-1 text-center font-medium">
-                {shortDate(d)}
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-[13px]">
+          <thead>
+            <tr className="bg-surface-0 text-text-secondary">
+              <th
+                className={`sticky left-0 z-10 bg-surface-0 text-left text-[12px] font-medium ${edgePad}`}
+              >
+                账号
               </th>
-            ))}
-            <th className="px-2 py-1 text-right font-medium">合计</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.accountId} className="border-t border-border">
-              <td className="sticky left-0 z-10 max-w-[160px] bg-surface-1 px-2 py-1">
-                <div className="truncate text-text-primary" title={row.label}>
-                  {row.label}
-                </div>
-                <div className="text-[10px] text-text-tertiary">
-                  {!row.exists ? "已删除" : row.bound ? "已绑定" : "未绑定"}
-                </div>
-              </td>
-              {row.cells.map((cell) => {
-                const isSel =
-                  selected?.accountId === row.accountId &&
-                  selected?.date === cell.date;
-                const empty = cell.runs.length === 0;
-                return (
-                  <td key={cell.date} className="px-0.5 py-0.5 text-center">
-                    <button
-                      type="button"
-                      disabled={empty}
-                      onClick={() => onSelect(row.accountId, cell.date)}
-                      title={
-                        empty
-                          ? "无运行"
-                          : `${cell.runs.length} 次运行 · 首页 ${cell.home} · 互动 ${cell.interactions} · 异常 ${cell.anomalies}`
-                      }
-                      className={`flex min-w-[52px] flex-col items-center rounded px-1 py-0.5 ${
-                        empty
-                          ? "text-text-tertiary"
-                          : isSel
-                            ? "bg-[var(--color-accent)]/15 text-text-primary"
-                            : "hover:bg-surface-2 text-text-primary"
-                      }`}
-                    >
-                      {empty ? (
-                        <span>—</span>
-                      ) : (
-                        <>
-                          <span className="flex items-center gap-1 font-medium">
-                            <StatusDot
-                              status={cell.status ?? "pending"}
-                              title={
-                                cell.status ? runStatusLabel(cell.status) : ""
-                              }
-                            />
-                            {cell.browsed}/{cell.planned}
-                          </span>
-                          <span className="text-[10px] text-text-tertiary">
-                            首{cell.home} 互{cell.interactions}
-                            {cell.anomalies > 0 ? (
-                              <span className="text-amber-600">
-                                {" "}
-                                异{cell.anomalies}
-                              </span>
-                            ) : null}
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  </td>
-                );
-              })}
-              <td className="px-2 py-1 text-right text-text-secondary">
-                <div className="font-medium text-text-primary">
-                  {row.totals.browsed}/{row.totals.planned}
-                </div>
-                <div className="text-[10px] text-text-tertiary">
-                  {row.totals.runs} 次 · 互 {row.totals.interactions}
-                </div>
-              </td>
+              {dates.map((d) => (
+                <th
+                  key={d}
+                  className={`text-center font-mono text-[12px] font-medium ${cellPad}`}
+                >
+                  {shortDate(d)}
+                </th>
+              ))}
+              <th className={`text-right text-[12px] font-medium ${edgePad}`}>
+                合计
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.accountId} className="border-t border-border-subtle">
+                <td
+                  className={`sticky left-0 z-10 max-w-[180px] bg-surface-1 ${edgePad}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <StatusMark
+                      tone={row.bound && row.exists ? "done" : "idle"}
+                      title={
+                        !row.exists ? "已删除" : row.bound ? "已绑定" : "未绑定"
+                      }
+                    />
+                    <span
+                      className="min-w-0 truncate text-text-primary"
+                      title={row.label}
+                    >
+                      {row.label}
+                    </span>
+                    {row.exists && !row.bound ? (
+                      <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-text-secondary">
+                        未绑定
+                      </span>
+                    ) : null}
+                    {!row.exists ? (
+                      <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-text-secondary">
+                        已删除
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
+                {row.cells.map((cell) => {
+                  const isSel =
+                    selected?.accountId === row.accountId &&
+                    selected?.date === cell.date;
+                  const empty = cell.runs.length === 0;
+                  const pct =
+                    cell.planned > 0
+                      ? Math.min(
+                          100,
+                          Math.round((cell.browsed / cell.planned) * 100),
+                        )
+                      : 0;
+                  return (
+                    <td
+                      key={cell.date}
+                      className={`${cellPad} ${isSel ? "bg-[var(--color-brand-subtle)]" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        disabled={empty}
+                        onClick={() => onSelect(row.accountId, cell.date)}
+                        title={cellTitle(cell)}
+                        className={`flex w-full min-w-[62px] flex-col items-center gap-1 rounded-md ${
+                          empty
+                            ? "text-text-secondary"
+                            : isSel
+                              ? "text-text-primary"
+                              : "text-text-primary hover:bg-surface-2"
+                        }`}
+                      >
+                        {empty ? (
+                          <span className="text-text-secondary">—</span>
+                        ) : (
+                          <>
+                            <span className="font-mono text-[13px] font-medium">
+                              {cell.browsed}
+                              <span className="font-normal text-text-secondary">
+                                /{cell.planned}
+                              </span>
+                            </span>
+                            <span className="h-[3px] w-full overflow-hidden rounded-sm bg-surface-3">
+                              <span
+                                className={`block h-[3px] ${cellBarClass(cell)}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </span>
+                            {compact ? null : (
+                              <span className="font-mono text-[12px] text-text-secondary">
+                                首 {cell.home}
+                                {cell.anomalies > 0 ? (
+                                  <span className="text-[var(--color-warning-ink)]">
+                                    {" "}
+                                    异 {cell.anomalies}
+                                  </span>
+                                ) : null}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    </td>
+                  );
+                })}
+                <td className={`text-right ${edgePad}`}>
+                  <div className="font-mono text-[13px] font-medium text-text-primary">
+                    {row.totals.browsed}
+                    <span className="font-normal text-text-secondary">
+                      /{row.totals.planned}
+                    </span>
+                  </div>
+                  <div className="font-mono text-[12px] text-text-secondary">
+                    首 {row.totals.home} · 互 {row.totals.interactions}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-4 border-t border-border-subtle bg-surface-0 px-3 py-2.5 text-[12px] text-text-secondary">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-[3px] w-4 rounded-sm bg-[var(--color-success)]" />
+          达成
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-[3px] w-4 rounded-sm bg-[var(--color-brand-primary)]" />
+          执行中
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-[3px] w-4 rounded-sm bg-[var(--color-warning-ink)]" />
+          未达成
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-[3px] w-4 rounded-sm bg-[var(--color-error)]" />
+          失败
+        </span>
+        <span>首 = 首页推荐流浏览数 · 异 = 异常次数</span>
+      </div>
     </div>
   );
 }
@@ -492,16 +745,16 @@ function RunDetail({
           {runStatusLabel(run.status)}
         </span>
         {run.segment && run.segment.count > 1 ? (
-          <span className="rounded-full bg-surface-2 px-1.5 text-[10px] text-text-secondary">
+          <span className="rounded-full bg-surface-2 px-1.5 text-[12px] text-text-secondary">
             {segmentLabel(run.segment)}
           </span>
         ) : null}
-        <span className="text-text-tertiary">
+        <span className="text-text-secondary">
           {formatClock(run.startedAt ?? run.createdAt)}
           {run.completedAt ? ` → ${formatClock(run.completedAt)}` : ""} ·{" "}
           {formatDurationMs(run.summary?.durationMs)}
         </span>
-        <span className="text-text-tertiary">
+        <span className="text-text-secondary">
           计划 {run.summary?.plannedTotal ?? 0} / 实际{" "}
           {run.summary?.browsedTotal ?? 0} · 赞{" "}
           {run.summary?.interactions?.like ?? 0} 藏{" "}
@@ -512,11 +765,12 @@ function RunDetail({
             : ""}
         </span>
       </div>
+      <XhsOpsPreparationStatus preparation={getRunPreparation(run)} />
       {run.error ? <ErrorLine message={run.error} /> : null}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-max border-collapse text-[11px]">
+        <table className="w-full min-w-max border-collapse text-[12px]">
           <thead>
-            <tr className="text-text-tertiary">
+            <tr className="text-text-secondary">
               <th className="px-1.5 py-0.5 text-left font-medium">环节</th>
               <th className="px-1.5 py-0.5 text-right font-medium">
                 实际/计划
@@ -540,10 +794,10 @@ function RunDetail({
                 <td className="px-1.5 py-0.5 text-right">
                   {c.browsed}/{c.plannedCount}
                 </td>
-                <td className="px-1.5 py-0.5 text-right text-text-tertiary">
+                <td className="px-1.5 py-0.5 text-right text-text-secondary">
                   {c.skipped}
                 </td>
-                <td className="px-1.5 py-0.5 text-right text-text-tertiary">
+                <td className="px-1.5 py-0.5 text-right text-text-secondary">
                   {c.interactions?.like ?? 0}/{c.interactions?.collect ?? 0}/
                   {c.interactions?.follow ?? 0}
                 </td>
@@ -557,7 +811,7 @@ function RunDetail({
                       // biome-ignore lint/suspicious/noArrayIndexKey: display-only list
                       key={i}
                       title={a.detail}
-                      className="mr-1 rounded-full bg-amber-500/15 px-1.5 text-[10px] text-amber-700"
+                      className="mr-1 rounded-full bg-[var(--color-warning-wash)] px-1.5 text-[12px] text-[var(--color-warning-ink)]"
                     >
                       {anomalyLabel(a.type)}
                     </span>
@@ -588,7 +842,7 @@ function RunDetail({
         <ErrorLine message={error} />
         <div className="flex items-center justify-end gap-2">
           {state === "saved" ? (
-            <span className="text-[11px] text-text-tertiary">已保存</span>
+            <span className="text-[12px] text-text-secondary">已保存</span>
           ) : null}
           <SecondaryButton onClick={save} disabled={state === "saving"}>
             {state === "saving" ? "保存中…" : "保存备注"}
@@ -604,11 +858,11 @@ function RunDetail({
 function verdictClass(v: KeywordStat["verdict"]): string {
   switch (v) {
     case "adjust":
-      return "bg-red-500/10 text-red-600";
+      return "bg-[var(--color-error-wash)] text-[var(--color-error-ink)]";
     case "watch":
-      return "bg-amber-500/15 text-amber-700";
+      return "bg-[var(--color-warning-wash)] text-[var(--color-warning-ink)]";
     default:
-      return "bg-emerald-500/10 text-emerald-700";
+      return "bg-[var(--color-success-muted)] text-[var(--color-success-ink)]";
   }
 }
 
@@ -626,9 +880,9 @@ function KeywordTable({
         关键词表现
       </SectionTitle>
       <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full min-w-max border-collapse text-[11px]">
+        <table className="w-full min-w-max border-collapse text-[12px]">
           <thead>
-            <tr className="bg-surface-2/60 text-text-tertiary">
+            <tr className="bg-surface-2/60 text-text-secondary">
               <th className="px-2 py-1 text-left font-medium">关键词</th>
               <th className="px-2 py-1 text-left font-medium">核心池账号</th>
               <th className="px-2 py-1 text-right font-medium">次数</th>
@@ -643,7 +897,7 @@ function KeywordTable({
               <tr key={k.keyword} className="border-t border-border">
                 <td className="px-2 py-1 text-text-primary">{k.keyword}</td>
                 <td
-                  className="max-w-[180px] truncate px-2 py-1 text-text-tertiary"
+                  className="max-w-[180px] truncate px-2 py-1 text-text-secondary"
                   title={k.coreOf.join("、")}
                 >
                   {k.coreOf.length > 0 ? k.coreOf.join("、") : "—"}
@@ -654,31 +908,31 @@ function KeywordTable({
                 </td>
                 <td className="px-2 py-1 text-right">{k.interactions}</td>
                 <td
-                  className={`px-2 py-1 text-right ${k.anomalies > 0 ? "text-amber-600" : ""}`}
+                  className={`px-2 py-1 text-right ${k.anomalies > 0 ? "text-[var(--color-warning-ink)]" : ""}`}
                 >
                   {k.anomalies}
                 </td>
                 <td className="px-2 py-1">
                   <span
-                    className={`rounded-full px-1.5 text-[10px] ${verdictClass(k.verdict)}`}
+                    className={`rounded-full px-1.5 text-[12px] ${verdictClass(k.verdict)}`}
                   >
                     {KEYWORD_VERDICT_LABEL[k.verdict]}
                   </span>
-                  <span className="ml-1 text-text-tertiary">{k.hint}</span>
+                  <span className="ml-1 text-text-secondary">{k.hint}</span>
                 </td>
               </tr>
             ))}
             {home.runs > 0 ? (
               <tr className="border-t border-border bg-surface-2/30">
                 <td className="px-2 py-1 text-text-primary">首页推荐流</td>
-                <td className="px-2 py-1 text-text-tertiary">—</td>
+                <td className="px-2 py-1 text-text-secondary">—</td>
                 <td className="px-2 py-1 text-right">{home.runs}</td>
                 <td className="px-2 py-1 text-right">
                   {home.browsed}/{home.planned}
                 </td>
                 <td className="px-2 py-1 text-right">{home.interactions}</td>
                 <td className="px-2 py-1 text-right">—</td>
-                <td className="px-2 py-1 text-text-tertiary">
+                <td className="px-2 py-1 text-text-secondary">
                   {home.observations}{" "}
                   条手机端观察——推荐流是否靠近目标兴趣看下方时间线
                 </td>
@@ -715,13 +969,13 @@ function ObservationTimeline({
             key={`${o.runId}-${o.chunk}-${i}`}
             className="flex items-start gap-2"
           >
-            <span className="shrink-0 font-mono text-[11px] text-text-tertiary">
+            <span className="shrink-0 font-mono text-[12px] text-text-secondary">
               {shortDate(o.date)}
             </span>
             <span
-              className={`shrink-0 rounded-full px-1.5 text-[10px] ${
+              className={`shrink-0 rounded-full px-1.5 text-[12px] ${
                 o.source === "ops"
-                  ? "bg-sky-500/10 text-sky-700"
+                  ? "bg-[var(--color-brand-wash)] text-[var(--color-brand-ink)]"
                   : "bg-surface-2 text-text-secondary"
               }`}
             >
@@ -756,11 +1010,20 @@ function Stat({
   value: string;
   tone?: "warn";
 }) {
+  const warn = tone === "warn";
   return (
-    <div className="rounded-md bg-surface-2/60 px-2 py-1.5">
-      <div className="text-[11px] text-text-tertiary">{label}</div>
+    <div
+      className={`flex items-baseline justify-between gap-2 rounded-[10px] px-3 py-2.5 @min-[480px]:flex-col @min-[480px]:items-stretch @min-[480px]:gap-1 @min-[480px]:px-3.5 @min-[480px]:py-3 ${
+        warn ? "bg-[var(--color-warning-ink)]/[8%]" : "bg-surface-2"
+      }`}
+    >
       <div
-        className={`text-[13px] font-medium ${tone === "warn" ? "text-amber-600" : "text-text-primary"}`}
+        className={`text-[12px] ${warn ? "text-[var(--color-warning-ink)]" : "text-text-secondary"}`}
+      >
+        {label}
+      </div>
+      <div
+        className={`font-mono text-[15px] font-semibold @min-[480px]:text-[18px] ${warn ? "text-[var(--color-warning-ink)]" : "text-text-primary"}`}
       >
         {value}
       </div>

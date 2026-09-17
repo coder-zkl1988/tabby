@@ -219,7 +219,7 @@ export function UpscaleDialog({
                   onClick={() => setUpscaleMode("interpolation")}
                   className={`flex-1 px-4 py-1.5 text-sm transition-colors ${
                     upscaleMode === "interpolation"
-                      ? "bg-sky-500 text-white"
+                      ? "bg-[var(--color-brand-wash)] text-[var(--color-brand-ink)]"
                       : "bg-surface-1 text-text-primary hover:bg-surface-2"
                   }`}
                 >
@@ -255,7 +255,7 @@ export function UpscaleDialog({
                       onClick={() => setTarget(le)}
                       className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                         target === le && size !== null
-                          ? "border-sky-500 bg-sky-500 text-white"
+                          ? "border-[var(--color-brand-primary)] bg-[var(--color-brand-wash)] text-[var(--color-brand-ink)]"
                           : "border-border bg-surface-1 text-text-primary hover:bg-surface-2"
                       }`}
                     >
@@ -307,7 +307,7 @@ export function UpscaleDialog({
                   (upscaleMode === "ai" && !sourceImage)
                 }
                 onClick={handleConfirm}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ZoomIn size={14} />
                 {upscaleMode === "ai" ? "AI 超分并生成节点" : "放大并生成节点"}
