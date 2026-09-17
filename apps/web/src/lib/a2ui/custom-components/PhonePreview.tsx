@@ -1,4 +1,4 @@
-import { Smartphone, Wifi, WifiOff } from "lucide-react";
+import { Wifi, WifiOff } from "lucide-react";
 import { useState } from "react";
 import type { CustomComponentProps } from "./registry";
 
@@ -20,7 +20,6 @@ export function PhonePreview({ comp, resolve }: CustomComponentProps) {
   if (devices.length === 0) {
     return (
       <div className="a2ui-phone-empty">
-        <Smartphone className="a2ui-phone-empty__icon" size={20} />
         <span>No connected devices</span>
       </div>
     );

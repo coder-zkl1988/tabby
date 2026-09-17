@@ -6,6 +6,7 @@ import {
 import { useTeamBoard } from "@/hooks/use-teams";
 import { rollupRunStatus } from "@/lib/team-run-status";
 import { useState } from "react";
+import { StatusPill, type StatusTone } from "../a2ui-status";
 import type { CustomComponentProps } from "./registry";
 
 /**
@@ -122,17 +123,29 @@ export function TeamRunPanel({ comp, resolve }: CustomComponentProps) {
   const selectedStep = run.steps.find((step) => step.id === selectedStepId);
   const selectedCard = selectedStep ? cardsById.get(selectedStep.cardId) : null;
 
+  // Same four states, same order of precedence, as TeamRunCard — the two
+  // render the same run and must never disagree about it.
+  const [runTone, runLabel]: [StatusTone, string] = allDone
+    ? ["done", "已完成"]
+    : anyBlocked && pending.length === 0
+      ? ["blocked", "有步骤受阻"]
+      : pending.length > 0
+        ? ["waiting", "等待审批"]
+        : ["running", "团队执行中"];
+
   return (
     <div
       className="flex h-full flex-col gap-3 overflow-y-auto p-3"
       data-team-run-panel={run.parentCardId}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{run.title}</div>
-          <div className="text-xs text-text-secondary">
-            {allDone ? "已完成" : anyBlocked ? "有步骤受阻" : "运行中…"}
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="truncate text-[15px] font-semibold leading-[1.4] text-text-heading">
+            {run.title}
           </div>
+          <StatusPill tone={runTone} className="self-start">
+            {runLabel}
+          </StatusPill>
         </div>
         {allDone ? (
           <button
@@ -148,7 +161,7 @@ export function TeamRunPanel({ comp, resolve }: CustomComponentProps) {
       {pending.map((approval) => (
         <div
           key={`${approval.runId}:${approval.stepId}`}
-          className="flex items-center gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2"
+          className="flex items-center gap-2 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-wash)] px-3 py-2"
         >
           <div className="min-w-0 flex-1 text-xs">
             <span className="font-medium">等待人工审批</span>
