@@ -435,7 +435,7 @@ export function DevicesPage() {
                 <DeviceCard
                   key={device.deviceId}
                   device={device}
-                  onTaskSuccess={fetchDevices}
+                  onRefresh={fetchDevices}
                   onViewScreen={handleViewScreen}
                 />
               ))}
