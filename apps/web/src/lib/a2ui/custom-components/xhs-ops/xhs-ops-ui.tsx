@@ -4,35 +4,65 @@
  * list hook. Styling follows XHSBatchTable / TeamRunCard (CSS variables +
  * Tailwind utility classes) so the cards sit naturally in the chat thread.
  */
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { getApiV1Devices } from "../../../../../lib/api/sdk.gen";
+import { StatusMark, StatusPill, type StatusTone } from "../../a2ui-status";
 import type {
   XhsOpsAnomalyType,
   XhsOpsChunkStatus,
   XhsOpsRunStatus,
 } from "./xhs-ops-types";
 
+// Re-exported so the eight xhs-ops cards keep a single import site.
+export {
+  EmptyState,
+  Skeleton,
+  Spinner,
+  StatusMark,
+  StatusPill,
+} from "../../a2ui-status";
+export type { StatusTone } from "../../a2ui-status";
+
 // ── Class name constants ───────────────────────────────────────
+//
+// Every size here comes off the three ladders documented at the top of
+// a2ui.css: type 24/18/15/14/13/12, space 4/8/12/16/24/32, control
+// 28 (in-table) / 36 (form default) / 44 (irreversible). Forms and the
+// approve/reject pair sit at 36 — the smallest height an action that
+// cannot be undone is allowed to have. `h-7` (28) stays for controls
+// that live inside a table row or a card header.
 
 export const inputClass =
-  "h-7 w-full min-w-0 rounded-md border border-border bg-surface-1 px-2 text-[12px] text-text-primary outline-none placeholder:text-text-tertiary focus:border-[var(--color-brand-primary)] disabled:opacity-60";
+  "h-9 w-full min-w-0 rounded-lg border border-border bg-surface-1 px-3 text-[13px] text-text-primary outline-none placeholder:text-text-secondary focus:border-[var(--color-brand-primary)] focus:shadow-[var(--shadow-focus)] disabled:opacity-60";
 
 export const textareaClass =
-  "w-full min-w-0 resize-y rounded-md border border-border bg-surface-1 px-2 py-1.5 text-[12px] leading-5 text-text-primary outline-none placeholder:text-text-tertiary focus:border-[var(--color-brand-primary)] disabled:opacity-60";
+  "w-full min-w-0 resize-y rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-[13px] leading-[1.55] text-text-primary outline-none placeholder:text-text-secondary focus:border-[var(--color-brand-primary)] focus:shadow-[var(--shadow-focus)] disabled:opacity-60";
 
 export const selectClass =
-  "h-7 w-full min-w-0 rounded-md border border-border bg-surface-1 px-1.5 text-[12px] text-text-primary outline-none focus:border-[var(--color-brand-primary)] disabled:opacity-60";
+  "h-9 w-full min-w-0 rounded-lg border border-border bg-surface-1 px-2.5 text-[13px] text-text-primary outline-none focus:border-[var(--color-brand-primary)] focus:shadow-[var(--shadow-focus)] disabled:opacity-60";
 
 const primaryButtonClass =
-  "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 text-[12px] font-semibold text-[var(--color-accent-fg)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)] px-5 text-[13px] font-semibold text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40";
 
 const secondaryButtonClass =
-  "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-surface-1 px-2.5 text-[12px] font-medium text-text-secondary hover:bg-surface-2 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-border-strong bg-surface-1 px-4 text-[13px] font-medium text-text-secondary transition-colors hover:border-[var(--color-accent)] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40";
 
+// Danger keeps a neutral border and white fill so it never outshouts the
+// primary next to it; the error meaning lives in the label colour, and
+// hover escalates the border.
 const dangerButtonClass =
-  "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md border border-red-500/40 bg-surface-1 px-2.5 text-[12px] font-medium text-red-600 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-border-strong bg-surface-1 px-4 text-[13px] font-medium text-[var(--color-error-ink)] transition-colors hover:border-[var(--color-error)] disabled:cursor-not-allowed disabled:opacity-40";
 
 // ── Layout primitives ─────────────────────────────────────────
 
@@ -52,15 +82,20 @@ export function CardShell({
   testId?: string;
 }) {
   return (
+    // `a2ui-framed` tells the inline chat host this card brings its own
+    // border, so the host drops its padding instead of double-framing it
+    // (see .a2ui-inline-host in a2ui.css).
     <div
       data-xhs-ops-card={testId}
-      className="flex w-full max-w-[720px] flex-col overflow-hidden rounded-xl border border-border bg-surface-1 text-text-primary"
+      className="a2ui-framed flex w-full max-w-[720px] flex-col overflow-hidden rounded-xl border border-border bg-surface-1 text-text-primary"
     >
-      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-2.5">
+      <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-5 py-3.5">
         <div className="min-w-0">
-          <div className="truncate text-[14px] font-medium">{title}</div>
+          <div className="truncate text-[15px] font-semibold leading-[1.4] text-text-heading">
+            {title}
+          </div>
           {subtitle ? (
-            <div className="mt-0.5 text-[11px] text-text-tertiary">
+            <div className="mt-1 text-[12px] leading-[1.5] text-text-secondary">
               {subtitle}
             </div>
           ) : null}
@@ -69,9 +104,9 @@ export function CardShell({
           <div className="flex shrink-0 items-center gap-2">{actions}</div>
         ) : null}
       </div>
-      <div className="flex flex-col gap-3 px-4 py-3">{children}</div>
+      <div className="flex flex-col gap-4 px-5 py-4">{children}</div>
       {footer ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle px-5 py-3.5">
           {footer}
         </div>
       ) : null}
@@ -87,12 +122,12 @@ export function SectionTitle({
   hint?: ReactNode;
 }) {
   return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-[12px] font-semibold text-text-primary">
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <span className="shrink-0 text-[15px] font-semibold text-text-heading">
         {children}
       </span>
       {hint ? (
-        <span className="text-[11px] text-text-tertiary">{hint}</span>
+        <span className="text-[12px] text-text-secondary">{hint}</span>
       ) : null}
     </div>
   );
@@ -110,7 +145,9 @@ export function Field({
   return (
     // biome-ignore lint/a11y/noLabelWithoutControl: wraps its control as a child
     <label className={`flex min-w-0 flex-col gap-1 ${className ?? ""}`}>
-      <span className="text-[11px] text-text-secondary">{label}</span>
+      <span className="text-[12px] font-medium text-text-secondary">
+        {label}
+      </span>
       {children}
     </label>
   );
@@ -119,17 +156,16 @@ export function Field({
 export function ErrorLine({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <div
-      role="alert"
-      className="rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[12px] text-red-600"
-    >
+    <div role="alert" className="a2ui-error">
       {message}
     </div>
   );
 }
 
+/** A one-line aside next to something else. Not for "there is nothing
+ *  here" — that is EmptyState, which has to be readable on its own. */
 export function HintLine({ children }: { children: ReactNode }) {
-  return <div className="text-[11px] text-text-tertiary">{children}</div>;
+  return <div className="text-[12px] text-text-secondary">{children}</div>;
 }
 
 export function PrimaryButton({
@@ -179,6 +215,85 @@ export function SecondaryButton({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Confirmation dialog with Tabby's own chrome, for the handful of xhs-ops
+ * actions that are consequential enough to double-check (they drive a real
+ * phone, or delete a record) but too frequent to make the operator navigate
+ * away for. Built on the app's Radix Dialog primitive rather than
+ * `window.confirm` — the browser's own dialog can't be styled, carries no
+ * branding, and freezes the whole tab (including this card's other rows)
+ * while it's open.
+ *
+ * Deliberately synchronous to close: `onConfirm` fires and the dialog closes
+ * immediately, exactly like the `window.confirm` call it replaces — any async
+ * work it kicks off is tracked by the caller's own busy state, not by this
+ * dialog staying open.
+ */
+export function ConfirmDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmLabel = "确认",
+  cancelLabel = "取消",
+  onConfirm,
+  danger,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  /** Style the confirm action as destructive (matches SecondaryButton's danger look). */
+  danger?: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          {/* asChild swaps Radix's default <p> for a <div>: the description is
+              often multiple <p> paragraphs, and <p> can't nest inside <p>. */}
+          <DialogDescription asChild>
+            <div className="text-[13px] leading-[1.6] text-text-secondary">
+              {description}
+            </div>
+          </DialogDescription>
+        </DialogBody>
+        <DialogFooter>
+          <SecondaryButton onClick={() => onOpenChange(false)}>
+            {cancelLabel}
+          </SecondaryButton>
+          {danger ? (
+            <SecondaryButton
+              danger
+              onClick={() => {
+                onOpenChange(false);
+                onConfirm();
+              }}
+            >
+              {confirmLabel}
+            </SecondaryButton>
+          ) : (
+            <PrimaryButton
+              onClick={() => {
+                onOpenChange(false);
+                onConfirm();
+              }}
+            >
+              {confirmLabel}
+            </PrimaryButton>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -251,28 +366,28 @@ export function ChipInput({
 
   return (
     <div
-      className={`flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-border bg-surface-1 px-1.5 py-1 ${disabled ? "opacity-60" : ""}`}
+      className={`flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-lg border border-border bg-surface-1 px-2 py-1.5 ${disabled ? "opacity-60" : ""}`}
     >
       {value.map((chip) => (
         <span
           key={chip}
-          className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-text-primary"
+          className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-[12px] text-text-primary"
         >
           <span className="truncate">{chip}</span>
           {!disabled ? (
             <button
               type="button"
               aria-label={`移除 ${chip}`}
-              className="shrink-0 rounded-full text-text-tertiary hover:text-text-primary"
+              className="shrink-0 rounded-full text-text-secondary hover:text-text-primary"
               onClick={() => onChange(value.filter((v) => v !== chip))}
             >
-              <X size={11} />
+              <X size={12} />
             </button>
           ) : null}
         </span>
       ))}
       <input
-        className="h-5 min-w-[80px] flex-1 bg-transparent text-[12px] text-text-primary outline-none placeholder:text-text-tertiary"
+        className="h-6 min-w-[80px] flex-1 bg-transparent text-[13px] text-text-primary outline-none placeholder:text-text-secondary"
         value={draft}
         placeholder={value.length === 0 ? placeholder : ""}
         disabled={disabled}
@@ -339,33 +454,63 @@ export function anomalyLabel(type: string): string {
   return (ANOMALY_LABEL as Record<string, string>)[type] ?? type;
 }
 
-export function chunkDotClass(status: XhsOpsChunkStatus | string): string {
+/** Map the xhs-ops status enums onto the shared A2UI status vocabulary. */
+export function chunkStatusTone(
+  status: XhsOpsChunkStatus | string,
+): StatusTone {
   switch (status) {
     case "completed":
-      return "bg-emerald-500";
+      return "done";
     case "running":
-      return "bg-sky-500 animate-pulse";
+      return "running";
     case "failed":
-      return "bg-red-500";
+      return "failed";
     case "skipped":
     case "cancelled":
-      return "bg-amber-400";
+      return "blocked";
     default:
-      return "bg-border";
+      return "idle";
   }
 }
 
-export function runStatusTextClass(status: XhsOpsRunStatus | string): string {
+export function runStatusTone(status: XhsOpsRunStatus | string): StatusTone {
   switch (status) {
     case "completed":
-      return "text-emerald-600";
+      return "done";
     case "running":
-    case "planned":
-      return "text-sky-600";
+      return "running";
     case "failed":
-      return "text-red-600";
+      return "failed";
+    // `planned` is queued-and-live (isRunActive counts it), so it must not
+    // read the same as a run that will never start; `cancelled` matches
+    // chunkStatusTone above rather than contradicting it in the same card.
+    case "planned":
+      return "waiting";
+    case "cancelled":
+    case "interrupted":
+      return "blocked";
     default:
-      return "text-amber-600";
+      return "idle";
+  }
+}
+
+export function chunkDotClass(status: XhsOpsChunkStatus | string): string {
+  return `a2ui-mark a2ui-mark--${chunkStatusTone(status)}`;
+}
+
+/** Status colour used as *text* is always the readable -ink variant. */
+export function runStatusTextClass(status: XhsOpsRunStatus | string): string {
+  switch (runStatusTone(status)) {
+    case "done":
+      return "text-[var(--color-success-ink)]";
+    case "running":
+      return "text-[var(--color-brand-ink)]";
+    case "failed":
+      return "text-[var(--color-error-ink)]";
+    case "blocked":
+      return "text-[var(--color-warning-ink)]";
+    default:
+      return "text-text-secondary";
   }
 }
 
@@ -376,12 +521,18 @@ export function StatusDot({
   status: XhsOpsChunkStatus | string;
   title?: string;
 }) {
-  return (
-    <span
-      title={title}
-      className={`inline-block h-2 w-2 shrink-0 rounded-full ${chunkDotClass(status)}`}
-    />
-  );
+  return <StatusMark tone={chunkStatusTone(status)} title={title} />;
+}
+
+/** Chunk / run status as a pill, label included. */
+export function RunStatusPill({
+  status,
+  label,
+}: {
+  status: XhsOpsRunStatus | string;
+  label: ReactNode;
+}) {
+  return <StatusPill tone={runStatusTone(status)}>{label}</StatusPill>;
 }
 
 // ── Time helpers ─────────────────────────────────────────────

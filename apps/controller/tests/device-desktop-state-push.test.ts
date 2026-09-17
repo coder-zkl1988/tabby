@@ -162,9 +162,122 @@ describe("DeviceControlService.isAvailable", () => {
 
 describe("DeviceControlService.executeTask", () => {
   it("forwards the caller's idle timeout untouched and records the run", async () => {
+    const result = { taskId: "task-1", success: true, message: "published" };
     const rpc = startRpcServer((_body, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ result: { taskId: "task-1", success: true } }));
+      res.end(JSON.stringify({ result }));
+    });
+    const port = await rpc.ready;
+    const append = vi.fn();
+    const configStore = {
+      getConfig: vi
+        .fn()
+        .mockResolvedValue({ deviceControl: { rpcPort: port } }),
+    } as unknown as NexuConfigStore;
+    const service = new DeviceControlService(configStore, {
+      append,
+    } as unknown as DeviceTaskHistoryStore);
+
+    const response = await service.executeTask("device-1", {
+      task: "发布一篇小红书图文笔记",
+      timeout: 120_000,
+      maxSteps: 40,
+    });
+
+    // The idle window belongs to the phone (it re-arms it on every heartbeat);
+    // the controller passes it through rather than substituting its own.
+    expect(
+      (rpc.received[0] as { params: { timeoutMs: number } }).params.timeoutMs,
+    ).toBe(120_000);
+    expect(append).toHaveBeenCalledTimes(1);
+    expect(response.result).toEqual(result);
+    expect(append.mock.calls[0]?.[0]).toMatchObject({
+      task: "发布一篇小红书图文笔记",
+      result,
+    });
+    rpc.server.close();
+  });
+
+  it("redacts login task details from history while returning the full result", async () => {
+    const secret = "secretcanary-login-13800138000-654321";
+    const result = {
+      taskId: "login-task-1",
+      success: false,
+      status: "aborted",
+      errorCode: "USER_CANCELLED",
+      needsInteraction: true,
+      message: `Enter ${secret}`,
+      interactionMessage: `Manual input required for ${secret}`,
+      totalSteps: 7,
+      steps: [{ step: 1, action: "TYPE", target: secret, success: true }],
+      finalScreenshot: `/tmp/${secret}.webp`,
+      artifacts: [
+        {
+          artifactId: "artifact-1",
+          name: secret,
+          mimeType: "image/webp",
+          path: `/tmp/${secret}-artifact.webp`,
+        },
+      ],
+    };
+    const rpc = startRpcServer((_body, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ result }));
+    });
+    const port = await rpc.ready;
+    const append = vi.fn();
+    const configStore = {
+      getConfig: vi
+        .fn()
+        .mockResolvedValue({ deviceControl: { rpcPort: port } }),
+    } as unknown as NexuConfigStore;
+    const service = new DeviceControlService(configStore, {
+      append,
+    } as unknown as DeviceTaskHistoryStore);
+
+    const response = await service.executeTask("device-1", {
+      task: `Use ${secret} to log in`,
+      guidance: `Continue with ${secret}`,
+      timeout: 120_000,
+      taskPolicy: { operationClass: "account.login" },
+    });
+
+    expect(response.result).toEqual(result);
+    expect(append).toHaveBeenCalledTimes(1);
+    const historyEntry = append.mock.calls[0]?.[0];
+    expect(JSON.stringify(historyEntry)).not.toContain(secret);
+    expect(historyEntry).toMatchObject({
+      task: "Account login preparation (sensitive details redacted)",
+      result: {
+        taskId: "login-task-1",
+        success: false,
+        status: "aborted",
+        errorCode: "USER_CANCELLED",
+        needsInteraction: true,
+        totalSteps: 7,
+        message:
+          "Account login preparation result (sensitive details redacted)",
+      },
+    });
+    expect(historyEntry.result.steps).toBeUndefined();
+    expect(historyEntry.result.interactionMessage).toBeUndefined();
+    expect(historyEntry.result.finalScreenshot).toBeUndefined();
+    expect(historyEntry.result.artifacts).toBeUndefined();
+    rpc.server.close();
+  });
+
+  it("drops unrecognized login status fields from history", async () => {
+    const secret = "secretcanary-login-status-13800138000";
+    const result = {
+      taskId: "login-task-untrusted-status",
+      success: false,
+      status: `blocked-${secret}`,
+      errorCode: `PHONE_${secret}`,
+      message: `failed with ${secret}`,
+    };
+    const rpc = startRpcServer((_body, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ result }));
     });
     const port = await rpc.ready;
     const append = vi.fn();
@@ -178,17 +291,14 @@ describe("DeviceControlService.executeTask", () => {
     } as unknown as DeviceTaskHistoryStore);
 
     await service.executeTask("device-1", {
-      task: "发布一篇小红书图文笔记",
-      timeout: 120_000,
-      maxSteps: 40,
+      task: `Log in with ${secret}`,
+      taskPolicy: { operationClass: "account.login" },
     });
 
-    // The idle window belongs to the phone (it re-arms it on every heartbeat);
-    // the controller passes it through rather than substituting its own.
-    expect(
-      (rpc.received[0] as { params: { timeoutMs: number } }).params.timeoutMs,
-    ).toBe(120_000);
-    expect(append).toHaveBeenCalledTimes(1);
+    const historyEntry = append.mock.calls[0]?.[0];
+    expect(JSON.stringify(historyEntry)).not.toContain(secret);
+    expect(historyEntry.result.status).toBeUndefined();
+    expect(historyEntry.result.errorCode).toBeUndefined();
     rpc.server.close();
   });
 
@@ -244,6 +354,49 @@ describe("DeviceControlService.executeTask", () => {
 
     expect(append).toHaveBeenCalledTimes(1);
     expect(append.mock.calls[0][0].result.success).toBe(false);
+    rpc.server.close();
+  });
+
+  it("redacts login task details and errors from failed history", async () => {
+    const secret = "secretcanary-login-rpc-error";
+    const rpc = startRpcServer((_body, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: { code: "OPERATION_FAILED", message: `failed with ${secret}` },
+        }),
+      );
+    });
+    const port = await rpc.ready;
+    const append = vi.fn();
+    const configStore = {
+      getConfig: vi
+        .fn()
+        .mockResolvedValue({ deviceControl: { rpcPort: port } }),
+    } as unknown as NexuConfigStore;
+    const service = new DeviceControlService(configStore, {
+      append,
+    } as unknown as DeviceTaskHistoryStore);
+
+    await expect(
+      service.executeTask("device-1", {
+        task: `Log in with ${secret}`,
+        timeout: 120_000,
+        taskPolicy: { operationClass: "account.login" },
+      }),
+    ).rejects.toThrow(secret);
+
+    expect(append).toHaveBeenCalledTimes(1);
+    const historyEntry = append.mock.calls[0]?.[0];
+    expect(JSON.stringify(historyEntry)).not.toContain(secret);
+    expect(historyEntry).toMatchObject({
+      task: "Account login preparation (sensitive details redacted)",
+      result: {
+        success: false,
+        message:
+          "Account login preparation failed (sensitive details redacted)",
+      },
+    });
     rpc.server.close();
   });
 });

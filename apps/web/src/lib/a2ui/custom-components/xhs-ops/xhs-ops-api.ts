@@ -1,23 +1,78 @@
-/**
- * Typed wrappers over the xhs-ops REST contract (scratchpad spec §3).
- *
- * Every xhs-ops HTTP call in the web app goes through this module. The routes
- * are not yet in the generated SDK (apps/web/lib/api/sdk.gen.ts), so the calls
- * use the same hey-api client the SDK uses (`@/lib/api` configures baseUrl and
- * credentials) with the contract paths spelled out here. Once
- * `pnpm generate-types` produces getApiV1XhsOps* functions, switching is a
- * one-file change: replace the `client.*` calls below with the SDK functions.
- */
-import { client } from "@/lib/api";
+/** Typed wrappers over the generated xhs-ops SDK contract. */
+import {
+  type XhsOpsAccountTransferInput,
+  type XhsOpsDeviceBinding,
+  xhsOpsAccountIdentityResponseSchema,
+  xhsOpsAccountListResponseSchema,
+  xhsOpsAccountResponseSchema,
+  xhsOpsCommentGenerateResponseSchema,
+  xhsOpsCommentListResponseSchema,
+  xhsOpsCommentResponseSchema,
+  xhsOpsDeviceBindingListResponseSchema,
+  type xhsOpsPersonaGenerateBodySchema,
+  xhsOpsPersonaGenerateResponseSchema,
+  type xhsOpsPersonasConfirmBodySchema,
+  xhsOpsPlanSuggestResponseSchema,
+  type xhsOpsProfileConfirmBodySchema,
+  xhsOpsProfileReadbackResponseSchema,
+  xhsOpsProjectListResponseSchema,
+  xhsOpsProjectResponseSchema,
+  xhsOpsRunListResponseSchema,
+  xhsOpsRunResponseSchema,
+} from "@nexu/shared";
+import type { z } from "zod";
+import {
+  deleteApiV1XhsOpsAccountsByAccountId,
+  deleteApiV1XhsOpsProjectsByProjectId,
+  getApiV1XhsOpsAccountsByAccountId,
+  getApiV1XhsOpsDeviceBindings,
+  getApiV1XhsOpsProjects,
+  getApiV1XhsOpsProjectsByProjectId,
+  getApiV1XhsOpsProjectsByProjectIdAccounts,
+  getApiV1XhsOpsProjectsByProjectIdComments,
+  getApiV1XhsOpsProjectsByProjectIdPlanSuggest,
+  getApiV1XhsOpsRuns,
+  getApiV1XhsOpsRunsByRunId,
+  patchApiV1XhsOpsAccountsByAccountId,
+  patchApiV1XhsOpsProjectsByProjectId,
+  patchApiV1XhsOpsRunsByRunId,
+  postApiV1XhsOpsAccountsByAccountIdIdentityRead,
+  postApiV1XhsOpsAccountsByAccountIdProfileDraftApply,
+  postApiV1XhsOpsAccountsByAccountIdProfileDraftConfirm,
+  postApiV1XhsOpsAccountsByAccountIdProfileDraftGenerate,
+  postApiV1XhsOpsAccountsByAccountIdProfileDraftReadback,
+  postApiV1XhsOpsAccountsByAccountIdProfileDraftReconcile,
+  postApiV1XhsOpsCommentsByCommentIdReview,
+  postApiV1XhsOpsProjects,
+  postApiV1XhsOpsProjectsByProjectIdAccounts,
+  postApiV1XhsOpsProjectsByProjectIdAccountsTransferDevice,
+  postApiV1XhsOpsProjectsByProjectIdCommentRuns,
+  postApiV1XhsOpsProjectsByProjectIdPersonasConfirm,
+  postApiV1XhsOpsProjectsByProjectIdPersonasGenerate,
+  postApiV1XhsOpsProjectsByProjectIdProfileConfirm,
+  postApiV1XhsOpsProjectsByProjectIdProfileGenerate,
+  postApiV1XhsOpsRuns,
+  postApiV1XhsOpsRunsByRunIdCancel,
+  postApiV1XhsOpsRunsByRunIdCommentsGenerate,
+  postApiV1XhsOpsRunsByRunIdStart,
+} from "../../../../../lib/api/sdk.gen";
+import type {
+  PatchApiV1XhsOpsAccountsByAccountIdData,
+  PostApiV1XhsOpsProjectsByProjectIdAccountsData,
+  PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceData,
+} from "../../../../../lib/api/types.gen";
 import type {
   XhsOpsAccount,
   XhsOpsAccountCreateInput,
+  XhsOpsAccountIdentity,
   XhsOpsAccountUpdateInput,
   XhsOpsCommentDraft,
   XhsOpsCommentQuota,
   XhsOpsCommentStatus,
   XhsOpsPlanSuggestion,
+  XhsOpsProfileField,
   XhsOpsProfilePart,
+  XhsOpsProfileReadback,
   XhsOpsProject,
   XhsOpsProjectCreateInput,
   XhsOpsProjectUpdateInput,
@@ -25,8 +80,6 @@ import type {
   XhsOpsRunCreateInput,
   XhsOpsRunListFilter,
 } from "./xhs-ops-types";
-
-const BASE = "/api/v1/xhs-ops";
 
 export class XhsOpsApiError extends Error {
   /** HTTP status when the server answered; null when the request never landed. */
@@ -63,11 +116,16 @@ interface ApiResult<T> {
   response?: Response;
 }
 
+interface ApiSchema<T> {
+  safeParse(value: unknown): { success: true; data: T } | { success: false };
+}
+
 async function unwrap<T>(
-  call: () => Promise<ApiResult<T>>,
+  call: () => Promise<ApiResult<unknown>>,
   fallback: string,
+  schema: ApiSchema<T>,
 ): Promise<T> {
-  let result: ApiResult<T>;
+  let result: ApiResult<unknown>;
   try {
     result = await call();
   } catch (err) {
@@ -84,7 +142,14 @@ async function unwrap<T>(
         : extractErrorMessage(result.error, fallback);
     throw new XhsOpsApiError(message, status);
   }
-  return result.data;
+  const parsed = schema.safeParse(result.data);
+  if (!parsed.success) {
+    throw new XhsOpsApiError(
+      `桌面端返回了不兼容的数据格式：${fallback}`,
+      result.response?.status ?? null,
+    );
+  }
+  return parsed.data;
 }
 
 /** Same as unwrap but tolerates an empty success body (DELETE). */
@@ -108,40 +173,93 @@ async function unwrapVoid(
   }
 }
 
-function enc(segment: string): string {
-  return encodeURIComponent(segment);
-}
-
 export const xhsOpsApi = {
+  async confirmProfile(
+    projectId: string,
+    body: z.input<typeof xhsOpsProfileConfirmBodySchema>,
+  ): Promise<XhsOpsProject> {
+    const result = await unwrap(
+      () =>
+        postApiV1XhsOpsProjectsByProjectIdProfileConfirm({
+          path: { projectId },
+          body,
+        }),
+      "画像确认失败",
+      xhsOpsProjectResponseSchema,
+    );
+    return result.project;
+  },
+
+  async generateProfile(
+    projectId: string,
+    body: { expectedUpdatedAt: string },
+  ): Promise<XhsOpsProject> {
+    const result = await unwrap(
+      () =>
+        postApiV1XhsOpsProjectsByProjectIdProfileGenerate({
+          path: { projectId },
+          body,
+        }),
+      "画像生成失败",
+      xhsOpsProjectResponseSchema,
+    );
+    return result.project;
+  },
+
+  async generatePersonas(
+    projectId: string,
+    body: z.input<typeof xhsOpsPersonaGenerateBodySchema>,
+  ) {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsProjectsByProjectIdPersonasGenerate({
+          path: { projectId },
+          body,
+        }),
+      "人设生成失败",
+      xhsOpsPersonaGenerateResponseSchema,
+    );
+  },
+
+  async confirmPersonas(
+    projectId: string,
+    body: z.input<typeof xhsOpsPersonasConfirmBodySchema>,
+  ): Promise<XhsOpsAccount[]> {
+    const result = await unwrap(
+      () =>
+        postApiV1XhsOpsProjectsByProjectIdPersonasConfirm({
+          path: { projectId },
+          body,
+        }),
+      "人设确认失败",
+      xhsOpsAccountListResponseSchema,
+    );
+    return result.accounts;
+  },
   // ── Projects ──
   async listProjects(): Promise<XhsOpsProject[]> {
     const data = await unwrap(
-      () =>
-        client.get<{ projects: XhsOpsProject[] }>({ url: `${BASE}/projects` }),
+      () => getApiV1XhsOpsProjects(),
       "项目列表加载失败",
+      xhsOpsProjectListResponseSchema,
     );
     return data.projects ?? [];
   },
 
   async getProject(projectId: string): Promise<XhsOpsProject> {
     const data = await unwrap(
-      () =>
-        client.get<{ project: XhsOpsProject }>({
-          url: `${BASE}/projects/${enc(projectId)}`,
-        }),
+      () => getApiV1XhsOpsProjectsByProjectId({ path: { projectId } }),
       "项目加载失败",
+      xhsOpsProjectResponseSchema,
     );
     return data.project;
   },
 
   async createProject(input: XhsOpsProjectCreateInput): Promise<XhsOpsProject> {
     const data = await unwrap(
-      () =>
-        client.post<{ project: XhsOpsProject }>({
-          url: `${BASE}/projects`,
-          body: input,
-        }),
+      () => postApiV1XhsOpsProjects({ body: input }),
       "项目创建失败",
+      xhsOpsProjectResponseSchema,
     );
     return data.project;
   },
@@ -152,30 +270,54 @@ export const xhsOpsApi = {
   ): Promise<XhsOpsProject> {
     const data = await unwrap(
       () =>
-        client.patch<{ project: XhsOpsProject }>({
-          url: `${BASE}/projects/${enc(projectId)}`,
+        patchApiV1XhsOpsProjectsByProjectId({
+          path: { projectId },
           body: patch,
         }),
       "项目保存失败",
+      xhsOpsProjectResponseSchema,
     );
     return data.project;
   },
 
   async deleteProject(projectId: string): Promise<void> {
     await unwrapVoid(
-      () => client.delete({ url: `${BASE}/projects/${enc(projectId)}` }),
+      () => deleteApiV1XhsOpsProjectsByProjectId({ path: { projectId } }),
       "项目删除失败",
     );
   },
 
   // ── Accounts ──
-  async listAccounts(projectId: string): Promise<XhsOpsAccount[]> {
+  async listDeviceBindings(): Promise<XhsOpsDeviceBinding[]> {
+    const data = await unwrap(
+      () => getApiV1XhsOpsDeviceBindings(),
+      "设备绑定信息加载失败",
+      xhsOpsDeviceBindingListResponseSchema,
+    );
+    return data.bindings;
+  },
+
+  async transferDevice(
+    projectId: string,
+    input: XhsOpsAccountTransferInput,
+  ): Promise<XhsOpsAccount> {
     const data = await unwrap(
       () =>
-        client.get<{ accounts: XhsOpsAccount[] }>({
-          url: `${BASE}/projects/${enc(projectId)}/accounts`,
+        postApiV1XhsOpsProjectsByProjectIdAccountsTransferDevice({
+          path: { projectId },
+          body: input as PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceData["body"],
         }),
+      "设备转移失败",
+      xhsOpsAccountResponseSchema,
+    );
+    return data.account;
+  },
+
+  async listAccounts(projectId: string): Promise<XhsOpsAccount[]> {
+    const data = await unwrap(
+      () => getApiV1XhsOpsProjectsByProjectIdAccounts({ path: { projectId } }),
       "账号列表加载失败",
+      xhsOpsAccountListResponseSchema,
     );
     return data.accounts ?? [];
   },
@@ -186,22 +328,53 @@ export const xhsOpsApi = {
   ): Promise<XhsOpsAccount> {
     const data = await unwrap(
       () =>
-        client.post<{ account: XhsOpsAccount }>({
-          url: `${BASE}/projects/${enc(projectId)}/accounts`,
-          body: input,
+        postApiV1XhsOpsProjectsByProjectIdAccounts({
+          path: { projectId },
+          body: input as PostApiV1XhsOpsProjectsByProjectIdAccountsData["body"],
         }),
       "账号创建失败",
+      xhsOpsAccountResponseSchema,
     );
     return data.account;
   },
 
   async getAccount(accountId: string): Promise<XhsOpsAccount> {
     const data = await unwrap(
-      () =>
-        client.get<{ account: XhsOpsAccount }>({
-          url: `${BASE}/accounts/${enc(accountId)}`,
-        }),
+      () => getApiV1XhsOpsAccountsByAccountId({ path: { accountId } }),
       "账号加载失败",
+      xhsOpsAccountResponseSchema,
+    );
+    return data.account;
+  },
+
+  async readAccountIdentity(accountId: string): Promise<XhsOpsAccountIdentity> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdIdentityRead({ path: { accountId } }),
+      "读取手机当前账号失败",
+      xhsOpsAccountIdentityResponseSchema,
+    );
+  },
+
+  async readbackProfile(accountId: string): Promise<XhsOpsProfileReadback> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdProfileDraftReadback({
+          path: { accountId },
+        }),
+      "回读手机资料失败",
+      xhsOpsProfileReadbackResponseSchema,
+    );
+  },
+
+  async reconcileProfileDraft(accountId: string): Promise<XhsOpsAccount> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdProfileDraftReconcile({
+          path: { accountId },
+        }),
+      "资料应用状态刷新失败",
+      xhsOpsAccountResponseSchema,
     );
     return data.account;
   },
@@ -212,18 +385,19 @@ export const xhsOpsApi = {
   ): Promise<XhsOpsAccount> {
     const data = await unwrap(
       () =>
-        client.patch<{ account: XhsOpsAccount }>({
-          url: `${BASE}/accounts/${enc(accountId)}`,
-          body: patch,
+        patchApiV1XhsOpsAccountsByAccountId({
+          path: { accountId },
+          body: patch as PatchApiV1XhsOpsAccountsByAccountIdData["body"],
         }),
       "账号保存失败",
+      xhsOpsAccountResponseSchema,
     );
     return data.account;
   },
 
   async deleteAccount(accountId: string): Promise<void> {
     await unwrapVoid(
-      () => client.delete({ url: `${BASE}/accounts/${enc(accountId)}` }),
+      () => deleteApiV1XhsOpsAccountsByAccountId({ path: { accountId } }),
       "账号删除失败",
     );
   },
@@ -232,26 +406,48 @@ export const xhsOpsApi = {
   async generateProfileDraft(
     accountId: string,
     parts: XhsOpsProfilePart[],
+    hints: { avatarPrompt?: string; coverPrompt?: string } = {},
   ): Promise<XhsOpsAccount> {
     const data = await unwrap(
       () =>
-        client.post<{ account: XhsOpsAccount }>({
-          url: `${BASE}/accounts/${enc(accountId)}/profile-draft/generate`,
-          body: { parts },
+        postApiV1XhsOpsAccountsByAccountIdProfileDraftGenerate({
+          path: { accountId },
+          body: { parts, ...hints },
         }),
       "资料生成失败",
+      xhsOpsAccountResponseSchema,
     );
     return data.account;
   },
 
-  async applyProfileDraft(accountId: string): Promise<XhsOpsAccount> {
+  async applyProfileDraft(
+    accountId: string,
+    fields?: XhsOpsProfileField[],
+  ): Promise<XhsOpsAccount> {
     const data = await unwrap(
       () =>
-        client.post<{ account: XhsOpsAccount }>({
-          url: `${BASE}/accounts/${enc(accountId)}/profile-draft/apply`,
-          body: {},
+        postApiV1XhsOpsAccountsByAccountIdProfileDraftApply({
+          path: { accountId },
+          body: fields ? { fields } : {},
         }),
       "资料应用到手机失败",
+      xhsOpsAccountResponseSchema,
+    );
+    return data.account;
+  },
+
+  async confirmProfileDraft(
+    accountId: string,
+    expectedUpdatedAt?: string,
+  ): Promise<XhsOpsAccount> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdProfileDraftConfirm({
+          path: { accountId },
+          query: { expectedUpdatedAt },
+        }),
+      "资料校验确认失败",
+      xhsOpsAccountResponseSchema,
     );
     return data.account;
   },
@@ -261,19 +457,14 @@ export const xhsOpsApi = {
     projectId: string,
     filter: { status?: XhsOpsCommentStatus; accountId?: string } = {},
   ): Promise<{ drafts: XhsOpsCommentDraft[]; quotas: XhsOpsCommentQuota[] }> {
-    const query: Record<string, string> = {};
-    if (filter.status) query.status = filter.status;
-    if (filter.accountId) query.accountId = filter.accountId;
     return unwrap(
       () =>
-        client.get<{
-          drafts: XhsOpsCommentDraft[];
-          quotas: XhsOpsCommentQuota[];
-        }>({
-          url: `${BASE}/projects/${enc(projectId)}/comments`,
-          query,
+        getApiV1XhsOpsProjectsByProjectIdComments({
+          path: { projectId },
+          query: filter,
         }),
       "评论队列加载失败",
+      xhsOpsCommentListResponseSchema,
     );
   },
 
@@ -283,11 +474,12 @@ export const xhsOpsApi = {
   ): Promise<{ drafts: XhsOpsCommentDraft[]; skipped: string[] }> {
     return unwrap(
       () =>
-        client.post<{ drafts: XhsOpsCommentDraft[]; skipped: string[] }>({
-          url: `${BASE}/runs/${enc(runId)}/comments/generate`,
+        postApiV1XhsOpsRunsByRunIdCommentsGenerate({
+          path: { runId },
           body: posts ? { posts } : {},
         }),
       "评论候选生成失败",
+      xhsOpsCommentGenerateResponseSchema,
     );
   },
 
@@ -297,11 +489,12 @@ export const xhsOpsApi = {
   ): Promise<XhsOpsCommentDraft> {
     const data = await unwrap(
       () =>
-        client.post<{ draft: XhsOpsCommentDraft }>({
-          url: `${BASE}/comments/${enc(commentId)}/review`,
+        postApiV1XhsOpsCommentsByCommentIdReview({
+          path: { commentId },
           body,
         }),
       "评论审核失败",
+      xhsOpsCommentResponseSchema,
     );
     return data.draft;
   },
@@ -314,11 +507,12 @@ export const xhsOpsApi = {
   ): Promise<XhsOpsRun> {
     const data = await unwrap(
       () =>
-        client.post<{ run: XhsOpsRun }>({
-          url: `${BASE}/projects/${enc(projectId)}/comment-runs`,
+        postApiV1XhsOpsProjectsByProjectIdCommentRuns({
+          path: { projectId },
           body: draftIds ? { accountId, draftIds } : { accountId },
         }),
       "评论任务派发失败",
+      xhsOpsRunResponseSchema,
     );
     return data.run;
   },
@@ -327,48 +521,37 @@ export const xhsOpsApi = {
   async suggestPlans(projectId: string): Promise<XhsOpsPlanSuggestion[]> {
     const data = await unwrap(
       () =>
-        client.get<{ plans: XhsOpsPlanSuggestion[] }>({
-          url: `${BASE}/projects/${enc(projectId)}/plan-suggest`,
-        }),
+        getApiV1XhsOpsProjectsByProjectIdPlanSuggest({ path: { projectId } }),
       "今日计划建议加载失败",
+      xhsOpsPlanSuggestResponseSchema,
     );
     return data.plans ?? [];
   },
 
   // ── Runs ──
   async listRuns(filter: XhsOpsRunListFilter = {}): Promise<XhsOpsRun[]> {
-    const query: Record<string, string> = {};
-    if (filter.projectId) query.projectId = filter.projectId;
-    if (filter.accountId) query.accountId = filter.accountId;
-    if (filter.date) query.date = filter.date;
     const data = await unwrap(
-      () =>
-        client.get<{ runs: XhsOpsRun[] }>({
-          url: `${BASE}/runs`,
-          query,
-        }),
+      () => getApiV1XhsOpsRuns({ query: filter }),
       "运行记录加载失败",
+      xhsOpsRunListResponseSchema,
     );
     return data.runs ?? [];
   },
 
   async createRun(input: XhsOpsRunCreateInput): Promise<XhsOpsRun> {
     const data = await unwrap(
-      () =>
-        client.post<{ run: XhsOpsRun }>({
-          url: `${BASE}/runs`,
-          body: input,
-        }),
+      () => postApiV1XhsOpsRuns({ body: input }),
       "运行计划创建失败",
+      xhsOpsRunResponseSchema,
     );
     return data.run;
   },
 
   async getRun(runId: string): Promise<XhsOpsRun> {
     const data = await unwrap(
-      () =>
-        client.get<{ run: XhsOpsRun }>({ url: `${BASE}/runs/${enc(runId)}` }),
+      () => getApiV1XhsOpsRunsByRunId({ path: { runId } }),
       "运行状态读取失败",
+      xhsOpsRunResponseSchema,
     );
     return data.run;
   },
@@ -376,33 +559,30 @@ export const xhsOpsApi = {
   async updateRunNotes(runId: string, notes: string): Promise<XhsOpsRun> {
     const data = await unwrap(
       () =>
-        client.patch<{ run: XhsOpsRun }>({
-          url: `${BASE}/runs/${enc(runId)}`,
+        patchApiV1XhsOpsRunsByRunId({
+          path: { runId },
           body: { notes },
         }),
       "运营观察保存失败",
+      xhsOpsRunResponseSchema,
     );
     return data.run;
   },
 
   async startRun(runId: string): Promise<XhsOpsRun> {
     const data = await unwrap(
-      () =>
-        client.post<{ run: XhsOpsRun }>({
-          url: `${BASE}/runs/${enc(runId)}/start`,
-        }),
+      () => postApiV1XhsOpsRunsByRunIdStart({ path: { runId } }),
       "启动执行失败",
+      xhsOpsRunResponseSchema,
     );
     return data.run;
   },
 
   async cancelRun(runId: string): Promise<XhsOpsRun> {
     const data = await unwrap(
-      () =>
-        client.post<{ run: XhsOpsRun }>({
-          url: `${BASE}/runs/${enc(runId)}/cancel`,
-        }),
+      () => postApiV1XhsOpsRunsByRunIdCancel({ path: { runId } }),
       "取消执行失败",
+      xhsOpsRunResponseSchema,
     );
     return data.run;
   },

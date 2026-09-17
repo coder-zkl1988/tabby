@@ -34,6 +34,16 @@ interface FormState {
   opsNotes: XhsOpsOpsNotes;
 }
 
+function missingProfileInputs(form: FormState): string[] {
+  const missing: string[] = [];
+  if (!form.business.industry.trim()) missing.push("行业");
+  if (!form.business.product.trim()) missing.push("产品 / 服务");
+  if (!form.audience.ageRange.trim()) missing.push("目标年龄段");
+  if (!form.audience.genderRatio.trim()) missing.push("性别比例");
+  if (form.audience.regions.length === 0) missing.push("目标地区");
+  return missing;
+}
+
 function formFromPrefill(prefill: unknown): FormState {
   const p =
     prefill && typeof prefill === "object"
@@ -71,6 +81,7 @@ export function XhsOpsProjectForm({
 
   const [form, setForm] = useState<FormState>(() => formFromPrefill(prefill));
   const [projectId, setProjectId] = useState<string | null>(propProjectId);
+  const [projectUpdatedAt, setProjectUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(Boolean(propProjectId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +98,7 @@ export function XhsOpsProjectForm({
         if (cancelled) return;
         setForm(formFromProject(project));
         setProjectId(project.id);
+        setProjectUpdatedAt(project.updatedAt);
         setError(null);
       })
       .catch((err) => {
@@ -118,6 +130,11 @@ export function XhsOpsProjectForm({
       setError("项目名称不超过 80 字");
       return;
     }
+    const missing = missingProfileInputs(form);
+    if (missing.length > 0) {
+      setError(`请补全生成画像所需信息：${missing.join("、")}`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -127,18 +144,37 @@ export function XhsOpsProjectForm({
         audience: form.audience,
         opsNotes: form.opsNotes,
       };
-      const project = projectId
-        ? await xhsOpsApi.updateProject(projectId, body)
+      const savedProject = projectId
+        ? await xhsOpsApi.updateProject(projectId, {
+            ...body,
+            expectedUpdatedAt: projectUpdatedAt ?? undefined,
+          })
         : await xhsOpsApi.createProject(body);
-      setProjectId(project.id);
-      setForm(formFromProject(project));
+      setProjectId(savedProject.id);
+      setProjectUpdatedAt(savedProject.updatedAt);
+      setForm(formFromProject(savedProject));
       setSavedAt(Date.now());
+      let project: XhsOpsProject;
+      try {
+        project = await xhsOpsApi.generateProfile(savedProject.id, {
+          expectedUpdatedAt: savedProject.updatedAt,
+        });
+        setProjectUpdatedAt(project.updatedAt);
+      } catch (err) {
+        setError(
+          `项目信息已保存，但画像生成失败：${describeXhsOpsError(err, "请重试")}`,
+        );
+        return;
+      }
       onAction?.("xhs_ops_project_saved", {
         projectId: project.id,
         name: project.name,
         business: project.business,
         audience: project.audience,
         opsNotes: project.opsNotes,
+        profile: project.profile,
+        agentInstruction:
+          "桌面已生成目标用户画像。请渲染 XhsOpsProfileCard 供运营核对；收到 xhs_ops_profile_confirmed 前不要生成人设。",
       });
     } catch (err) {
       setError(describeXhsOpsError(err, "保存失败"));
@@ -158,7 +194,7 @@ export function XhsOpsProjectForm({
       subtitle="填写业务与目标消费者信息，保存后由 AI 生成目标用户画像"
       footer={
         <>
-          <div className="min-w-0 text-[11px] text-text-tertiary">
+          <div className="min-w-0 text-[12px] text-text-secondary">
             {savedAt
               ? `已保存 ${formatClock(savedAt)} · 等待 AI 生成画像`
               : "只描述内容方向与受众，不会生成任何虚构个人身份"}
@@ -186,7 +222,7 @@ export function XhsOpsProjectForm({
       <div className="flex flex-col gap-2">
         <SectionTitle>业务信息</SectionTitle>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Field label="行业">
+          <Field label="行业 *">
             <input
               className={inputClass}
               value={form.business.industry}
@@ -195,7 +231,7 @@ export function XhsOpsProjectForm({
               onChange={(e) => patchBusiness({ industry: e.target.value })}
             />
           </Field>
-          <Field label="产品 / 服务">
+          <Field label="产品 / 服务 *">
             <input
               className={inputClass}
               value={form.business.product}
@@ -246,7 +282,7 @@ export function XhsOpsProjectForm({
           目标消费者
         </SectionTitle>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Field label="年龄段">
+          <Field label="年龄段 *">
             <input
               className={inputClass}
               value={form.audience.ageRange}
@@ -255,7 +291,7 @@ export function XhsOpsProjectForm({
               onChange={(e) => patchAudience({ ageRange: e.target.value })}
             />
           </Field>
-          <Field label="性别比例">
+          <Field label="性别比例 *">
             <input
               className={inputClass}
               value={form.audience.genderRatio}
@@ -264,7 +300,7 @@ export function XhsOpsProjectForm({
               onChange={(e) => patchAudience({ genderRatio: e.target.value })}
             />
           </Field>
-          <Field label="所在地区">
+          <Field label="所在地区 *">
             <ChipInput
               value={form.audience.regions}
               disabled={disabled}

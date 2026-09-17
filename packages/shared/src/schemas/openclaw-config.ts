@@ -251,9 +251,10 @@ const blockStreamingCoalesceSchema = z
 const agentsConfigSchema = z.object({
   defaults: z
     .object({
-      model: z
-        .union([z.string(), z.object({ primary: z.string() })])
-        .optional(),
+      // Same shape as a per-agent override: plain z.object() strips unknown
+      // keys, so an inline `{ primary }` here silently dropped `fallbacks`
+      // and left the defaults with no failover ladder.
+      model: agentModelSchema.optional(),
       // Lower-cost model for short internal tasks (generated session/thread
       // titles). Falls back to the primary model when unset.
       utilityModel: z.string().optional(),

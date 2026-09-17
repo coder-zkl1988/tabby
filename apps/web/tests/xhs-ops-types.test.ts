@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   commentTextProblem,
+  emptyProfileDraft,
   isRunQueued,
   normalizeBrowseDefaults,
   normalizeInteractionConfig,
+  normalizeProfileDraft,
   normalizeRunSegment,
   normalizeSchedule,
   segmentLabel,
@@ -12,8 +14,12 @@ import {
 describe("xhs-ops web normalizers (P2-3 daily segments)", () => {
   it("normalizeBrowseDefaults fills and clamps the daily target/segment fields", () => {
     expect(normalizeBrowseDefaults({})).toMatchObject({
-      dailyTargetPosts: 0,
-      dailySegments: 1,
+      dwellSecMin: 11,
+      dailyTargetPosts: 90,
+      dailySegments: 2,
+    });
+    expect(normalizeBrowseDefaults({ dwellSecMin: 7 })).toMatchObject({
+      dwellSecMin: 7,
     });
     expect(
       normalizeBrowseDefaults({ dailyTargetPosts: 999, dailySegments: 7 }),
@@ -90,6 +96,43 @@ describe("xhs-ops web normalizers (P2-3 daily segments)", () => {
       enabled: false,
       dailyCap: 2,
     });
+    expect(
+      normalizeInteractionConfig({
+        follow: { enabled: true, targetTypes: ["教练", "俱乐部"] },
+      }).follow.targetTypes,
+    ).toEqual(["教练", "俱乐部"]);
+  });
+
+  it("preserves the complete profile draft and server verification receipt", () => {
+    expect(emptyProfileDraft()).toMatchObject({
+      gender: "",
+      birthday: "",
+      region: "",
+      interestTags: [],
+      verifiedAt: null,
+      verifiedAccountId: null,
+      verificationTaskId: null,
+    });
+    expect(
+      normalizeProfileDraft({
+        gender: "女",
+        birthday: "1995-01-01",
+        region: "杭州",
+        interestTags: ["羽毛球", "咖啡"],
+        verifiedAt: "2026-09-09T12:00:00.000Z",
+        verifiedAccountId: "xhs-account",
+        verificationTaskId: "verify-task",
+      }),
+    ).toMatchObject({
+      gender: "女",
+      birthday: "1995-01-01",
+      region: "杭州",
+      interestTags: ["羽毛球", "咖啡"],
+      verifiedAt: "2026-09-09T12:00:00.000Z",
+      verifiedAccountId: "xhs-account",
+      verificationTaskId: "verify-task",
+    });
+    expect(normalizeProfileDraft({ gender: "未知" }).gender).toBe("");
   });
 
   it("commentTextProblem mirrors the server's length rules", () => {

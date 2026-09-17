@@ -15,11 +15,15 @@ import {
 } from "./xhs-ops-types";
 import {
   CardShell,
+  EmptyState,
   ErrorLine,
   HintLine,
   PrimaryButton,
   SecondaryButton,
   SectionTitle,
+  Skeleton,
+  Spinner,
+  StatusPill,
   formatClock,
   inputClass,
   readProp,
@@ -152,7 +156,7 @@ export function XhsOpsCommentReview({
           purpose="审核评论"
         />
       ) : drafts === null ? (
-        <HintLine>正在加载评论队列…</HintLine>
+        <Skeleton rows={3} label="正在加载评论队列" />
       ) : (
         <>
           <QuotaStrip
@@ -180,14 +184,14 @@ export function XhsOpsCommentReview({
             }
           />
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-3">
             <SectionTitle hint={`${pending.length} 条待审核`}>
               待审核
             </SectionTitle>
             {pending.length === 0 ? (
-              <HintLine>
+              <EmptyState>
                 队列为空。从下方最近的浏览记录里挑帖子生成候选，或等手机在浏览时标注「值得评」的帖子。
-              </HintLine>
+              </EmptyState>
             ) : (
               pending.map((d) => (
                 <DraftCard
@@ -238,7 +242,7 @@ export function XhsOpsCommentReview({
                   {history.map((d) => (
                     <li key={d.id} className="flex items-start gap-2">
                       <span
-                        className={`shrink-0 rounded-full px-1.5 text-[10px] ${statusClass(d.status)}`}
+                        className={`shrink-0 rounded-full px-1.5 text-[12px] ${statusClass(d.status)}`}
                       >
                         {COMMENT_STATUS_LABEL[d.status]}
                       </span>
@@ -263,14 +267,14 @@ function statusClass(status: XhsOpsCommentDraft["status"]): string {
   switch (status) {
     case "approved":
     case "sent":
-      return "bg-emerald-500/10 text-emerald-700";
+      return "bg-[var(--color-success-muted)] text-[var(--color-success-ink)]";
     case "rejected":
     case "failed":
-      return "bg-red-500/10 text-red-600";
+      return "bg-[var(--color-error-wash)] text-[var(--color-error-ink)]";
     case "expired":
-      return "bg-surface-2 text-text-tertiary";
+      return "bg-surface-2 text-text-secondary";
     default:
-      return "bg-amber-500/15 text-amber-700";
+      return "bg-[var(--color-warning-wash)] text-[var(--color-warning-ink)]";
   }
 }
 
@@ -329,14 +333,14 @@ function QuotaStrip({
                   {q.accountLabel}
                 </span>
                 <span
-                  className={`shrink-0 text-[11px] ${q.enabled ? "text-text-secondary" : "text-amber-600"}`}
+                  className={`shrink-0 text-[12px] ${q.enabled ? "text-text-secondary" : "text-[var(--color-warning-ink)]"}`}
                 >
                   {q.enabled
                     ? `剩余 ${q.remaining} / 上限 ${q.cap}`
                     : "评论开关未开"}
                 </span>
               </div>
-              <div className="text-[11px] text-text-tertiary">
+              <div className="text-[12px] text-text-secondary">
                 今日浏览 {q.todayBrowsed} 篇 → 按 8 篇 1 条可评 {q.byBrowse}
                 ；每日上限 {q.dailyCap}；已发 {q.sentToday}，已批未发{" "}
                 {q.approvedPending}
@@ -403,18 +407,20 @@ function DraftCard({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-0/40 p-2.5 text-[12px]">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="font-medium text-text-primary">
+    <div className="flex flex-col gap-3 rounded-[10px] border border-border bg-surface-1 p-3.5 text-[13px]">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-[14px] font-medium text-text-primary">
           {draft.post.title}
         </span>
-        <span className="text-text-tertiary">
+        <span className="text-[12px] text-text-secondary">
           {draft.post.author ? `@${draft.post.author} · ` : ""}
           {accountLabel} · {formatClock(draft.createdAt)}
         </span>
       </div>
       {draft.post.summary ? (
-        <div className="text-text-secondary">{draft.post.summary}</div>
+        <div className="text-[12px] text-text-secondary">
+          {draft.post.summary}
+        </div>
       ) : null}
       {draft.reviewNote ? <HintLine>{draft.reviewNote}</HintLine> : null}
       {draft.candidates.length > 0 ? (
@@ -424,7 +430,7 @@ function DraftCard({
               key={c}
               type="button"
               onClick={() => setText(c)}
-              className={`rounded-full border px-2 py-0.5 text-[12px] ${
+              className={`rounded-full border px-2.5 py-1 text-[12px] ${
                 text === c
                   ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-text-primary"
                   : "border-border text-text-secondary hover:bg-surface-2"
@@ -445,7 +451,7 @@ function DraftCard({
           onChange={(e) => setText(e.target.value)}
         />
         <span
-          className={`text-[11px] ${problem ? "text-amber-600" : "text-text-tertiary"}`}
+          className={`text-[12px] ${problem ? "text-[var(--color-warning-ink)]" : "text-text-secondary"}`}
         >
           {[...text.trim()].length}/{COMMENT_MAX_CHARS}
           {problem ? ` · ${problem}` : ""}
@@ -459,26 +465,35 @@ function DraftCard({
         onChange={(e) => setNote(e.target.value)}
       />
       <ErrorLine message={error} />
-      <div className="flex items-center justify-end gap-2">
-        {quotaBlocked ? (
-          <span className="text-[11px] text-amber-600">
-            {quota && !quota.enabled ? "该账号评论开关未开" : "今日配额已用完"}
-          </span>
-        ) : null}
-        <SecondaryButton
-          onClick={() => void review("rejected")}
-          disabled={busy !== null}
-          danger
-        >
-          {busy === "reject" ? "…" : "拒绝"}
-        </SecondaryButton>
+      {/* 批准 leads: it is the action the queue exists for. Both sit at
+          36px — approving posts a comment from a real account, which is
+          the least reversible thing on this card. */}
+      <div className="flex flex-wrap items-center gap-2">
         <PrimaryButton
           onClick={() => void review("approved")}
           disabled={busy !== null || Boolean(problem) || quotaBlocked}
           title={problem ?? undefined}
         >
-          {busy === "approve" ? "…" : "批准"}
+          {busy === "approve" ? <Spinner /> : null}
+          {busy === "approve" ? "批准中" : "批准"}
         </PrimaryButton>
+        <SecondaryButton
+          onClick={() => void review("rejected")}
+          disabled={busy !== null}
+          danger
+        >
+          {busy === "reject" ? <Spinner /> : null}
+          {busy === "reject" ? "拒绝中" : "拒绝"}
+        </SecondaryButton>
+        {quotaBlocked ? (
+          <StatusPill tone="blocked">
+            {quota && !quota.enabled ? "该账号评论开关未开" : "今日配额已用完"}
+          </StatusPill>
+        ) : (
+          <span className="ml-auto text-[12px] text-text-secondary">
+            批准后由你手动派发
+          </span>
+        )}
       </div>
     </div>
   );
@@ -506,7 +521,9 @@ function RunPostPicker({
         d.sourcePostIndex === postIndex,
     );
   if (runs.length === 0) {
-    return <HintLine>最近 {RECENT_RUN_DAYS} 天没有带帖子记录的运行。</HintLine>;
+    return (
+      <EmptyState>最近 {RECENT_RUN_DAYS} 天没有带帖子记录的运行。</EmptyState>
+    );
   }
   const generate = async (
     runId: string,
@@ -539,7 +556,7 @@ function RunPostPicker({
       {notice ? <HintLine>{notice}</HintLine> : null}
       {runs.map((run) => (
         <div key={run.id} className="flex flex-col gap-1">
-          <div className="text-[11px] text-text-tertiary">
+          <div className="text-[12px] text-text-secondary">
             {run.date} · {accountLabel(run.accountId)} ·{" "}
             {runStatusLabel(run.status)}
           </div>

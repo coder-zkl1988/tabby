@@ -60,6 +60,13 @@ const MODEL_CAPABILITIES: Record<
     maxTokens: 8192,
   },
 
+  // Zhipu GLM
+  "glm-5.3": { contextWindow: 1048576, maxTokens: 131072 }, // official docs: 1M ctx / 128K out; BYOK discovery persists the same window
+  "glm-5.3-flash": { contextWindow: 1048576, maxTokens: 131072 },
+
+  // StepFun
+  "step-3.7-flash": { contextWindow: 245760, maxTokens: 8192 }, // confirmed 256,000 ctx (same upstream as tabby-phone), with margin
+
   // Tabby Official aliases → underlying-model limits. Without these the aliases
   // fall back to the compiler default (contextWindow 200000), which mismatches
   // the real window and causes context-overflow errors. Comment = the gateway's
@@ -74,7 +81,8 @@ const MODEL_CAPABILITIES: Record<
   // smaller than the API's published 1,050,000. Use the Codex window, not the
   // API one, or these overflow exactly like tabby-mini did before.
   "tabby-ultra": { contextWindow: 258000, maxTokens: 128000 }, // gpt-5.5 via Codex — effective product window capped at 258K
-  "tabby-pro": { contextWindow: 258000, maxTokens: 128000 }, // gpt-5.4 via Codex — effective product window capped at 258K
+  "tabby-pro": { contextWindow: 1048576, maxTokens: 131072 }, // glm-5.3 (gateway re-routed 2026-09; was gpt-5.4 via Codex) — official docs: 1M ctx / 128K out
+  "tabby-plus": { contextWindow: 1048576, maxTokens: 131072 }, // glm-5.3-flash — official docs: 1M ctx / 128K out
   "tabby-mini": { contextWindow: 258000, maxTokens: 32768 }, // gpt-5.4-mini via Codex — effective product window capped at 258K
   "tabby-fast": { contextWindow: 983040, maxTokens: 384000 }, // deepseek-v4-pro — official docs: 1,000,000 ctx (was wrongly 1,048,576, slightly over cap)
   "tabby-free": { contextWindow: 240000, maxTokens: 8192 }, // agnes-2.0-flash — docs conflict (512K vs 256K); using the more conservative 256K with margin
@@ -755,6 +763,44 @@ function compilePlugins(
   };
 }
 
+/**
+ * Image, video and embedding entries live on the same relay provider as the
+ * chat models but do not share its API surface, so they are never valid
+ * failover targets. Matched on the id because that is all the catalog carries.
+ */
+const NON_CHAT_MODEL_ID = /(^|[/-])(image|video|embedding|bge|reranker)/i;
+
+/**
+ * OpenClaw picks failover targets from `model.fallbacks`. Nexu compiles the
+ * Tabby relay as a single provider, so without a ladder one dead upstream
+ * channel fails every agent outright — the runtime logs that as
+ * "All models failed (1)". Offer the relay's other chat models, in the order
+ * it declares them, so an outage degrades instead of failing the run.
+ *
+ * Only ever within the relay: a BYOK or OAuth primary must not silently fail
+ * over to a different vendor's billing and data path.
+ */
+function collectModelFallbacks(
+  config: NexuConfig,
+  env: ControllerEnv,
+  primaryModelRef: string,
+  oauthState: OAuthConnectionState,
+): string[] {
+  if (!primaryModelRef.startsWith("link/")) return [];
+  const cloud = isDesktopCloudConfig(config.desktop.cloud)
+    ? config.desktop.cloud
+    : null;
+  if (!cloud) return [];
+  const fallbacks: string[] = [];
+  for (const model of cloud.models) {
+    if (NON_CHAT_MODEL_ID.test(model.id)) continue;
+    const ref = resolveModelId(config, env, model.id, oauthState);
+    if (ref === primaryModelRef || fallbacks.includes(ref)) continue;
+    fallbacks.push(ref);
+  }
+  return fallbacks;
+}
+
 export function compileOpenClawConfig(
   config: NexuConfig,
   env: ControllerEnv,
@@ -779,6 +825,12 @@ export function compileOpenClawConfig(
       getDesktopSelectedModel(config) ||
       firstBotModel ||
       "",
+    oauthState,
+  );
+  const modelFallbacks = collectModelFallbacks(
+    config,
+    env,
+    defaultModelId,
     oauthState,
   );
   const utilityModelId = config.runtime.utilityModelId
@@ -896,7 +948,10 @@ export function compileOpenClawConfig(
     },
     agents: {
       defaults: {
-        model: { primary: defaultModelId },
+        model: {
+          primary: defaultModelId,
+          ...(modelFallbacks.length > 0 ? { fallbacks: modelFallbacks } : {}),
+        },
         memorySearch: {
           enabled: memoryConfig.enabled,
           sources: memoryConfig.sources,

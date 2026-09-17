@@ -1,362 +1,129 @@
 /**
- * TypeScript mirror of the xhs-ops contract (scratchpad spec §1).
- *
- * The controller owns the zod schemas (packages/shared/src/schemas/xhs-ops.ts).
- * Until that file is exported from "@nexu/shared" and `pnpm generate-types`
- * has refreshed the SDK, the web side types the REST payloads here. Field
- * names/shapes must stay identical to the spec — this file is the only place
- * the web code spells them out.
+ * Runtime and request types come from the shared Zod schemas. The API adapter
+ * uses the generated OpenAPI functions, so this file only owns UI helpers.
  */
+import {
+  XHS_PROFILE_CANDIDATES,
+  XHS_PROFILE_FIELD_LABEL,
+  xhsOpsProfileCandidatePlan,
+  xhsOpsProfileDraftMissingFields,
+  xhsOpsProfileDraftReady,
+} from "@nexu/shared";
+import type {
+  XhsOpsAccount,
+  XhsOpsAccountCreateInput,
+  XhsOpsAccountIdentity,
+  XhsOpsAccountUpdateInput,
+  XhsOpsAnomaly,
+  XhsOpsAnomalyType,
+  XhsOpsProjectAudience as XhsOpsAudience,
+  XhsOpsBrowseDefaults,
+  XhsOpsProjectBusiness as XhsOpsBusiness,
+  XhsOpsRunChunkMode as XhsOpsChunkMode,
+  XhsOpsRunChunkStatus as XhsOpsChunkStatus,
+  XhsOpsCommentDraft,
+  XhsOpsCommentQuota,
+  XhsOpsCommentRule,
+  XhsOpsCommentStatus,
+  XhsOpsInteractionConfig,
+  XhsOpsInteractionCounts,
+  XhsOpsInteractionRule,
+  XhsOpsInterestPool,
+  XhsOpsProjectOpsNotes as XhsOpsOpsNotes,
+  XhsOpsPersonaSuggestion,
+  XhsOpsPersonaTags,
+  XhsOpsPlanSuggestion,
+  XhsOpsProfile,
+  XhsOpsProfileApplyOperation,
+  XhsOpsProfileApplyStatus,
+  XhsOpsProfileDraft,
+  XhsOpsProfileDraftRequiredField,
+  XhsOpsProfileField,
+  XhsOpsProfileFieldDiff,
+  XhsOpsProfilePart,
+  XhsOpsProfileReadback,
+  XhsOpsProject,
+  XhsOpsProjectCreateInput,
+  XhsOpsProjectUpdateInput,
+  XhsOpsRun,
+  XhsOpsRunChunk,
+  XhsOpsRunPost as XhsOpsRunChunkPost,
+  XhsOpsRunCreateInput,
+  XhsOpsRunPlanKeyword as XhsOpsRunKeyword,
+  XhsOpsRunListQuery as XhsOpsRunListFilter,
+  XhsOpsRunPlan,
+  XhsOpsRunPlanComment,
+  XhsOpsRunSegment,
+  XhsOpsRunStatus,
+  XhsOpsRunSummary,
+  XhsOpsRunUpdate,
+  XhsOpsSchedule,
+} from "@nexu/shared";
 
-export interface XhsOpsInteractionRule {
-  enabled: boolean;
-  /** 0..50 */
-  dailyCap: number;
-  /** 0..100 */
-  ratioPercent: number;
-}
+export {
+  XHS_PROFILE_CANDIDATES,
+  XHS_PROFILE_FIELD_LABEL,
+  xhsOpsProfileCandidatePlan,
+  xhsOpsProfileDraftMissingFields,
+  xhsOpsProfileDraftReady,
+};
 
-/** 评论开关（P3-1）：开启只意味着允许进审核队列，每条仍需人工批准；硬上限 5。 */
-export interface XhsOpsCommentRule {
-  enabled: boolean;
-  /** 0..5，默认 2 */
-  dailyCap: number;
-}
+export type {
+  XhsOpsAccount,
+  XhsOpsAccountIdentity,
+  XhsOpsProfileField,
+  XhsOpsProfileFieldDiff,
+  XhsOpsProfileReadback,
+  XhsOpsAccountCreateInput,
+  XhsOpsAccountUpdateInput,
+  XhsOpsAnomaly,
+  XhsOpsAnomalyType,
+  XhsOpsAudience,
+  XhsOpsBrowseDefaults,
+  XhsOpsBusiness,
+  XhsOpsChunkMode,
+  XhsOpsChunkStatus,
+  XhsOpsCommentDraft,
+  XhsOpsCommentQuota,
+  XhsOpsCommentRule,
+  XhsOpsCommentStatus,
+  XhsOpsInteractionConfig,
+  XhsOpsInteractionCounts,
+  XhsOpsInteractionRule,
+  XhsOpsInterestPool,
+  XhsOpsOpsNotes,
+  XhsOpsPlanSuggestion,
+  XhsOpsPersonaSuggestion,
+  XhsOpsPersonaTags,
+  XhsOpsProfile,
+  XhsOpsProfileApplyStatus,
+  XhsOpsProfileDraft,
+  XhsOpsProfileDraftRequiredField,
+  XhsOpsProfilePart,
+  XhsOpsProject,
+  XhsOpsProjectCreateInput,
+  XhsOpsProjectUpdateInput,
+  XhsOpsRun,
+  XhsOpsRunCreateInput,
+  XhsOpsRunChunk,
+  XhsOpsRunChunkPost,
+  XhsOpsRunKeyword,
+  XhsOpsRunPlan,
+  XhsOpsRunPlanComment,
+  XhsOpsRunSegment,
+  XhsOpsRunListFilter,
+  XhsOpsRunStatus,
+  XhsOpsRunSummary,
+  XhsOpsSchedule,
+};
 
-export interface XhsOpsInteractionConfig {
-  like: XhsOpsInteractionRule;
-  collect: XhsOpsInteractionRule;
-  follow: XhsOpsInteractionRule;
-  comment: XhsOpsCommentRule;
-}
-
-export interface XhsOpsBrowseDefaults {
-  /** 5..60 */
-  dwellSecMin: number;
-  /** 5..120 */
-  dwellSecMax: number;
-  /** 0..100 */
-  searchRatioPercent: number;
-  /** 1..8 */
-  postsPerKeyword: number;
-  /** 0..12 */
-  homeFeedCount: number;
-  /** 日目标篇数（0 = 不设目标）；>0 时按 dailySegments 拆段 */
-  dailyTargetPosts: number;
-  /** 当日拆成几个 run 串行执行，1..3；1 = 单 run */
-  dailySegments: number;
-}
-
-/** 当日多段执行时本 run 的段序；单 run 为 null。 */
-export interface XhsOpsRunSegment {
-  index: number;
-  count: number;
-}
-
-export interface XhsOpsBusiness {
-  industry: string;
-  product: string;
-  regions: string[];
-  sellingPoints: string[];
-  priceBand: string;
-  scene: string;
-}
-
-export interface XhsOpsAudience {
-  ageRange: string;
-  genderRatio: string;
-  regions: string[];
-  occupations: string[];
-  spendingPower: string;
-  knownInterests: string[];
-  painPoints: string[];
-}
-
-export interface XhsOpsOpsNotes {
-  forbiddenTopics: string[];
-  boostKeywords: string[];
-  avoidContentTypes: string[];
-}
-
-export interface XhsOpsProfileBase {
-  ageRange: string;
-  genderRatio: string;
-  regions: string[];
-}
-
-export interface XhsOpsProfile {
-  summary: string;
-  base: XhsOpsProfileBase;
-  verticalInterests: string[];
-  generalInterests: string[];
-  confirmedAt: string | null;
-  updatedAt: string;
-}
-
-/** 每日自动执行（P2-4）：桌面 controller 内的调度器按本地时间点火。 */
-export interface XhsOpsSchedule {
-  enabled: boolean;
-  /** HH:mm 本地时间 */
-  time: string;
-  lastTriggeredDate: string | null;
-  lastResult: string | null;
-}
-
-export interface XhsOpsProject {
-  id: string;
-  name: string;
-  business: XhsOpsBusiness;
-  audience: XhsOpsAudience;
-  opsNotes: XhsOpsOpsNotes;
-  profile: XhsOpsProfile | null;
-  schedule: XhsOpsSchedule;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface XhsOpsInterestPool {
-  core: string[];
-  extended: string[];
-  general: string[];
-}
-
-export type XhsOpsProfilePart = "text" | "avatar" | "cover";
-export type XhsOpsProfileApplyStatus = "applied" | "partial" | "failed";
-
-export interface XhsOpsProfileDraft {
-  nickname: string;
-  bio: string;
-  /** media 目录下的绝对路径 */
-  avatarCandidates: string[];
-  coverCandidates: string[];
-  avatarPath: string | null;
-  coverPath: string | null;
-  generatedAt: string | null;
-  appliedAt: string | null;
-  applyStatus: XhsOpsProfileApplyStatus | null;
-  applyResult: string | null;
-}
-
-export interface XhsOpsPersona {
-  age: string;
-  gender: string;
-  region: string;
-  occupation: string;
-  lifeStatus: string;
-}
-
-export interface XhsOpsAccount {
-  id: string;
-  projectId: string;
-  /** 账号定位名，1..40 */
-  label: string;
-  /** 一句话内容方向与风格 */
-  positioning: string;
-  /** 人设人口学字段（年龄/性别/地区/职业/生活状态） */
-  persona: XhsOpsPersona;
-  /** 账号基础资料草稿（昵称/简介/头像背景备选/应用状态） */
-  profileDraft: XhsOpsProfileDraft;
-  deviceId: string | null;
-  deviceName: string | null;
-  interestPool: XhsOpsInterestPool;
-  interaction: XhsOpsInteractionConfig;
-  browseDefaults: XhsOpsBrowseDefaults;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type XhsOpsAnomalyType =
-  | "no_results"
-  | "load_failed"
-  | "login_required"
-  | "account_restricted"
-  | "rate_limited"
-  | "content_mismatch"
-  | "interrupted"
-  | "other";
-
-export interface XhsOpsAnomaly {
-  type: XhsOpsAnomalyType;
-  detail: string;
-}
-
-export interface XhsOpsInteractionCounts {
-  like: number;
-  collect: number;
-  follow: number;
-  /** 评论 run 里成功发出的评论数（浏览 run 无此字段） */
-  comment?: number;
-}
-
-export type XhsOpsChunkMode = "search" | "home" | "comment";
-
-export type XhsOpsChunkStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "skipped"
-  | "cancelled";
-
-export interface XhsOpsRunChunkPost {
-  title: string;
-  author: string;
-  action: "like" | "collect" | "follow" | "none" | "skip";
-  commentsRead: number;
-  /** P3-1：手机标注的"值不值得评" + 正文一句话摘要 */
-  commentWorthy: boolean;
-  summary: string;
-}
-
-export interface XhsOpsRunChunk {
-  index: number;
-  mode: XhsOpsChunkMode;
-  keyword: string | null;
-  plannedCount: number;
-  status: XhsOpsChunkStatus;
-  taskId: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  browsed: number;
-  skipped: number;
-  interactions: XhsOpsInteractionCounts;
-  anomalies: XhsOpsAnomaly[];
-  observation: string | null;
-  posts: XhsOpsRunChunkPost[];
-  /** mode=comment：本 chunk 发的评论草稿 id */
-  commentDraftId?: string | null;
-  message: string | null;
-  totalSteps: number | null;
-  finalScreenshot: string | null;
-  error: string | null;
-}
-
-export interface XhsOpsRunKeyword {
-  /** 1..40 */
-  keyword: string;
-  /** 1..8 */
-  count: number;
-}
-
-export interface XhsOpsRunPlanComment {
-  draftId: string;
-  postTitle: string;
-  postAuthor: string;
-  text: string;
-}
-
-export interface XhsOpsRunPlan {
-  /** 省略/browse = 浏览；comment = 发人工审核通过的评论（P3-1 D2） */
-  kind?: "browse" | "comment";
-  /** browse 1..8 entries；comment 为空 */
-  keywords: XhsOpsRunKeyword[];
-  /** 0..12 */
-  homeFeedCount: number;
-  dwellSecMin: number;
-  dwellSecMax: number;
-  interaction: XhsOpsInteractionConfig;
-  comments?: XhsOpsRunPlanComment[];
-}
-
-export interface XhsOpsRunSummary {
-  plannedTotal: number;
-  browsedTotal: number;
-  searchBrowsed: number;
-  homeBrowsed: number;
-  interactions: XhsOpsInteractionCounts;
-  anomalyCount: number;
-  durationMs: number | null;
-}
-
-export type XhsOpsRunStatus =
-  | "planned"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "interrupted";
-
-export interface XhsOpsRun {
-  id: string;
-  projectId: string;
-  accountId: string;
-  deviceId: string;
-  accountLabel: string;
-  /** YYYY-MM-DD */
-  date: string;
-  status: XhsOpsRunStatus;
-  plan: XhsOpsRunPlan;
-  segment: XhsOpsRunSegment | null;
-  /** 设备队列：排在同一手机上哪个 run 后面；null = 未排队 */
-  queuedBehindRunId: string | null;
-  chunks: XhsOpsRunChunk[];
-  summary: XhsOpsRunSummary;
-  /** 运营观察（人工填写） */
-  notes: string;
-  error: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  updatedAt: string;
-}
-
-// ── Request bodies ─────────────────────────────────────────────
-
-export interface XhsOpsProfileInput {
-  summary: string;
-  base: XhsOpsProfileBase;
-  verticalInterests: string[];
-  generalInterests: string[];
-  confirmedAt?: string | null;
+export type XhsOpsProfileBase = XhsOpsProfile["base"];
+export type XhsOpsPersona = XhsOpsAccount["persona"];
+/** Local form value: shared output shape, before the server stamps updatedAt. */
+export type XhsOpsProfileInput = Omit<XhsOpsProfile, "updatedAt"> & {
   updatedAt?: string;
-}
-
-export interface XhsOpsProjectCreateInput {
-  name: string;
-  business?: Partial<XhsOpsBusiness>;
-  audience?: Partial<XhsOpsAudience>;
-  opsNotes?: Partial<XhsOpsOpsNotes>;
-  profile?: XhsOpsProfileInput | null;
-  schedule?: XhsOpsSchedule;
-}
-
-export type XhsOpsProjectUpdateInput = Partial<XhsOpsProjectCreateInput>;
-
-export interface XhsOpsAccountCreateInput {
-  projectId: string;
-  label: string;
-  positioning?: string;
-  persona?: XhsOpsPersona;
-  profileDraft?: XhsOpsProfileDraft;
-  deviceId?: string | null;
-  deviceName?: string | null;
-  interestPool?: XhsOpsInterestPool;
-  interaction?: XhsOpsInteractionConfig;
-  browseDefaults?: XhsOpsBrowseDefaults;
-}
-
-export type XhsOpsAccountUpdateInput = Partial<
-  Omit<XhsOpsAccountCreateInput, "projectId">
->;
-
-export interface XhsOpsRunCreateInput {
-  projectId: string;
-  accountId: string;
-  /** YYYY-MM-DD; server defaults to today (local time zone). */
-  date?: string;
-  plan: XhsOpsRunPlan;
-  segment?: XhsOpsRunSegment | null;
-}
-
-export interface XhsOpsRunUpdateInput {
-  notes?: string;
-}
-
-export interface XhsOpsRunListFilter {
-  projectId?: string;
-  accountId?: string;
-  date?: string;
-}
+};
+export type XhsOpsRunUpdateInput = XhsOpsRunUpdate;
 
 // ── Defaults (mirror the zod .default() values) ───────────────
 
@@ -371,13 +138,13 @@ export function defaultInteractionConfig(): XhsOpsInteractionConfig {
 
 export function defaultBrowseDefaults(): XhsOpsBrowseDefaults {
   return {
-    dwellSecMin: 10,
+    dwellSecMin: 11,
     dwellSecMax: 25,
     searchRatioPercent: 80,
     postsPerKeyword: 5,
     homeFeedCount: 6,
-    dailyTargetPosts: 0,
-    dailySegments: 1,
+    dailyTargetPosts: 90,
+    dailySegments: 2,
   };
 }
 
@@ -410,6 +177,10 @@ export function emptyOpsNotes(): XhsOpsOpsNotes {
 
 export function emptyInterestPool(): XhsOpsInterestPool {
   return { core: [], extended: [], general: [] };
+}
+
+export function emptyPersonaTags(): XhsOpsPersonaTags {
+  return { vertical: [], general: [] };
 }
 
 export function emptyInteractionCounts(): XhsOpsInteractionCounts {
@@ -536,6 +307,14 @@ export function normalizeInterestPool(value: unknown): XhsOpsInterestPool {
   };
 }
 
+export function normalizePersonaTags(value: unknown): XhsOpsPersonaTags {
+  const v = asRecord(value);
+  return {
+    vertical: asStringArray(v.vertical),
+    general: asStringArray(v.general),
+  };
+}
+
 function normalizeRule(
   value: unknown,
   fallback: XhsOpsInteractionRule,
@@ -545,6 +324,7 @@ function normalizeRule(
     enabled: asBoolean(v.enabled, fallback.enabled),
     dailyCap: asInt(v.dailyCap, fallback.dailyCap, 0, 50),
     ratioPercent: asInt(v.ratioPercent, fallback.ratioPercent, 0, 100),
+    targetTypes: asStringArray(v.targetTypes ?? fallback.targetTypes),
   };
 }
 
@@ -672,7 +452,59 @@ export interface PersonaOverlapInput {
   key: string;
   label: string;
   persona: XhsOpsPersona;
+  personaTags?: XhsOpsPersonaTags;
   interestPool: XhsOpsInterestPool;
+}
+
+export function personaArchiveIssues(input: {
+  persona: XhsOpsPersona;
+  personaTags: XhsOpsPersonaTags;
+}): string[] {
+  const missing = [
+    { label: "年龄", value: input.persona.age },
+    { label: "性别", value: input.persona.gender },
+    { label: "地区", value: input.persona.region },
+    { label: "职业/身份", value: input.persona.occupation },
+    { label: "生活状态", value: input.persona.lifeStatus },
+  ]
+    .filter(({ value }) => !value?.trim())
+    .map(({ label }) => label);
+  const issues: string[] = [];
+  if (missing.length > 0) issues.push(`缺少${missing.join("、")}`);
+  if (
+    input.personaTags.vertical.length < 1 ||
+    input.personaTags.vertical.length > 2
+  ) {
+    issues.push("垂直兴趣档案标签需 1–2 个");
+  }
+  if (
+    input.personaTags.general.length < 2 ||
+    input.personaTags.general.length > 3
+  ) {
+    issues.push("泛兴趣档案标签需 2–3 个");
+  }
+  return issues;
+}
+
+export function personaDistributionSummary(
+  rows: Array<Pick<PersonaOverlapInput, "persona">>,
+): string {
+  const summarize = (values: string[]) => {
+    const counts = new Map<string, number>();
+    for (const raw of values) {
+      const value = raw.trim() || "未填写";
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-CN"))
+      .map(([value, count]) => `${value} ${count}`)
+      .join("、");
+  };
+  return [
+    `年龄：${summarize(rows.map((row) => row.persona.age))}`,
+    `性别：${summarize(rows.map((row) => row.persona.gender))}`,
+    `地区：${summarize(rows.map((row) => row.persona.region))}`,
+  ].join("；");
 }
 
 /** 核心兴趣集合重叠到这个比例（Jaccard）即视为"同一类账号"。 */
@@ -748,7 +580,14 @@ export function findPersonaOverlaps(
         push(a.key, `年龄/性别/生活状态与「${nameB}」完全相同`);
         push(b.key, `年龄/性别/生活状态与「${nameA}」完全相同`);
       }
-      const overlap = jaccard(a.interestPool.core, b.interestPool.core);
+      const overlap = jaccard(
+        a.personaTags?.vertical.length
+          ? a.personaTags.vertical
+          : a.interestPool.core,
+        b.personaTags?.vertical.length
+          ? b.personaTags.vertical
+          : b.interestPool.core,
+      );
       if (overlap >= PERSONA_CORE_OVERLAP_THRESHOLD) {
         const pct = Math.round(overlap * 100);
         push(a.key, `核心兴趣与「${nameB}」重叠 ${pct}%`);
@@ -759,40 +598,65 @@ export function findPersonaOverlaps(
   return out;
 }
 
-/** GET /projects/{id}/plan-suggest 的一条建议。 */
-export interface XhsOpsPlanSuggestion {
-  accountId: string;
-  accountLabel: string;
-  keywords: XhsOpsRunKeyword[];
-  homeFeedCount: number;
-  dwellSecMin: number;
-  dwellSecMax: number;
-  interaction: XhsOpsInteractionConfig;
-  rationale: string[];
-  segment: XhsOpsRunSegment | null;
-}
-
 export function emptyProfileDraft(): XhsOpsProfileDraft {
   return {
     nickname: "",
     bio: "",
+    gender: "",
+    birthday: "",
+    region: "",
+    interestTags: [],
     avatarCandidates: [],
     coverCandidates: [],
     avatarPath: null,
     coverPath: null,
     generatedAt: null,
+    reviewedAt: null,
     appliedAt: null,
     applyStatus: null,
     applyResult: null,
+    applyOperation: null,
+    verifiedAt: null,
+    verifiedAccountId: null,
+    verificationTaskId: null,
   };
 }
 
 export function normalizeProfileDraft(value: unknown): XhsOpsProfileDraft {
   const v = asRecord(value);
   const status = asString(v.applyStatus);
+  const operation = asRecord(v.applyOperation);
+  const operationStatus = asString(operation.status);
+  const applyOperation: XhsOpsProfileApplyOperation | null =
+    (operationStatus === "running" || operationStatus === "completed") &&
+    asString(operation.operationId) &&
+    asString(operation.deviceId) &&
+    asString(operation.accountUpdatedAt) &&
+    asString(operation.startedAt)
+      ? {
+          operationId: asString(operation.operationId),
+          status: operationStatus,
+          deviceId: asString(operation.deviceId),
+          taskId:
+            typeof operation.taskId === "string" ? operation.taskId : null,
+          accountUpdatedAt: asString(operation.accountUpdatedAt),
+          startedAt: asString(operation.startedAt),
+          completedAt:
+            typeof operation.completedAt === "string"
+              ? operation.completedAt
+              : null,
+        }
+      : null;
   return {
     nickname: asString(v.nickname).slice(0, 20),
     bio: asString(v.bio).slice(0, 200),
+    gender:
+      v.gender === "男" || v.gender === "女" || v.gender === "不展示"
+        ? v.gender
+        : "",
+    birthday: asString(v.birthday),
+    region: asString(v.region),
+    interestTags: asStringArray(v.interestTags),
     avatarCandidates: asStringArray(v.avatarCandidates),
     coverCandidates: asStringArray(v.coverCandidates),
     avatarPath:
@@ -800,63 +664,25 @@ export function normalizeProfileDraft(value: unknown): XhsOpsProfileDraft {
     coverPath:
       typeof v.coverPath === "string" && v.coverPath ? v.coverPath : null,
     generatedAt: typeof v.generatedAt === "string" ? v.generatedAt : null,
+    reviewedAt: typeof v.reviewedAt === "string" ? v.reviewedAt : null,
     appliedAt: typeof v.appliedAt === "string" ? v.appliedAt : null,
     applyStatus:
       status === "applied" || status === "partial" || status === "failed"
         ? status
         : null,
     applyResult: typeof v.applyResult === "string" ? v.applyResult : null,
+    applyOperation,
+    verifiedAt: typeof v.verifiedAt === "string" ? v.verifiedAt : null,
+    verifiedAccountId:
+      typeof v.verifiedAccountId === "string" ? v.verifiedAccountId : null,
+    verificationTaskId:
+      typeof v.verificationTaskId === "string" ? v.verificationTaskId : null,
   };
 }
 
 /** media 目录绝对路径 → 桌面可显示的 URL（controller 的 state-file 端点）。 */
 export function mediaFileUrl(absPath: string): string {
   return `/api/v1/media/state-file?path=${encodeURIComponent(absPath)}`;
-}
-
-// ── Comment review queue (P3-1 D1) ────────────────────────────
-
-export type XhsOpsCommentStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "sent"
-  | "failed"
-  | "expired";
-
-export interface XhsOpsCommentDraft {
-  id: string;
-  projectId: string;
-  accountId: string;
-  deviceId: string | null;
-  sourceRunId: string;
-  sourceChunkIndex: number;
-  sourcePostIndex: number;
-  post: { title: string; author: string; summary: string };
-  candidates: string[];
-  text: string | null;
-  status: XhsOpsCommentStatus;
-  reviewedAt: string | null;
-  reviewNote: string;
-  sentRunId: string | null;
-  sentAt: string | null;
-  sendResult: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface XhsOpsCommentQuota {
-  accountId: string;
-  accountLabel: string;
-  date: string;
-  enabled: boolean;
-  dailyCap: number;
-  todayBrowsed: number;
-  byBrowse: number;
-  cap: number;
-  sentToday: number;
-  approvedPending: number;
-  remaining: number;
 }
 
 export const COMMENT_STATUS_LABEL: Record<XhsOpsCommentStatus, string> = {

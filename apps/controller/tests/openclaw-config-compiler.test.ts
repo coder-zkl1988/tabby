@@ -694,7 +694,7 @@ describe("compileOpenClawConfig", () => {
         "get_window_state",
       ]),
     });
-    // Peekaboo's nested agent loop and remote-debugging browser are not part
+    // Nested agent loops and remote-debugging browser control are not part
     // of the reviewed surface on any platform.
     expect(server?.toolFilter).not.toMatchObject({
       include: expect.arrayContaining(["agent"]),
@@ -777,7 +777,7 @@ describe("compileOpenClawConfig", () => {
         },
       }),
       createEnv({
-        computerUseBackend: "peekaboo",
+        computerUseBackend: "cua-driver",
         computerUseBin: process.execPath,
         computerUsePlatformSupported: false,
       }),
@@ -965,7 +965,7 @@ describe("compileOpenClawConfig", () => {
     ]);
   });
 
-  it("compiles Tabby Codex aliases with a 258K context window", () => {
+  it("compiles Tabby aliases with their underlying-model context windows", () => {
     const result = compileOpenClawConfig(
       createConfig({
         desktop: {
@@ -976,6 +976,7 @@ describe("compileOpenClawConfig", () => {
             models: [
               { id: "tabby-ultra", name: "tabby-ultra", provider: "openai" },
               { id: "tabby-pro", name: "tabby-pro", provider: "openai" },
+              { id: "tabby-plus", name: "tabby-plus", provider: "openai" },
               { id: "tabby-mini", name: "tabby-mini", provider: "openai" },
             ],
           },
@@ -986,9 +987,124 @@ describe("compileOpenClawConfig", () => {
 
     expect(result.models?.providers.link?.models).toMatchObject([
       { id: "tabby-ultra", contextWindow: 258000, maxTokens: 128000 },
-      { id: "tabby-pro", contextWindow: 258000, maxTokens: 128000 },
+      { id: "tabby-pro", contextWindow: 1048576, maxTokens: 131072 },
+      { id: "tabby-plus", contextWindow: 1048576, maxTokens: 131072 },
       { id: "tabby-mini", contextWindow: 258000, maxTokens: 32768 },
     ]);
+  });
+
+  it("gives agents.defaults a failover ladder of the relay's other chat models", () => {
+    const result = compileOpenClawConfig(
+      createConfig({
+        desktop: {
+          selectedModelId: "link/tabby-plus",
+          cloud: {
+            linkUrl: "https://link.example.com",
+            apiKey: "link-key",
+            models: [
+              { id: "tabby-plus", name: "tabby-plus", provider: "openai" },
+              { id: "tabby-ultra", name: "tabby-ultra", provider: "openai" },
+              { id: "tabby-phone", name: "tabby-phone", provider: "openai" },
+              // Not chat surfaces — never valid failover targets.
+              {
+                id: "tabby-image-pro",
+                name: "tabby-image-pro",
+                provider: "openai",
+              },
+              { id: "tabby-video", name: "tabby-video", provider: "openai" },
+              { id: "BAAI/bge-m3", name: "bge-m3", provider: "baai" },
+            ],
+          },
+        },
+        runtime: {
+          gateway: { port: 18789, bind: "loopback", authMode: "token" },
+          defaultModelId: "link/tabby-plus",
+        },
+      }),
+      createEnv(),
+    );
+
+    expect(result.agents.defaults?.model).toEqual({
+      primary: "link/tabby-plus",
+      fallbacks: ["link/tabby-ultra", "link/tabby-phone"],
+    });
+  });
+
+  it("never fails a BYOK primary over to the relay", () => {
+    const result = compileOpenClawConfig(
+      createConfig({
+        desktop: {
+          selectedModelId: "byok_anthropic/claude-sonnet-4",
+          cloud: {
+            linkUrl: "https://link.example.com",
+            apiKey: "link-key",
+            models: [
+              { id: "tabby-plus", name: "tabby-plus", provider: "openai" },
+            ],
+          },
+        },
+      }),
+      createEnv(),
+    );
+
+    expect(
+      (result.agents.defaults?.model as { fallbacks?: string[] }).fallbacks,
+    ).toBeUndefined();
+  });
+
+  it("fills known GLM and StepFun windows when BYOK stores no metadata", () => {
+    const model = (id: string) => ({
+      id,
+      name: id,
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 0,
+      maxTokens: 0,
+    });
+    const result = compileOpenClawConfig(
+      createConfig({
+        models: {
+          mode: "merge",
+          providers: {
+            glm: {
+              enabled: true,
+              auth: "api-key",
+              api: "openai-completions",
+              apiKey: "glm-key",
+              baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+              models: [model("glm-5.3"), model("glm-5.3-flash")],
+            },
+            stepfun: {
+              enabled: true,
+              auth: "api-key",
+              api: "openai-completions",
+              apiKey: "step-key",
+              baseUrl: "https://api.stepfun.com/step_plan/v1/",
+              models: [model("step-3.7-flash")],
+            },
+          } as unknown as Record<string, unknown>,
+        } as unknown as NexuConfig["models"],
+      }),
+      createEnv(),
+    );
+
+    const compiledModels = Object.values(
+      result.models?.providers ?? {},
+    ).flatMap((provider) => provider.models ?? []);
+    const byId = new Map(compiledModels.map((model) => [model.id, model]));
+    expect(byId.get("glm-5.3")).toMatchObject({
+      contextWindow: 1048576,
+      maxTokens: 131072,
+    });
+    expect(byId.get("glm-5.3-flash")).toMatchObject({
+      contextWindow: 1048576,
+      maxTokens: 131072,
+    });
+    expect(byId.get("step-3.7-flash")).toMatchObject({
+      contextWindow: 245760,
+      maxTokens: 8192,
+    });
   });
 
   it("does not allow/enable openclaw-weixin without a connected wechat channel", () => {

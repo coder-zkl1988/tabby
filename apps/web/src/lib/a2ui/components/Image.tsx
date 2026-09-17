@@ -1,4 +1,5 @@
 import type { ImageComponent as ImageComp } from "../a2ui-types";
+import { ZoomableImage } from "./zoomable-image";
 
 interface Props {
   comp: ImageComp;
@@ -14,10 +15,11 @@ export function ImageComponent({ comp, resolve }: Props) {
     (resolve(comp.objectFit) as ImageComp["objectFit"]) ?? "cover";
 
   return (
-    <img
-      className="a2ui-image"
+    <ZoomableImage
       src={source}
       alt={alt}
+      className="a2ui-image-zoom"
+      imgClassName="a2ui-image"
       style={{
         width: width != null ? `${width}px` : undefined,
         height: height != null ? `${height}px` : undefined,

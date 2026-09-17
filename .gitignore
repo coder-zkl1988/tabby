@@ -44,3 +44,4 @@ apps/desktop/build-config.json
 docs/superpowers/
 .superpowers/
 package-lock.json
+.repo_memory/

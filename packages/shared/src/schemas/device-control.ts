@@ -144,6 +144,10 @@ export const deviceTaskArtifactSchema = z.object({
 export const taskResultSchema = z.object({
   taskId: z.string().min(1),
   success: z.boolean(),
+  /** Final phone status/reason, retained to distinguish cancellation from failure. */
+  status: z.string().optional(),
+  errorCode: z.string().optional(),
+  needsInteraction: z.boolean().optional(),
   message: z.string().optional(),
   totalSteps: z.number().int().min(0).optional(),
   steps: z.array(stepRecordSchema).optional(),

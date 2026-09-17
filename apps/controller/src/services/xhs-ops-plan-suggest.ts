@@ -4,6 +4,7 @@ import type {
   XhsOpsRun,
   XhsOpsRunSegment,
 } from "@nexu/shared";
+import { XhsOpsError } from "../lib/xhs-ops-common.js";
 
 /**
  * 当日计划确定性生成（运营文档 §四「当日养号任务」）：不依赖 LLM——
@@ -143,32 +144,72 @@ function suggestPlanAt(
   }
   const ext = rotate(extended, round, EXTENDED_PICK);
   const gen = rotate(general, round, GENERAL_PICK);
-  const words = uniq([...picks, ...ext, ...gen]).slice(0, MAX_KEYWORDS);
+  const preferredWords = uniq([...picks, ...ext, ...gen]);
+  const availableWords = uniq([
+    ...preferredWords,
+    ...rotate(core, offset, core.length),
+    ...rotate(extended, round, extended.length),
+    ...rotate(general, round, general.length),
+  ]).slice(0, MAX_KEYWORDS);
   const target = account.browseDefaults.dailyTargetPosts ?? 0;
   const segmentCount = segment?.count ?? 1;
-  let perKeyword = account.browseDefaults.postsPerKeyword;
+  const perKeyword = account.browseDefaults.postsPerKeyword;
+  let plannedWords = preferredWords;
+  let plannedCounts: number[] | null = null;
   let homeFeedCount = 0;
   let targetLine: string | null = null;
-  if (target > 0 && words.length > 0) {
-    // 日目标 ÷ 段数 = 本段目标；按搜索占比切成 搜索/首页，每词篇数取整并钳 1..8。
-    const segmentTarget = Math.ceil(target / segmentCount);
+  if (target > 0) {
+    const baseSegmentTarget = Math.floor(target / segmentCount);
+    const segmentRemainder = target % segmentCount;
+    const segmentTarget =
+      segment === null
+        ? target
+        : baseSegmentTarget + (segment.index <= segmentRemainder ? 1 : 0);
     const r =
       Math.max(0, Math.min(100, account.browseDefaults.searchRatioPercent)) /
       100;
-    const searchTarget = Math.max(words.length, Math.round(segmentTarget * r));
-    perKeyword = Math.max(
-      1,
-      Math.min(8, Math.ceil(searchTarget / words.length)),
+    const requestedSearchBudget = Math.round(segmentTarget * r);
+    const requestedHomeBudget = segmentTarget - requestedSearchBudget;
+    const requiredWordCount = Math.ceil(requestedSearchBudget / 8);
+    if (requiredWordCount > availableWords.length) {
+      throw new XhsOpsError(
+        409,
+        `本段搜索目标 ${requestedSearchBudget} 篇至少需要 ${requiredWordCount} 个兴趣词，当前只有 ${availableWords.length} 个，请补充兴趣池或增加每日分段`,
+      );
+    }
+    if (requestedHomeBudget > MAX_HOME) {
+      throw new XhsOpsError(
+        409,
+        `本段首页目标 ${requestedHomeBudget} 篇超过上限 ${MAX_HOME}，请提高搜索占比或增加每日分段`,
+      );
+    }
+    const searchBudget = requestedSearchBudget;
+    const homeBudget = requestedHomeBudget;
+    const activeWordCount = Math.min(
+      availableWords.length,
+      searchBudget,
+      Math.max(preferredWords.length, requiredWordCount),
     );
-    const searchTotalPlanned = perKeyword * words.length;
-    homeFeedCount = Math.max(
+    plannedWords = availableWords.slice(0, activeWordCount);
+    const baseKeywordCount =
+      activeWordCount > 0 ? Math.floor(searchBudget / activeWordCount) : 0;
+    const keywordRemainder =
+      activeWordCount > 0 ? searchBudget % activeWordCount : 0;
+    plannedCounts = plannedWords.map(
+      (_, index) => baseKeywordCount + (index < keywordRemainder ? 1 : 0),
+    );
+    homeFeedCount = homeBudget;
+    const searchTotalPlanned = plannedCounts.reduce(
+      (sum, count) => sum + count,
       0,
-      Math.min(MAX_HOME, segmentTarget - searchTotalPlanned),
     );
     const total = searchTotalPlanned + homeFeedCount;
     targetLine = `日目标 ${target} 篇${segmentCount > 1 ? ` ÷ ${segmentCount} 段` : ""} → 本${segmentCount > 1 ? "段" : "次"}目标 ${segmentTarget} 篇：搜索 ${searchTotalPlanned} + 首页 ${homeFeedCount}${total < segmentTarget ? `（受每词 ≤8、首页 ≤${MAX_HOME} 限制，实际 ${total} 篇）` : ""}`;
   }
-  const keywords = words.map((keyword) => ({ keyword, count: perKeyword }));
+  const keywords = plannedWords.map((keyword, index) => ({
+    keyword,
+    count: plannedCounts?.[index] ?? perKeyword,
+  }));
   const searchTotal = keywords.reduce((n, k) => n + k.count, 0);
   if (targetLine === null) {
     homeFeedCount = homeFeedFromRatio(
