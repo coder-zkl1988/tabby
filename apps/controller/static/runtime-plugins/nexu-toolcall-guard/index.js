@@ -36,6 +36,10 @@ import path from "node:path";
 
 const DEFAULT_THRESHOLD = 3;
 const MAX_TRACKED_RUNS = 500;
+// peekaboo__ stays in the gate list as a permanently unapproved legacy
+// surface: Nexu ships cua-driver on every platform, so any peekaboo__* tool
+// (including a third-party Peekaboo MCP) fails closed in
+// isApprovedLocalAutomationTool below.
 const LOCAL_AUTOMATION_TOOL_PREFIXES = ["peekaboo__", "cua-driver__"];
 // Embedded-browser tools registered by the nexu-browser plugin. They drive a
 // browser that carries the user's own logins, so they are gated exactly like
@@ -54,26 +58,12 @@ const HOST_EXECUTION_TOOLS = new Set([
   "cron",
 ]);
 const COMPUTER_OBSERVATION_TOOLS = new Set([
-  "peekaboo__see",
-  "peekaboo__inspect_ui",
   "cua-driver__get_accessibility_tree",
   "cua-driver__get_desktop_state",
   "cua-driver__get_session_state",
   "cua-driver__get_window_state",
 ]);
 const COMPUTER_MUTATION_TOOLS = new Set([
-  "peekaboo__app",
-  "peekaboo__click",
-  "peekaboo__type",
-  "peekaboo__set_value",
-  "peekaboo__perform_action",
-  "peekaboo__hotkey",
-  "peekaboo__scroll",
-  "peekaboo__drag",
-  "peekaboo__window",
-  "peekaboo__menu",
-  "peekaboo__dock",
-  "peekaboo__dialog",
   "cua-driver__click",
   "cua-driver__double_click",
   "cua-driver__right_click",
@@ -88,7 +78,6 @@ const COMPUTER_MUTATION_TOOLS = new Set([
 ]);
 const NON_MUTATING_COMPUTER_TOOLS = new Set([
   ...COMPUTER_OBSERVATION_TOOLS,
-  "peekaboo__list",
   "cua-driver__check_permissions",
   "cua-driver__get_cursor_position",
   "cua-driver__get_screen_size",
@@ -130,15 +119,6 @@ const IMPLICIT_APP_TARGETS = new Set(["active", "current", "frontmost"]);
 // unverified `type` stays a hard failure even where the provider cannot bind
 // it to an element.
 const UNVERIFIABLE_ACTION_TOOLS = new Set([
-  "peekaboo__click",
-  "peekaboo__hotkey",
-  "peekaboo__scroll",
-  "peekaboo__drag",
-  "peekaboo__menu",
-  "peekaboo__dock",
-  "peekaboo__dialog",
-  "peekaboo__window",
-  "peekaboo__perform_action",
   "cua-driver__click",
   "cua-driver__double_click",
   "cua-driver__right_click",
@@ -287,9 +267,7 @@ function resolveAutomationTarget(toolName, params) {
   ]);
   const pid = readText(params, ["pid"]);
   const appName =
-    toolName === "peekaboo__app" || toolName === "cua-driver__launch_app"
-      ? readText(params, ["name"])
-      : null;
+    toolName === "cua-driver__launch_app" ? readText(params, ["name"]) : null;
   const windowId = readText(params, ["window_id", "windowId"]);
   const windowIndex = readText(params, ["window_index", "windowIndex"]);
   const session = readText(params, [
@@ -394,13 +372,10 @@ function hasExplicitAutomationTarget(target) {
 }
 
 function expectedTextForMutation(toolName, params) {
-  if (toolName === "peekaboo__type" || toolName === "cua-driver__type_text") {
+  if (toolName === "cua-driver__type_text") {
     return readLiteralText(params, ["text"]);
   }
-  if (
-    toolName === "peekaboo__set_value" ||
-    toolName === "cua-driver__set_value"
-  ) {
+  if (toolName === "cua-driver__set_value") {
     return readLiteralText(params, ["value", "text"]);
   }
   return null;
@@ -686,52 +661,21 @@ function verificationKindForMutation(toolName, params) {
     return "element-value";
   }
   if (toolName === "cua-driver__launch_app") return "target-observed";
-  if (toolName === "peekaboo__app") {
-    const action = readText(params, ["action"])?.toLowerCase();
-    if (action === "launch" || action === "relaunch") {
-      return "target-observed";
-    }
-  }
   return "provider-only";
 }
 
-function isReadOnlyMutationToolAction(toolName, action) {
-  if (!action) return false;
-  if (toolName === "peekaboo__app") return action === "list";
-  if (toolName === "peekaboo__menu") {
-    return action === "list" || action === "list-all";
-  }
-  if (toolName === "peekaboo__dock" || toolName === "peekaboo__dialog") {
-    return action === "list";
-  }
-  return false;
-}
-
-function isComputerMutation(toolName, params) {
-  if (
-    toolName === "peekaboo__app" ||
-    toolName === "peekaboo__window" ||
-    toolName === "peekaboo__menu" ||
-    toolName === "peekaboo__dock" ||
-    toolName === "peekaboo__dialog"
-  ) {
-    const action = readText(params, ["action"])?.toLowerCase();
-    if (isReadOnlyMutationToolAction(toolName, action)) return false;
-  }
+function isComputerMutation(toolName) {
   if (NON_MUTATING_COMPUTER_TOOLS.has(toolName)) return false;
   if (COMPUTER_MUTATION_TOOLS.has(toolName)) return true;
-  return (
-    toolName?.startsWith("peekaboo__") ||
-    toolName?.startsWith("cua-driver__")
-  );
+  return toolName?.startsWith("cua-driver__") === true;
 }
 
 function isApprovedLocalAutomationTool(toolName) {
-  // Nexu ships cua-driver on every platform. Peekaboo was the macOS backend
-  // before the backends were unified; nothing compiles it into the MCP
-  // registry any more, so any peekaboo__* call is an unreviewed surface and
-  // fails closed. The completion guard still knows how to classify Peekaboo
-  // results — that is fail-safe classification, not an authorisation path.
+  // Fail closed for gate-listed surfaces that are not individually reviewed:
+  // cua-driver tools must be on APPROVED_CUA_TOOLS, and peekaboo__* — the
+  // pre-unification macOS backend, plus any third-party Peekaboo MCP — is
+  // never approved. Embedded-browser tools are policed by the session gate,
+  // not by this list, so they stay approved here.
   if (toolName?.startsWith("peekaboo__")) {
     return false;
   }
@@ -775,7 +719,7 @@ function getComputerRunState(ctx, event) {
 function trackComputerStart(event, ctx) {
   const toolName = event?.toolName;
   const params = event?.params ?? {};
-  if (!isComputerMutation(toolName, params)) return;
+  if (!isComputerMutation(toolName)) return;
   const tracked = getComputerRunState(ctx, event);
   if (!tracked) return;
   const fingerprint = mutationFingerprint(toolName, params);
@@ -788,7 +732,7 @@ function trackComputerStart(event, ctx) {
 function trackComputerCompletion(event, ctx) {
   const toolName = event?.toolName;
   const params = event?.params ?? {};
-  const mutation = isComputerMutation(toolName, params);
+  const mutation = isComputerMutation(toolName);
   const observation = COMPUTER_OBSERVATION_TOOLS.has(toolName);
   if (!mutation && !observation) return;
   const tracked = getComputerRunState(ctx, event);

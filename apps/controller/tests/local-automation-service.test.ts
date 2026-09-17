@@ -851,7 +851,7 @@ describe("LocalAutomationService", () => {
 
   it("requires macOS 13 or later, matching CuaDriver.app's LSMinimumSystemVersion", () => {
     // Darwin 22 == macOS 13. This floor is lower than the macOS 15 the
-    // Peekaboo backend needed before the backends were unified.
+    // previous macOS-only backend needed before the backends were unified.
     expect(supportsComputerUseBackend("cua-driver", "darwin", "21.6.0")).toBe(
       false,
     );

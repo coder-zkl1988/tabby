@@ -46,12 +46,12 @@ export function describeEvidenceGaps(
   return `\n缺少证据的动作：${shown.join("、")}${suffix}。`;
 }
 
-// Click, hotkey, scroll, drag, menu, Dock, dialog, and window actions have no
-// read-back: the OS delivers the event and what happens next is the target
-// app's business. No provider can prove intent for them — cua-driver 0.12.6
-// says so in its own tool description ("A click is never driver-verifiable
-// (no read-back) ... confirm the effect via screenshot"), and Peekaboo 3.9.8
-// returns plain `[ok]` text. Failing the whole run on that means reporting a
+// Click, hotkey, scroll, and drag actions have no read-back: the OS
+// delivers the event and what happens next is the target app's business. No
+// provider can prove intent for them — cua-driver 0.12.6 says so in its own
+// tool description ("A click is never driver-verifiable (no read-back) ...
+// confirm the effect via screenshot"). Failing the whole run on that means
+// reporting a
 // successful task as failed, which is worse than saying the outcome is
 // unconfirmed. Evidence the provider *can* produce and did not — a typed or
 // assigned value that never read back, a launch never observed, a failed call
@@ -60,8 +60,6 @@ export const LOCAL_AUTOMATION_ADVISORY_MESSAGE =
   "提示：本次电脑操作中的点击/按键/滚动/拖拽类动作无法被系统验证——这类动作只能投递事件，操作系统不提供「是否达成意图」的回执。上述结果未经证实，请自行确认。";
 
 const OBSERVATION_TOOLS = new Set([
-  "peekaboo__see",
-  "peekaboo__inspect_ui",
   "cua-driver__get_accessibility_tree",
   "cua-driver__get_desktop_state",
   "cua-driver__get_session_state",
@@ -69,18 +67,6 @@ const OBSERVATION_TOOLS = new Set([
 ]);
 
 const MUTATION_TOOLS = new Set([
-  "peekaboo__app",
-  "peekaboo__click",
-  "peekaboo__type",
-  "peekaboo__set_value",
-  "peekaboo__perform_action",
-  "peekaboo__hotkey",
-  "peekaboo__scroll",
-  "peekaboo__drag",
-  "peekaboo__window",
-  "peekaboo__menu",
-  "peekaboo__dock",
-  "peekaboo__dialog",
   "cua-driver__click",
   "cua-driver__double_click",
   "cua-driver__right_click",
@@ -96,7 +82,6 @@ const MUTATION_TOOLS = new Set([
 
 const NON_MUTATING_TOOLS = new Set([
   ...OBSERVATION_TOOLS,
-  "peekaboo__list",
   "cua-driver__check_permissions",
   "cua-driver__get_cursor_position",
   "cua-driver__get_screen_size",
@@ -112,22 +97,11 @@ const IMPLICIT_APP_TARGETS = new Set(["active", "current", "frontmost"]);
 // Actions with no read-back: the OS delivers the event and what happens next
 // is the target app's business. No provider can prove intent for these —
 // cua-driver 0.12.6 states it in its own `click` description ("A click is
-// never driver-verifiable (no read-back)"), and Peekaboo 3.9.8 returns plain
-// `[ok]` text. Membership is by action class, NOT by whether a given call
-// carried an element reference: `type` belongs to a verifiable class even when
-// the provider offers no way to bind it to an element (Peekaboo's `type` has
-// no `--on`), and an unverified `type` is exactly the failure this guard
-// exists to catch.
+// never driver-verifiable (no read-back)"). Membership is by action class,
+// NOT by whether a given call carried an element reference: `type_text`
+// belongs to a verifiable class even when a call carries no element binding,
+// and an unverified type is exactly the failure this guard exists to catch.
 const UNVERIFIABLE_ACTION_TOOLS = new Set([
-  "peekaboo__click",
-  "peekaboo__hotkey",
-  "peekaboo__scroll",
-  "peekaboo__drag",
-  "peekaboo__menu",
-  "peekaboo__dock",
-  "peekaboo__dialog",
-  "peekaboo__window",
-  "peekaboo__perform_action",
   "cua-driver__click",
   "cua-driver__double_click",
   "cua-driver__right_click",
@@ -256,9 +230,7 @@ function resolveTarget(
   ]);
   const pid = readText(params, ["pid"]);
   const appName =
-    toolName === "peekaboo__app" || toolName === "cua-driver__launch_app"
-      ? readText(params, ["name"])
-      : null;
+    toolName === "cua-driver__launch_app" ? readText(params, ["name"]) : null;
   const windowId = readText(params, ["window_id", "windowId"]);
   const windowIndex = readText(params, ["window_index", "windowIndex"]);
   const session = readText(params, [
@@ -369,13 +341,10 @@ function expectedTextForMutation(
   toolName: string,
   params: Record<string, unknown>,
 ): string | null {
-  if (toolName === "peekaboo__type" || toolName === "cua-driver__type_text") {
+  if (toolName === "cua-driver__type_text") {
     return readLiteralText(params, ["text"]);
   }
-  if (
-    toolName === "peekaboo__set_value" ||
-    toolName === "cua-driver__set_value"
-  ) {
+  if (toolName === "cua-driver__set_value") {
     return readLiteralText(params, ["value", "text"]);
   }
   return null;
@@ -661,49 +630,13 @@ function verificationKindForMutation(
     return "element-value";
   }
   if (toolName === "cua-driver__launch_app") return "target-observed";
-  if (toolName === "peekaboo__app") {
-    const action = readText(params, ["action"])?.toLowerCase();
-    if (action === "launch" || action === "relaunch") {
-      return "target-observed";
-    }
-  }
   return "provider-only";
 }
 
-function isReadOnlyMutationToolAction(
-  toolName: string,
-  action: string | undefined,
-): boolean {
-  if (!action) return false;
-  if (toolName === "peekaboo__app") return action === "list";
-  if (toolName === "peekaboo__menu") {
-    return action === "list" || action === "list-all";
-  }
-  if (toolName === "peekaboo__dock" || toolName === "peekaboo__dialog") {
-    return action === "list";
-  }
-  return false;
-}
-
-function isMutation(
-  toolName: string,
-  params: Record<string, unknown>,
-): boolean {
-  if (
-    toolName === "peekaboo__app" ||
-    toolName === "peekaboo__window" ||
-    toolName === "peekaboo__menu" ||
-    toolName === "peekaboo__dock" ||
-    toolName === "peekaboo__dialog"
-  ) {
-    const action = readText(params, ["action"])?.toLowerCase();
-    if (isReadOnlyMutationToolAction(toolName, action)) return false;
-  }
+function isMutation(toolName: string): boolean {
   if (NON_MUTATING_TOOLS.has(toolName)) return false;
   if (MUTATION_TOOLS.has(toolName)) return true;
-  return (
-    toolName.startsWith("peekaboo__") || toolName.startsWith("cua-driver__")
-  );
+  return toolName.startsWith("cua-driver__");
 }
 
 export class LocalAutomationCompletionGuard {
@@ -726,7 +659,7 @@ export class LocalAutomationCompletionGuard {
     const toolCallId =
       typeof data?.toolCallId === "string" ? data.toolCallId : null;
     if (!phase || !name || !toolCallId) return;
-    if (!OBSERVATION_TOOLS.has(name) && !isMutation(name, {})) return;
+    if (!OBSERVATION_TOOLS.has(name) && !isMutation(name)) return;
 
     if (phase === "start") {
       const state = this.getOrCreateRun(runId);
@@ -744,7 +677,7 @@ export class LocalAutomationCompletionGuard {
     const target = resolveTarget(call.name, call.params);
     const failed = data.isError === true;
 
-    if (isMutation(call.name, call.params)) {
+    if (isMutation(call.name)) {
       const aliases =
         call.name === "cua-driver__launch_app"
           ? resultTargets(data.result)
@@ -811,7 +744,7 @@ export class LocalAutomationCompletionGuard {
     if (finalizedFailure) return finalizedFailure;
     const state = this.runs.get(runId);
     const unfinishedMutations = [...(state?.calls.values() ?? [])]
-      .filter((call) => isMutation(call.name, call.params))
+      .filter((call) => isMutation(call.name))
       .map((call) => call.name);
     const hasUnfinishedMutation = unfinishedMutations.length > 0;
     if (!state || (state.pending.length === 0 && !hasUnfinishedMutation)) {

@@ -390,7 +390,7 @@ describe("chat routes", () => {
       stream: "tool",
       data: {
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-guarded",
         args: { app: "飞书", text: "锦鲤" },
       },
@@ -400,7 +400,7 @@ describe("chat routes", () => {
       stream: "tool",
       data: {
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-guarded",
         isError: false,
       },
@@ -546,7 +546,7 @@ describe("chat routes", () => {
       stream: "tool",
       data: {
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "click-shared",
         args: { app: "Safari", element_id: "search", text: "锦鲤" },
       },
@@ -556,7 +556,7 @@ describe("chat routes", () => {
       stream: "tool",
       data: {
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "click-shared",
         isError: false,
       },

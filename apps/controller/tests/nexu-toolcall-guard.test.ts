@@ -1085,7 +1085,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     };
     await afterToolCall?.(
       {
-        toolName: "peekaboo__type",
+        toolName: "cua-driver__type_text",
         params: {
           app: "PID:18609",
           element_id: "search-field",
@@ -1097,7 +1097,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__see",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "PID:18609" },
         error: "Operation timed out",
       },
@@ -1195,7 +1195,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
 
     await afterToolCall?.(
       {
-        toolName: "peekaboo__type",
+        toolName: "cua-driver__type_text",
         params: {
           app: "PID:18609",
           element_id: "search-field",
@@ -1207,7 +1207,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__see",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "PID:18609" },
         result: {
           elements: [{ element_id: "search-field", value: "锦鲤" }],
@@ -1280,7 +1280,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
 
     await afterToolCall?.(
       {
-        toolName: "peekaboo__type",
+        toolName: "cua-driver__type_text",
         params: { app: "飞书", text: "锦鲤" },
         error: "input failed",
       },
@@ -1288,7 +1288,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__click",
+        toolName: "cua-driver__click",
         params: { app: "飞书", x: 100, y: 120 },
         result: { ok: true },
       },
@@ -1296,7 +1296,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__see",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app: "飞书" },
         result: { ok: true },
       },
@@ -1333,7 +1333,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
 
     await afterToolCall?.(
       {
-        toolName: "peekaboo__type",
+        toolName: "cua-driver__type_text",
         params: {
           app: "飞书",
           element_id: "search-field",
@@ -1345,7 +1345,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__hotkey",
+        toolName: "cua-driver__hotkey",
         params: { app: "飞书", keys: "return" },
         result: { ok: true },
       },
@@ -1353,7 +1353,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__see",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app: "飞书" },
         result: {
           elements: [
@@ -1389,7 +1389,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
 
     await afterToolCall?.(
       {
-        toolName: "peekaboo__click",
+        toolName: "cua-driver__click",
         params: { app: "Safari", on: "submit-button" },
         result: { ok: true },
       },
@@ -1397,7 +1397,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__inspect_ui",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "Safari" },
         result: {
           content: [
@@ -1422,60 +1422,10 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     ).toMatchObject({ message: { role: "assistant" } });
   });
 
-  it("tracks Dock show and ignores static labels as value evidence", async () => {
+  it("ignores static labels as value evidence for typed text", async () => {
     const hooks = await loadHooks();
     const afterToolCall = hooks.get("after_tool_call");
     const beforeMessageWrite = hooks.get("before_message_write");
-
-    const dockContext = {
-      runId: "run-dock-show",
-      sessionKey: "agent:bot-dock:main",
-    };
-    await afterToolCall?.(
-      {
-        toolName: "peekaboo__dock",
-        params: { action: "show" },
-        result: { ok: true },
-      },
-      dockContext,
-    );
-    expect(
-      beforeMessageWrite?.(
-        {
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: "Dock 已显示。" }],
-            stopReason: "stop",
-          },
-        },
-        { sessionKey: dockContext.sessionKey },
-      ),
-    ).toMatchObject({ message: { role: "assistant" } });
-
-    const appContext = {
-      runId: "run-app-quit",
-      sessionKey: "agent:bot-app:main",
-    };
-    await afterToolCall?.(
-      {
-        toolName: "peekaboo__app",
-        params: { action: "quit", name: "TextEdit" },
-        result: { ok: true },
-      },
-      appContext,
-    );
-    expect(
-      beforeMessageWrite?.(
-        {
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: "TextEdit 已退出。" }],
-            stopReason: "stop",
-          },
-        },
-        { sessionKey: appContext.sessionKey },
-      ),
-    ).toMatchObject({ message: { role: "assistant" } });
 
     const labelContext = {
       runId: "run-label-only",
@@ -1483,7 +1433,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     };
     await afterToolCall?.(
       {
-        toolName: "peekaboo__type",
+        toolName: "cua-driver__type_text",
         params: { app: "Safari", on: "search-field", text: "Search" },
         result: { ok: true },
       },
@@ -1491,7 +1441,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__inspect_ui",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "Safari" },
         result: {
           elements: [
@@ -1515,18 +1465,18 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     ).toMatchObject({ message: { role: "assistant" } });
   });
 
-  it("accepts real Peekaboo refs and cua-driver 0.12.6 verification", async () => {
+  it("accepts element refs and cua-driver 0.12.6 verification", async () => {
     const hooks = await loadHooks();
     const afterToolCall = hooks.get("after_tool_call");
     const beforeMessageWrite = hooks.get("before_message_write");
 
-    const peekabooContext = {
-      runId: "run-peekaboo-on",
-      sessionKey: "agent:bot-peekaboo:main",
+    const refContext = {
+      runId: "run-cua-driver-refs",
+      sessionKey: "agent:bot-refs:main",
     };
     await afterToolCall?.(
       {
-        toolName: "peekaboo__set_value",
+        toolName: "cua-driver__set_value",
         params: {
           on: "search-field",
           snapshot: "snapshot-1",
@@ -1534,11 +1484,11 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
         },
         result: { ok: true },
       },
-      peekabooContext,
+      refContext,
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__inspect_ui",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "Safari", snapshot: "snapshot-1" },
         result: {
           content: [
@@ -1549,7 +1499,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
           ],
         },
       },
-      peekabooContext,
+      refContext,
     );
     expect(
       beforeMessageWrite?.(
@@ -1560,7 +1510,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
             stopReason: "stop",
           },
         },
-        { sessionKey: peekabooContext.sessionKey },
+        { sessionKey: refContext.sessionKey },
       ),
     ).toBeUndefined();
 
@@ -1598,7 +1548,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     ).toBeUndefined();
   });
 
-  it("accepts exact empty Peekaboo evidence but not verification-shaped text", async () => {
+  it("accepts exact empty value evidence but not verification-shaped text", async () => {
     const hooks = await loadHooks();
     const afterToolCall = hooks.get("after_tool_call");
     const beforeMessageWrite = hooks.get("before_message_write");
@@ -1609,7 +1559,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     };
     await afterToolCall?.(
       {
-        toolName: "peekaboo__set_value",
+        toolName: "cua-driver__set_value",
         params: { app: "Safari", on: "field", value: "" },
         result: { ok: true },
       },
@@ -1617,7 +1567,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__inspect_ui",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "Safari" },
         result: {
           content: [{ type: "text", text: 'field text field value=""' }],
@@ -1796,7 +1746,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
       };
       await afterToolCall?.(
         {
-          toolName: "peekaboo__set_value",
+          toolName: "cua-driver__set_value",
           params: {
             app: "Safari",
             on: testCase.target,
@@ -1808,7 +1758,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
       );
       await afterToolCall?.(
         {
-          toolName: "peekaboo__inspect_ui",
+          toolName: "cua-driver__get_accessibility_tree",
           params: { app_target: "Safari" },
           result: {
             content: [{ type: "text", text: testCase.evidence }],
@@ -1843,7 +1793,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     };
     await afterToolCall?.(
       {
-        toolName: "peekaboo__set_value",
+        toolName: "cua-driver__set_value",
         params: { app: "Safari", on: "field", value: "锦" },
         result: { ok: true },
       },
@@ -1851,7 +1801,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__inspect_ui",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "Safari" },
         result: { elements: [{ element_id: "field", value: "旧锦鲤" }] },
       },
@@ -2011,7 +1961,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     };
     await afterToolCall?.(
       {
-        toolName: "peekaboo__click",
+        toolName: "cua-driver__click",
         params: { x: 100, y: 120 },
         result: { ok: true },
       },
@@ -2019,7 +1969,7 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     );
     await afterToolCall?.(
       {
-        toolName: "peekaboo__see",
+        toolName: "cua-driver__get_accessibility_tree",
         params: { app_target: "frontmost" },
         result: { tree: "frontmost app" },
       },
@@ -2092,11 +2042,11 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
     for (const [toolCall, params] of [
       ["click", { app: "Safari", window_id: 1, x: 100, y: 120 }],
       ["click", { app: "Safari", window_id: 2, x: 200, y: 220 }],
-      ["see", { app: "Safari", window_id: 2 }],
+      ["get_accessibility_tree", { app: "Safari", window_id: 2 }],
     ] as const) {
       await afterToolCall?.(
         {
-          toolName: `peekaboo__${toolCall}`,
+          toolName: `cua-driver__${toolCall}`,
           params,
           result: { ok: true },
         },

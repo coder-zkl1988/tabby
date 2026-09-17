@@ -31,7 +31,7 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-1",
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-1",
         args: { app: "PID:18609", text: "锦鲤" },
       }),
@@ -40,7 +40,7 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-1",
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-1",
         isError: false,
       }),
@@ -49,7 +49,7 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-1",
         phase: "start",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-1",
         args: { app_target: "PID:18609" },
       }),
@@ -58,7 +58,7 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-1",
         phase: "result",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-1",
         isError: true,
       }),
@@ -129,28 +129,28 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-3",
         phase: "start",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-3",
         args: { app: "飞书", element_id: 42 },
       }),
       toolEvent({
         runId: "run-3",
         phase: "result",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-3",
         isError: false,
       }),
       toolEvent({
         runId: "run-3",
         phase: "start",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-3",
         args: { app_target: "Safari" },
       }),
       toolEvent({
         runId: "run-3",
         phase: "result",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-3",
         isError: false,
       }),
@@ -167,28 +167,28 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-click-unchanged",
         phase: "start",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-unchanged",
         args: { app: "Safari", on: "submit-button" },
       }),
       toolEvent({
         runId: "run-click-unchanged",
         phase: "result",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-unchanged",
         isError: false,
       }),
       toolEvent({
         runId: "run-click-unchanged",
         phase: "start",
-        name: "peekaboo__inspect_ui",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "inspect-unchanged",
         args: { app_target: "Safari" },
       }),
       toolEvent({
         runId: "run-click-unchanged",
         phase: "result",
-        name: "peekaboo__inspect_ui",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "inspect-unchanged",
         isError: false,
         result: {
@@ -204,58 +204,33 @@ describe("LocalAutomationCompletionGuard", () => {
     expect(guard.finalFailureFor("run-click-unchanged")).not.toBeNull();
   });
 
-  it("tracks Dock show as a mutation", () => {
+  it("tracks app launches while keeping app list read-only", () => {
     const guard = new LocalAutomationCompletionGuard();
     for (const event of [
       toolEvent({
-        runId: "run-dock-show",
+        runId: "run-app-launch",
         phase: "start",
-        name: "peekaboo__dock",
-        toolCallId: "dock-show",
-        args: { action: "show" },
+        name: "cua-driver__launch_app",
+        toolCallId: "app-launch",
+        args: { name: "TextEdit" },
       }),
       toolEvent({
-        runId: "run-dock-show",
+        runId: "run-app-launch",
         phase: "result",
-        name: "peekaboo__dock",
-        toolCallId: "dock-show",
-        isError: false,
-      }),
-    ]) {
-      guard.observeAgentEvent(event);
-    }
-
-    expect(guard.finalFailureFor("run-dock-show")).not.toBeNull();
-  });
-
-  it("tracks Peekaboo app actions while keeping app list read-only", () => {
-    const guard = new LocalAutomationCompletionGuard();
-    for (const event of [
-      toolEvent({
-        runId: "run-app-quit",
-        phase: "start",
-        name: "peekaboo__app",
-        toolCallId: "app-quit",
-        args: { action: "quit", name: "TextEdit" },
-      }),
-      toolEvent({
-        runId: "run-app-quit",
-        phase: "result",
-        name: "peekaboo__app",
-        toolCallId: "app-quit",
+        name: "cua-driver__launch_app",
+        toolCallId: "app-launch",
         isError: false,
       }),
       toolEvent({
         runId: "run-app-list",
         phase: "start",
-        name: "peekaboo__app",
+        name: "cua-driver__list_apps",
         toolCallId: "app-list",
-        args: { action: "list" },
       }),
       toolEvent({
         runId: "run-app-list",
         phase: "result",
-        name: "peekaboo__app",
+        name: "cua-driver__list_apps",
         toolCallId: "app-list",
         isError: false,
       }),
@@ -263,7 +238,7 @@ describe("LocalAutomationCompletionGuard", () => {
       guard.observeAgentEvent(event);
     }
 
-    expect(guard.finalFailureFor("run-app-quit")).not.toBeNull();
+    expect(guard.finalFailureFor("run-app-launch")).not.toBeNull();
     expect(guard.finalFailureFor("run-app-list")).toBeNull();
   });
 
@@ -273,28 +248,28 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-unknown-action",
         phase: "start",
-        name: "peekaboo__paste",
+        name: "cua-driver__future_widget",
         toolCallId: "paste-1",
         args: { app: "TextEdit", text: "sensitive" },
       }),
       toolEvent({
         runId: "run-unknown-action",
         phase: "result",
-        name: "peekaboo__paste",
+        name: "cua-driver__future_widget",
         toolCallId: "paste-1",
         isError: false,
       }),
       toolEvent({
         runId: "run-read-only",
         phase: "start",
-        name: "peekaboo__list",
+        name: "cua-driver__list_apps",
         toolCallId: "list-1",
         args: { item_type: "running_applications" },
       }),
       toolEvent({
         runId: "run-read-only",
         phase: "result",
-        name: "peekaboo__list",
+        name: "cua-driver__list_apps",
         toolCallId: "list-1",
         isError: false,
       }),
@@ -312,42 +287,42 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-4",
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-4",
         args: { app: "飞书", text: "锦鲤" },
       }),
       toolEvent({
         runId: "run-4",
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-4",
         isError: true,
       }),
       toolEvent({
         runId: "run-4",
         phase: "start",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-4",
         args: { app: "飞书", x: 100, y: 120 },
       }),
       toolEvent({
         runId: "run-4",
         phase: "result",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-4",
         isError: false,
       }),
       toolEvent({
         runId: "run-4",
         phase: "start",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-4",
         args: { app: "飞书" },
       }),
       toolEvent({
         runId: "run-4",
         phase: "result",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-4",
         isError: false,
       }),
@@ -367,42 +342,42 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-5",
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-5a",
         args,
       }),
       toolEvent({
         runId: "run-5",
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-5a",
         isError: true,
       }),
       toolEvent({
         runId: "run-5",
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-5b",
         args,
       }),
       toolEvent({
         runId: "run-5",
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-5b",
         isError: false,
       }),
       toolEvent({
         runId: "run-5",
         phase: "start",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-5",
         args: { app: "飞书" },
       }),
       toolEvent({
         runId: "run-5",
         phase: "result",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-5",
         isError: false,
         result: {
@@ -422,42 +397,42 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-6",
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-6",
         args: { app: "飞书", element_id: "search-6", text: "锦鲤" },
       }),
       toolEvent({
         runId: "run-6",
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-6",
         isError: false,
       }),
       toolEvent({
         runId: "run-6",
         phase: "start",
-        name: "peekaboo__hotkey",
+        name: "cua-driver__hotkey",
         toolCallId: "enter-6",
         args: { app: "飞书", keys: "return" },
       }),
       toolEvent({
         runId: "run-6",
         phase: "result",
-        name: "peekaboo__hotkey",
+        name: "cua-driver__hotkey",
         toolCallId: "enter-6",
         isError: false,
       }),
       toolEvent({
         runId: "run-6",
         phase: "start",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-6",
         args: { app: "飞书" },
       }),
       toolEvent({
         runId: "run-6",
         phase: "result",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-6",
         isError: false,
         result: {
@@ -480,28 +455,28 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-label-only",
         phase: "start",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-label-only",
         args: { app: "Safari", on: "search-field", text: "Search" },
       }),
       toolEvent({
         runId: "run-label-only",
         phase: "result",
-        name: "peekaboo__type",
+        name: "cua-driver__type_text",
         toolCallId: "type-label-only",
         isError: false,
       }),
       toolEvent({
         runId: "run-label-only",
         phase: "start",
-        name: "peekaboo__inspect_ui",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "inspect-label-only",
         args: { app_target: "Safari" },
       }),
       toolEvent({
         runId: "run-label-only",
         phase: "result",
-        name: "peekaboo__inspect_ui",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "inspect-label-only",
         isError: false,
         result: {
@@ -517,35 +492,35 @@ describe("LocalAutomationCompletionGuard", () => {
     expect(guard.finalFailureFor("run-label-only")).not.toBeNull();
   });
 
-  it("accepts Peekaboo on references in MCP text value evidence", () => {
+  it("accepts on references in MCP text value evidence", () => {
     const guard = new LocalAutomationCompletionGuard();
     for (const event of [
       toolEvent({
-        runId: "run-peekaboo-on",
+        runId: "run-on-ref",
         phase: "start",
-        name: "peekaboo__set_value",
-        toolCallId: "set-peekaboo-on",
+        name: "cua-driver__set_value",
+        toolCallId: "set-on-ref",
         args: { on: "search-field", snapshot: "snapshot-1", value: "锦鲤" },
       }),
       toolEvent({
-        runId: "run-peekaboo-on",
+        runId: "run-on-ref",
         phase: "result",
-        name: "peekaboo__set_value",
-        toolCallId: "set-peekaboo-on",
+        name: "cua-driver__set_value",
+        toolCallId: "set-on-ref",
         isError: false,
       }),
       toolEvent({
-        runId: "run-peekaboo-on",
+        runId: "run-on-ref",
         phase: "start",
-        name: "peekaboo__inspect_ui",
-        toolCallId: "inspect-peekaboo-on",
+        name: "cua-driver__get_accessibility_tree",
+        toolCallId: "inspect-on-ref",
         args: { app_target: "Safari", snapshot: "snapshot-1" },
       }),
       toolEvent({
-        runId: "run-peekaboo-on",
+        runId: "run-on-ref",
         phase: "result",
-        name: "peekaboo__inspect_ui",
-        toolCallId: "inspect-peekaboo-on",
+        name: "cua-driver__get_accessibility_tree",
+        toolCallId: "inspect-on-ref",
         isError: false,
         result: {
           content: [
@@ -560,7 +535,7 @@ describe("LocalAutomationCompletionGuard", () => {
       guard.observeAgentEvent(event);
     }
 
-    expect(guard.finalFailureFor("run-peekaboo-on")).toBeNull();
+    expect(guard.finalFailureFor("run-on-ref")).toBeNull();
   });
 
   it("accepts cua-driver 0.12.6 native verification", () => {
@@ -691,7 +666,7 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-mutation-in-flight",
         phase: "start",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-in-flight",
         args: { app: "Safari", x: 10, y: 20 },
       }),
@@ -700,11 +675,13 @@ describe("LocalAutomationCompletionGuard", () => {
     expect(guard.finalFailureFor("run-mutation-in-flight")).not.toBeNull();
   });
 
-  it("accepts exact empty Peekaboo values but not an empty type receipt", () => {
+  it("accepts exact empty values but not an empty type receipt", () => {
     const guard = new LocalAutomationCompletionGuard();
     for (const runId of ["run-empty-value", "run-empty-type"]) {
       const toolName =
-        runId === "run-empty-value" ? "peekaboo__set_value" : "peekaboo__type";
+        runId === "run-empty-value"
+          ? "cua-driver__set_value"
+          : "cua-driver__type_text";
       const args =
         runId === "run-empty-value"
           ? { app: "Safari", on: "field", value: "" }
@@ -727,14 +704,14 @@ describe("LocalAutomationCompletionGuard", () => {
         toolEvent({
           runId,
           phase: "start",
-          name: "peekaboo__inspect_ui",
+          name: "cua-driver__get_accessibility_tree",
           toolCallId: `inspect-${runId}`,
           args: { app_target: "Safari" },
         }),
         toolEvent({
           runId,
           phase: "result",
-          name: "peekaboo__inspect_ui",
+          name: "cua-driver__get_accessibility_tree",
           toolCallId: `inspect-${runId}`,
           isError: false,
           result: {
@@ -797,7 +774,7 @@ describe("LocalAutomationCompletionGuard", () => {
         toolEvent({
           runId: testCase.runId,
           phase: "start",
-          name: "peekaboo__set_value",
+          name: "cua-driver__set_value",
           toolCallId: `set-${testCase.runId}`,
           args: {
             app: "Safari",
@@ -808,21 +785,21 @@ describe("LocalAutomationCompletionGuard", () => {
         toolEvent({
           runId: testCase.runId,
           phase: "result",
-          name: "peekaboo__set_value",
+          name: "cua-driver__set_value",
           toolCallId: `set-${testCase.runId}`,
           isError: false,
         }),
         toolEvent({
           runId: testCase.runId,
           phase: "start",
-          name: "peekaboo__inspect_ui",
+          name: "cua-driver__get_accessibility_tree",
           toolCallId: `inspect-${testCase.runId}`,
           args: { app_target: "Safari" },
         }),
         toolEvent({
           runId: testCase.runId,
           phase: "result",
-          name: "peekaboo__inspect_ui",
+          name: "cua-driver__get_accessibility_tree",
           toolCallId: `inspect-${testCase.runId}`,
           isError: false,
           result: {
@@ -843,28 +820,28 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-substring-value",
         phase: "start",
-        name: "peekaboo__set_value",
+        name: "cua-driver__set_value",
         toolCallId: "set-substring",
         args: { app: "Safari", on: "field", value: "锦" },
       }),
       toolEvent({
         runId: "run-substring-value",
         phase: "result",
-        name: "peekaboo__set_value",
+        name: "cua-driver__set_value",
         toolCallId: "set-substring",
         isError: false,
       }),
       toolEvent({
         runId: "run-substring-value",
         phase: "start",
-        name: "peekaboo__inspect_ui",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "inspect-substring",
         args: { app_target: "Safari" },
       }),
       toolEvent({
         runId: "run-substring-value",
         phase: "result",
-        name: "peekaboo__inspect_ui",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "inspect-substring",
         isError: false,
         result: { elements: [{ element_id: "field", value: "旧锦鲤" }] },
@@ -962,28 +939,28 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-8",
         phase: "start",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-8",
         args: { x: 100, y: 120 },
       }),
       toolEvent({
         runId: "run-8",
         phase: "result",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-8",
         isError: false,
       }),
       toolEvent({
         runId: "run-8",
         phase: "start",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-8",
         args: { app_target: "frontmost" },
       }),
       toolEvent({
         runId: "run-8",
         phase: "result",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-8",
         isError: false,
       }),
@@ -1000,42 +977,42 @@ describe("LocalAutomationCompletionGuard", () => {
       toolEvent({
         runId: "run-9",
         phase: "start",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-9a",
         args: { app: "Safari", window_id: 1, x: 100, y: 120 },
       }),
       toolEvent({
         runId: "run-9",
         phase: "result",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-9a",
         isError: false,
       }),
       toolEvent({
         runId: "run-9",
         phase: "start",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-9b",
         args: { app: "Safari", window_id: 2, x: 200, y: 220 },
       }),
       toolEvent({
         runId: "run-9",
         phase: "result",
-        name: "peekaboo__click",
+        name: "cua-driver__click",
         toolCallId: "click-9b",
         isError: false,
       }),
       toolEvent({
         runId: "run-9",
         phase: "start",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-9",
         args: { app: "Safari", window_id: 2 },
       }),
       toolEvent({
         runId: "run-9",
         phase: "result",
-        name: "peekaboo__see",
+        name: "cua-driver__get_accessibility_tree",
         toolCallId: "see-9",
         isError: false,
       }),
@@ -1182,14 +1159,14 @@ describe("LocalAutomationCompletionGuard", () => {
         toolEvent({
           runId: "sev-type",
           phase: "start",
-          name: "peekaboo__type",
+          name: "cua-driver__type_text",
           toolCallId: "t1",
           args: { app: "\u98de\u4e66", text: "\u9526\u9ca4" },
         }),
         toolEvent({
           runId: "sev-type",
           phase: "result",
-          name: "peekaboo__type",
+          name: "cua-driver__type_text",
           toolCallId: "t1",
           isError: false,
           result: { content: [{ type: "text", text: "[ok] Typed" }] },
@@ -1207,14 +1184,14 @@ describe("LocalAutomationCompletionGuard", () => {
         toolEvent({
           runId: "sev-failed",
           phase: "start",
-          name: "peekaboo__click",
+          name: "cua-driver__click",
           toolCallId: "f1",
           args: { app: "Safari", on: "submit" },
         }),
         toolEvent({
           runId: "sev-failed",
           phase: "result",
-          name: "peekaboo__click",
+          name: "cua-driver__click",
           toolCallId: "f1",
           isError: true,
         }),
@@ -1231,7 +1208,7 @@ describe("LocalAutomationCompletionGuard", () => {
         toolEvent({
           runId: "sev-inflight",
           phase: "start",
-          name: "peekaboo__click",
+          name: "cua-driver__click",
           toolCallId: "i1",
           args: { app: "Safari", on: "submit" },
         }),
@@ -1246,28 +1223,28 @@ describe("LocalAutomationCompletionGuard", () => {
         toolEvent({
           runId: "sev-mixed",
           phase: "start",
-          name: "peekaboo__click",
+          name: "cua-driver__click",
           toolCallId: "m1",
           args: { app: "Safari", on: "submit" },
         }),
         toolEvent({
           runId: "sev-mixed",
           phase: "result",
-          name: "peekaboo__click",
+          name: "cua-driver__click",
           toolCallId: "m1",
           isError: false,
         }),
         toolEvent({
           runId: "sev-mixed",
           phase: "start",
-          name: "peekaboo__set_value",
+          name: "cua-driver__set_value",
           toolCallId: "m2",
           args: { app: "Safari", on: "field", value: "x" },
         }),
         toolEvent({
           runId: "sev-mixed",
           phase: "result",
-          name: "peekaboo__set_value",
+          name: "cua-driver__set_value",
           toolCallId: "m2",
           isError: false,
         }),
