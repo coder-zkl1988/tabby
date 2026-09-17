@@ -14,12 +14,24 @@ export async function generateImageViaJob(
   },
 ): Promise<GenerateImageResponse> {
   throwIfAborted(options?.signal);
+  const jobId = await submitImageGenerationJob(input);
+  return waitForImageGenerationJob(jobId, options);
+}
+
+/**
+ * Submit the job and return its id without waiting.
+ *
+ * The canvas persists that id on the node, so a reload can resume the poll
+ * rather than losing a run that is still going on the controller.
+ */
+export async function submitImageGenerationJob(
+  input: GenerateImageRequest,
+): Promise<string> {
   const { data, error } = await postApiV1MediaImageJobs({ body: input });
   if (!data || error) {
     throw new Error(readJobError(error, "图片生成任务提交失败"));
   }
-
-  return waitForImageGenerationJob(data.jobId, options);
+  return data.jobId;
 }
 
 export async function waitForImageGenerationJob(

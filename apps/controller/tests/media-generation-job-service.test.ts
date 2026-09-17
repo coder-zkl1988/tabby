@@ -1,9 +1,9 @@
 import type { GenerateImageResponse } from "@nexu/shared";
 import { describe, expect, it, vi } from "vitest";
 import {
-  ImageGenerationJobService,
-  ImageGenerationQueueFullError,
-} from "../src/services/image-generation-job-service.js";
+  MediaGenerationJobService,
+  MediaGenerationQueueFullError,
+} from "../src/services/media-generation-job-service.js";
 import { ImageGenerationFailedError } from "../src/services/media-generation-service.js";
 
 const firstResult: GenerateImageResponse = {
@@ -27,7 +27,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-describe("ImageGenerationJobService", () => {
+describe("MediaGenerationJobService", () => {
   it("runs submitted jobs serially and exposes terminal results", async () => {
     const first = deferred<GenerateImageResponse>();
     const second = deferred<GenerateImageResponse>();
@@ -39,8 +39,9 @@ describe("ImageGenerationJobService", () => {
       "11111111-1111-4111-8111-111111111111",
       "22222222-2222-4222-8222-222222222222",
     ];
-    const service = new ImageGenerationJobService({
-      generateImage,
+    const service = new MediaGenerationJobService({
+      label: "图片生成",
+      run: generateImage,
       genId: () => ids.shift() ?? "33333333-3333-4333-8333-333333333333",
     });
 
@@ -68,8 +69,9 @@ describe("ImageGenerationJobService", () => {
   });
 
   it("stores a safe user-facing failure instead of rejecting the queue", async () => {
-    const service = new ImageGenerationJobService({
-      generateImage: async () => {
+    const service = new MediaGenerationJobService({
+      label: "图片生成",
+      run: async () => {
         throw new ImageGenerationFailedError("图像服务响应超时，请稍后重试");
       },
       genId: () => "44444444-4444-4444-8444-444444444444",
@@ -84,15 +86,16 @@ describe("ImageGenerationJobService", () => {
 
   it("bounds queued and running work", () => {
     const pending = deferred<GenerateImageResponse>();
-    const service = new ImageGenerationJobService({
-      generateImage: () => pending.promise,
+    const service = new MediaGenerationJobService({
+      label: "图片生成",
+      run: () => pending.promise,
       genId: () => "55555555-5555-4555-8555-555555555555",
       maxActiveJobs: 1,
     });
 
     service.submit({ prompt: "first" });
     expect(() => service.submit({ prompt: "second" })).toThrow(
-      ImageGenerationQueueFullError,
+      MediaGenerationQueueFullError,
     );
     pending.resolve(firstResult);
   });

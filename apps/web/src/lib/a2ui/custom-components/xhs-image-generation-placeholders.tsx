@@ -18,7 +18,7 @@ export function XHSImageGenerationPlaceholders({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "#bb0028",
+        color: "var(--color-xhs)",
       }}
     >
       <Loader2 size={20} className="animate-spin" />

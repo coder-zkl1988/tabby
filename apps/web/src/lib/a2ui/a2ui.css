@@ -1,16 +1,73 @@
 /* ── A2UI Interactive Components ──────────────────────────────
-   Aligned with Nexu Design System 2.0 (apps/web/src/index.css) */
+   Aligned with Nexu Design System 2.0 (apps/web/src/index.css)
+
+   Scale (converged 2026-09, "A2UI 优化版"): everything below picks
+   from three fixed ladders. Adding a value off-ladder is the bug the
+   convergence was meant to remove, so reach for the vars, not a new
+   number.
+
+   type     24 / 18 / 15 / 14 / 13 / 12 / 12-mono   (px, never rem)
+   space    4 / 8 / 12 / 16 / 24                    (multiples of 4)
+   control  28 (sm, in-table) / 36 (md, forms) / 44 (lg, irreversible)
+
+   Two colour rules ride along with the ladders:
+   - below 14px never use --color-text-tertiary; it drops under 4.5:1.
+     Use --color-text-secondary.
+   - a status colour used as *text* is the `-ink` token, not the fill.
+     See "Status ink + wash" in index.css. */
+
+:root {
+  --a2ui-text-title: 24px;
+  --a2ui-text-card: 18px;
+  --a2ui-text-section: 15px;
+  --a2ui-text-strong: 14px;
+  --a2ui-text-body: 13px;
+  --a2ui-text-support: 12px;
+
+  --a2ui-space-1: 4px;
+  --a2ui-space-2: 8px;
+  --a2ui-space-3: 12px;
+  --a2ui-space-4: 16px;
+  --a2ui-space-6: 24px;
+
+  --a2ui-control-sm: 28px;
+  --a2ui-control-md: 36px;
+  --a2ui-control-lg: 44px;
+}
+
+@keyframes a2uiPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes a2uiShimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+@keyframes a2uiSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* ── Surfaces ────────────────────────────────────────────────── */
 .a2ui-surfaces {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--a2ui-space-3);
 }
 .a2ui-surface {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--a2ui-space-2);
 }
 
 /* Sidebar-bound full-height editors (XHSEditor) fill the right panel.
@@ -24,54 +81,88 @@
   min-height: 0;
 }
 
+/* Inline chat host: the bubble draws a 20px-radius frame and 16px of
+   padding, which double-frames any card that already brings its own
+   border (CardShell, XHSBatchTable, …) and costs 32px of usable width.
+
+   `.a2ui-framed` is a promise of TWO things: the card draws its own frame
+   *and* it stretches to the host's width. A card with a max-width below
+   the host (TeamRunCard caps at 360) must NOT carry the marker — dropping
+   the padding there welds it to the corner of a 704px bubble and leaves
+   340px of empty bordered white beside it.
+
+   Dropping the host padding is only half the job: with both borders still
+   drawn they sit flush and read as one 2px rule, and the card's 12px
+   corners get clipped against the host's 20px arc. So the frame itself
+   moves to the host — the card gives up its border and radius and lets
+   the host's `overflow: hidden` do the corners. */
+.a2ui-inline-host:has(
+    > .a2ui-surfaces > .a2ui-surface:only-child > .a2ui-framed:only-child
+  ) {
+  padding: 0;
+  overflow: hidden;
+}
+.a2ui-inline-host:has(
+    > .a2ui-surfaces > .a2ui-surface:only-child > .a2ui-framed:only-child
+  )
+  > .a2ui-surfaces
+  > .a2ui-surface
+  > .a2ui-framed {
+  border: 0;
+  border-radius: 0;
+}
+
 /* ── Text ────────────────────────────────────────────────────── */
 .a2ui-text {
   margin: 0;
   word-break: break-word;
 }
 .a2ui-text--h1 {
-  font-size: 1.5rem;
+  font-size: var(--a2ui-text-title);
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
   color: var(--color-text-heading);
 }
 .a2ui-text--h2 {
-  font-size: 1.25rem;
+  font-size: var(--a2ui-text-card);
   font-weight: 600;
   line-height: 1.35;
   color: var(--color-text-heading);
 }
 .a2ui-text--h3 {
-  font-size: 1.1rem;
+  font-size: var(--a2ui-text-section);
   font-weight: 600;
   line-height: 1.4;
   color: var(--color-text-heading);
 }
 .a2ui-text--h4 {
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--a2ui-text-strong);
+  font-weight: 500;
+  line-height: 1.5;
   color: var(--color-text-heading);
 }
 .a2ui-text--h5 {
-  font-size: 0.9rem;
-  font-weight: 500;
-  line-height: 1.4;
+  font-size: var(--a2ui-text-body);
+  font-weight: 600;
+  line-height: 1.55;
   color: var(--color-text-heading);
 }
 .a2ui-text--body {
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-size: var(--a2ui-text-body);
+  line-height: 1.55;
   color: var(--color-text-primary);
 }
+/* 12px: secondary, never tertiary — tertiary on white is ~4.3:1. */
 .a2ui-text--caption {
-  font-size: 0.75rem;
+  font-size: var(--a2ui-text-support);
   line-height: 1.5;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 .a2ui-text--code {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--a2ui-text-support);
+  font-weight: 500;
   background: var(--color-surface-3);
   padding: 2px 6px;
   border-radius: var(--radius-4);
@@ -80,15 +171,19 @@
 
 /* ── Button ────────────────────────────────────────────────────
    Mirrors the design-system button: dark accent primary,
-   surface-2 secondary, border-only outline, ghost text. */
+   surface-2 secondary, border-only outline, ghost text.
+   One height (md/36) — A2UI's Button has no size prop, and 36 is the
+   form default. Hover has to keep the variants apart: outlined darkens
+   its border, text/ghost only tints its background. */
 .a2ui-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 16px;
+  gap: var(--a2ui-space-2);
+  height: var(--a2ui-control-md);
+  padding: 0 var(--a2ui-space-4);
   border-radius: var(--radius-8);
-  font-size: 0.8125rem;
+  font-size: var(--a2ui-text-body);
   font-weight: 500;
   line-height: 1.5;
   cursor: pointer;
@@ -106,6 +201,7 @@
 .a2ui-button--primary {
   background: var(--color-accent);
   color: var(--color-accent-fg);
+  font-weight: 600;
 }
 .a2ui-button--primary:hover:not(:disabled) {
   background: var(--color-accent-hover);
@@ -126,7 +222,8 @@
   border-color: var(--color-border-strong);
 }
 .a2ui-button--outlined:hover:not(:disabled) {
-  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+  background: transparent;
 }
 
 .a2ui-button--text {
@@ -137,29 +234,41 @@
   background: var(--color-accent-subtle);
 }
 
+/* In-button progress: replaces the "保存中…" text ellipsis. Inherits the
+   button's own colour, so it reads on dark and light variants alike. */
+.a2ui-spinner {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  border-radius: var(--radius-circle);
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  animation: a2uiSpin 0.7s linear infinite;
+}
+
 /* ── TextField ───────────────────────────────────────────────── */
 .a2ui-textfield-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--a2ui-space-1);
 }
 .a2ui-textfield-label {
-  font-size: 0.75rem;
+  font-size: var(--a2ui-text-support);
   font-weight: 500;
   color: var(--color-text-secondary);
 }
 .a2ui-textfield {
-  padding: 7px 12px;
+  min-height: var(--a2ui-control-md);
+  padding: 8px var(--a2ui-space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-8);
-  font-size: 0.8125rem;
+  font-size: var(--a2ui-text-body);
   line-height: 1.5;
   outline: none;
   color: var(--color-text-primary);
   background: var(--color-surface-1);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   resize: vertical;
-  min-height: 34px;
   font-family: inherit;
 }
 .a2ui-textfield:focus {
@@ -173,21 +282,22 @@
   box-shadow: 0 0 0 2px var(--color-error-subtle);
 }
 .a2ui-textfield-hint {
-  font-size: 0.7rem;
-  color: var(--color-text-tertiary);
+  font-size: var(--a2ui-text-support);
+  color: var(--color-text-secondary);
 }
 .a2ui-textfield-error {
-  font-size: 0.7rem;
-  color: var(--color-error);
+  font-size: var(--a2ui-text-support);
+  color: var(--color-error-ink);
 }
 
 /* ── CheckBox ────────────────────────────────────────────────── */
 .a2ui-checkbox {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  min-height: var(--a2ui-control-sm);
+  gap: 10px;
   cursor: pointer;
-  font-size: 0.8125rem;
+  font-size: var(--a2ui-text-body);
   color: var(--color-text-primary);
 }
 .a2ui-checkbox input[type="checkbox"] {
@@ -202,23 +312,23 @@
 .a2ui-choice-picker {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--a2ui-space-1);
 }
 .a2ui-choice-picker__label {
-  font-size: 0.75rem;
+  font-size: var(--a2ui-text-support);
   font-weight: 500;
   color: var(--color-text-secondary);
 }
 .a2ui-choice-picker__select {
-  padding: 7px 12px;
+  height: var(--a2ui-control-md);
+  padding: 0 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-8);
-  font-size: 0.8125rem;
+  font-size: var(--a2ui-text-body);
   background: var(--color-surface-1);
   color: var(--color-text-primary);
   outline: none;
   cursor: pointer;
-  min-height: 34px;
   font-family: inherit;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -228,25 +338,40 @@
 }
 
 /* ── Slider ──────────────────────────────────────────────────── */
+/* Label and value share one baseline row; the track gets the full width
+   below them, so a long label can no longer squeeze the track.
+   Placement is explicit: Slider.tsx emits label → input → value, so
+   auto-placement would drop the value onto a third row. */
 .a2ui-slider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--a2ui-space-2);
 }
 .a2ui-slider__label {
-  font-size: 0.75rem;
+  grid-area: 1 / 1;
+}
+.a2ui-slider__value {
+  grid-area: 1 / 2;
+}
+.a2ui-slider__label {
+  font-size: var(--a2ui-text-support);
   font-weight: 500;
   color: var(--color-text-secondary);
 }
 .a2ui-slider input[type="range"] {
-  flex: 1;
+  grid-area: 2 / 1 / 3 / -1;
+  width: 100%;
+  margin: 0;
   accent-color: var(--color-brand-primary);
   height: 4px;
 }
 .a2ui-slider__value {
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary);
-  min-width: 2em;
+  font-family: var(--font-mono);
+  font-size: var(--a2ui-text-support);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  min-width: 2.5em;
   text-align: right;
 }
 
@@ -254,22 +379,22 @@
 .a2ui-datetime-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--a2ui-space-1);
 }
 .a2ui-datetime-label {
-  font-size: 0.75rem;
+  font-size: var(--a2ui-text-support);
   font-weight: 500;
   color: var(--color-text-secondary);
 }
 .a2ui-datetime {
-  padding: 7px 12px;
+  height: var(--a2ui-control-md);
+  padding: 0 var(--a2ui-space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-8);
-  font-size: 0.8125rem;
+  font-size: var(--a2ui-text-body);
   background: var(--color-surface-1);
   color: var(--color-text-primary);
   outline: none;
-  min-height: 34px;
   font-family: inherit;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -284,14 +409,14 @@
 .a2ui-column {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--a2ui-space-3);
 }
 .a2ui-row {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--a2ui-space-2);
 }
 
 /* ── Card ──────────────────────────────────────────────────────
@@ -303,17 +428,17 @@
   border-radius: var(--radius-16);
   box-shadow: var(--shadow-rest);
   overflow: hidden;
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--a2ui-space-3);
 }
 
 /* ── List ────────────────────────────────────────────────────── */
 .a2ui-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--a2ui-space-2);
 }
 
 /* ── Tabs ────────────────────────────────────────────────────── */
@@ -323,16 +448,17 @@
 }
 .a2ui-tabs__header {
   display: flex;
-  border-bottom: 2px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
 }
 .a2ui-tabs__tab {
-  padding: 8px 16px;
-  font-size: 0.8125rem;
+  height: 40px;
+  padding: 0 var(--a2ui-space-4);
+  font-size: var(--a2ui-text-strong);
   font-weight: 500;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  margin-bottom: -1px;
   transition: color 0.15s ease, border-color 0.15s ease;
   background: none;
   border-top: none;
@@ -344,11 +470,11 @@
   color: var(--color-text-primary);
 }
 .a2ui-tabs__tab--active {
-  color: var(--color-brand-primary);
+  color: var(--color-brand-ink);
   border-bottom-color: var(--color-brand-primary);
 }
 .a2ui-tabs__content {
-  padding: 12px 0;
+  padding: var(--a2ui-space-4) 0 0;
 }
 
 /* ── Modal ───────────────────────────────────────────────────── */
@@ -363,7 +489,7 @@
 }
 .a2ui-modal {
   background: var(--color-surface-1);
-  border-radius: var(--radius-24);
+  border-radius: var(--radius-20);
   box-shadow: var(--shadow-elevated);
   max-width: 480px;
   width: 90vw;
@@ -371,17 +497,18 @@
   overflow-y: auto;
 }
 .a2ui-modal__title {
-  font-size: 1rem;
+  font-size: var(--a2ui-text-card);
   font-weight: 600;
-  padding: 20px 24px 0;
+  line-height: 1.35;
+  padding: var(--a2ui-space-6) var(--a2ui-space-6) 0;
   margin: 0;
   color: var(--color-text-heading);
 }
 .a2ui-modal__content {
-  padding: 16px 24px 24px;
+  padding: var(--a2ui-space-3) var(--a2ui-space-6) var(--a2ui-space-6);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--a2ui-space-4);
 }
 
 /* ── Divider ─────────────────────────────────────────────────── */
@@ -415,33 +542,189 @@
 .a2ui-audio {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--a2ui-space-1);
 }
 .a2ui-audio__title {
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary);
+  font-size: var(--a2ui-text-support);
+  color: var(--color-text-secondary);
 }
 .a2ui-audio__player audio {
   width: 100%;
   min-width: 240px;
 }
 
+/* ── StatusPill ────────────────────────────────────────────────
+   The single status vocabulary: replaces the emoji strings (⏳ ✅ ⚠️ ⏸)
+   that carried state before. Shape carries the meaning alongside colour
+   — solid circle = done, pulsing circle = running, diamond = blocked,
+   double bar = awaiting approval, square = failed, hollow = not started
+   — so the pills stay distinguishable without colour vision, and the
+   same marks reuse in table status columns and DAG nodes.
+   Text is the -ink token, the mark is the fill: on a 10–12% wash the
+   fill colour alone would not clear 4.5:1 as text. */
+.a2ui-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-pill);
+  padding: var(--a2ui-space-1) var(--a2ui-space-3);
+  font-size: var(--a2ui-text-support);
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+/* Pills default to one line so they never break a table row. A pill
+   carrying free-form text (a device error message) opts out — nowrap
+   inside an overflow:hidden panel silently truncates the one string the
+   user needs, with no ellipsis and no title. */
+.a2ui-status-pill--wrap {
+  white-space: normal;
+  align-items: flex-start;
+  text-align: left;
+}
+.a2ui-status-pill--wrap .a2ui-mark {
+  margin-top: 5px;
+}
+.a2ui-status-pill--running {
+  background: var(--color-brand-wash);
+  color: var(--color-brand-ink);
+  --a2ui-mark: var(--color-brand-primary);
+}
+.a2ui-status-pill--done {
+  background: var(--color-success-muted);
+  color: var(--color-success-ink);
+  --a2ui-mark: var(--color-success);
+}
+.a2ui-status-pill--blocked,
+.a2ui-status-pill--waiting {
+  background: var(--color-warning-wash);
+  color: var(--color-warning-ink);
+  --a2ui-mark: var(--color-warning-ink);
+}
+.a2ui-status-pill--failed {
+  background: var(--color-error-wash);
+  color: var(--color-error-ink);
+  --a2ui-mark: var(--color-error);
+}
+.a2ui-status-pill--idle {
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  --a2ui-mark: var(--color-neutral-400);
+}
+
+/* Marks are usable on their own (table cells, step rows), not just
+   inside a pill; they read --a2ui-mark and fall back to currentColor. */
+.a2ui-mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: var(--radius-circle);
+  background: var(--a2ui-mark, currentColor);
+}
+.a2ui-mark--running {
+  --a2ui-mark: var(--color-brand-primary);
+  animation: a2uiPulse 2s ease-in-out infinite;
+}
+.a2ui-mark--done {
+  --a2ui-mark: var(--color-success);
+}
+.a2ui-mark--blocked {
+  --a2ui-mark: var(--color-warning-ink);
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.a2ui-mark--failed {
+  --a2ui-mark: var(--color-error);
+  border-radius: 1px;
+}
+.a2ui-mark--idle {
+  background: transparent;
+  border: 1.5px solid var(--color-neutral-400);
+}
+/* Awaiting approval: a pause glyph, two bars — the one mark that is not
+   a single box, so it gets its own element shape. */
+.a2ui-mark--waiting {
+  width: auto;
+  height: auto;
+  background: none;
+  display: inline-flex;
+  gap: 2px;
+}
+.a2ui-mark--waiting::before,
+.a2ui-mark--waiting::after {
+  content: "";
+  width: 2px;
+  height: 7px;
+  background: var(--a2ui-mark, var(--color-warning-ink));
+}
+
+/* ── Skeleton ──────────────────────────────────────────────────
+   Loading placeholder that keeps the layout's shape, replacing the
+   "正在加载…" text line. */
+.a2ui-skeleton {
+  display: block;
+  border-radius: var(--radius-8);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-3) 25%,
+    var(--color-surface-2) 50%,
+    var(--color-surface-3) 75%
+  );
+  background-size: 200px 100%;
+  animation: a2uiShimmer 1.4s linear infinite;
+}
+.a2ui-skeleton--label {
+  height: 12px;
+  width: 40%;
+  border-radius: var(--radius-4);
+}
+.a2ui-skeleton--row {
+  height: var(--a2ui-control-md);
+}
+
+/* ── EmptyState ────────────────────────────────────────────────
+   No icon, no button on purpose: these sit inside cards that already
+   carry the next action right below them, and a second one would just
+   compete. The fix is legibility — 13px on a wash, so the line does
+   not read as a forgotten grey label. */
+.a2ui-empty {
+  padding: 10px var(--a2ui-space-3);
+  border-radius: var(--radius-8);
+  background: var(--color-surface-2);
+  font-size: var(--a2ui-text-body);
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
 /* ── Error / Unknown fallback ────────────────────────────────── */
 .a2ui-error {
-  border: 1px solid var(--color-error-subtle);
-  background: var(--color-error-subtle);
-  color: var(--color-error);
-  font-size: 0.75rem;
-  padding: 6px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--a2ui-space-2);
+  background: var(--color-error-wash);
+  color: var(--color-error-ink);
+  font-size: var(--a2ui-text-body);
+  line-height: 1.55;
+  padding: 10px var(--a2ui-space-3);
   border-radius: var(--radius-8);
 }
+.a2ui-error::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  flex-shrink: 0;
+  border-radius: 1px;
+  background: var(--color-error);
+}
 .a2ui-unknown {
-  padding: 8px 12px;
-  border: 1px dashed var(--color-warning);
+  padding: 10px var(--a2ui-space-3);
+  border: 1px dashed var(--color-warning-ink);
   border-radius: var(--radius-8);
-  background: var(--color-warning-subtle);
-  font-size: 0.7rem;
-  color: #92400e;
+  background: color-mix(in srgb, var(--color-warning-ink) 6%, transparent);
+  font-size: var(--a2ui-text-support);
+  color: var(--color-warning-ink);
   font-family: var(--font-mono);
   overflow-x: auto;
 }
@@ -450,20 +733,15 @@
 .a2ui-phone-preview {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--a2ui-space-2);
 }
 .a2ui-phone-empty {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
+  padding: 10px var(--a2ui-space-3);
   border-radius: var(--radius-8);
   background: var(--color-surface-2);
-  color: var(--color-text-tertiary);
-  font-size: 0.75rem;
-}
-.a2ui-phone-empty__icon {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
+  font-size: var(--a2ui-text-body);
+  line-height: 1.55;
 }
 .a2ui-phone-card {
   border: 1px solid var(--color-border-subtle);
@@ -476,7 +754,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: var(--a2ui-space-3) var(--a2ui-space-4);
   width: 100%;
   border: none;
   background: none;
@@ -490,7 +768,7 @@
 .a2ui-phone-card__info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--a2ui-space-2);
   min-width: 0;
 }
 .a2ui-phone-card__status-icon--online {
@@ -498,36 +776,56 @@
   flex-shrink: 0;
 }
 .a2ui-phone-card__status-icon--offline {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 .a2ui-phone-card__name {
-  font-size: 0.8125rem;
+  font-size: var(--a2ui-text-strong);
   font-weight: 500;
   color: var(--color-text-primary);
 }
 .a2ui-phone-card__model {
-  font-size: 0.7rem;
-  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--a2ui-text-support);
+  color: var(--color-text-secondary);
 }
+/* Same pill and the same two marks as .a2ui-status-pill — filled circle
+   for online, hollow for offline — so device state reads like every
+   other state in the system. */
 .a2ui-phone-card__status {
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--a2ui-text-support);
   font-weight: 500;
-  padding: 2px 8px;
+  padding: var(--a2ui-space-1) var(--a2ui-space-3);
   border-radius: var(--radius-pill);
   flex-shrink: 0;
+  white-space: nowrap;
+}
+.a2ui-phone-card__status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-circle);
 }
 .a2ui-phone-card__status--online {
-  background: var(--color-success-subtle);
-  color: var(--color-success);
+  background: var(--color-success-muted);
+  color: var(--color-success-ink);
+}
+.a2ui-phone-card__status--online::before {
+  background: var(--color-success);
 }
 .a2ui-phone-card__status--offline {
-  background: var(--color-surface-3);
-  color: var(--color-text-tertiary);
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+}
+.a2ui-phone-card__status--offline::before {
+  border: 1.5px solid var(--color-neutral-400);
 }
 .a2ui-phone-card__screenshot {
   border-top: 1px solid var(--color-border-subtle);
-  padding: 8px;
+  padding: var(--a2ui-space-3);
 }
 .a2ui-phone-card__screenshot img {
   width: 100%;
@@ -550,43 +848,55 @@
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  padding: 8px 14px;
+  padding: 10px var(--a2ui-space-4);
   border-bottom: 1px solid var(--color-border-subtle);
-  background: var(--color-surface-2);
+  background: var(--color-surface-0);
 }
 .a2ui-markdown-editor__title {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: var(--a2ui-text-strong);
+  font-weight: 500;
+  color: var(--color-text-primary);
 }
 .a2ui-markdown-editor__copy {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 6px;
+  height: var(--a2ui-control-sm);
+  padding: 0 var(--a2ui-space-3);
   border-radius: var(--radius-6);
   border: 1px solid var(--color-border);
   background: var(--color-surface-1);
-  color: var(--color-text-secondary);
-  font-size: 0.7rem;
+  color: var(--color-text-primary);
+  font-size: var(--a2ui-text-support);
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .a2ui-markdown-editor__copy:hover {
-  background: var(--color-surface-3);
+  border-color: var(--color-accent);
   color: var(--color-text-primary);
 }
 .a2ui-markdown-editor__preview {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 14px;
+  padding: var(--a2ui-space-4) 20px;
 }
 .a2ui-markdown-editor__content {
-  font-size: 0.8125rem;
+  font-size: var(--a2ui-text-body);
+  line-height: 1.7;
   color: var(--color-text-primary);
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────
+   Every animation above loops forever. The skeleton keeps its gradient
+   (it still reads as "loading"), the marks keep their shape and colour —
+   only the movement stops. */
+@media (prefers-reduced-motion: reduce) {
+  .a2ui-skeleton,
+  .a2ui-spinner,
+  .a2ui-mark--running {
+    animation: none;
+  }
 }

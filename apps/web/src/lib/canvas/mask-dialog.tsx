@@ -1,15 +1,22 @@
 /**
- * mask-dialog.tsx — inpaint mask editor dialog (W3.5, T6).
+ * mask-dialog.tsx — local mask edit dialog (W3.5, T6; reworked per reference v0.17).
  *
  * Sanctioned approach: ONE offscreen mask canvas at full bitmap resolution.
  * On each pointer stroke, paint into BOTH the display overlay (for visual
  * feedback) and the full-res mask (with coords scaled up by 1/fitScale).
- * On confirm: mask.toDataURL("image/png") → generateImageIntoNode with maskDataUrl.
+ *
+ * On confirm the mask does NOT become an API `mask` parameter any more — see
+ * mask-annotation.ts. It is composited onto a copy of the source as a
+ * translucent overlay, saved into the media dir, and placed on the canvas as an
+ * ordinary image node; source + annotation then feed the result node as two
+ * plain reference images. Confirm is split in two: 导出到画布 writes the nodes
+ * and prefills the prompt for review, 立刻生成 also fires the request.
  *
  * Container pointer capture follows crop-dialog precedent:
  * capture on the painting container, NOT the cursor dot.
  */
 
+import { saveInboundImage } from "@/lib/media/inbound-image";
 import { Brush, Eraser } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -17,10 +24,20 @@ import type { CanvasDialogState } from "./canvas-dialogs";
 import { closeCanvasDialog } from "./canvas-dialogs";
 import { generateImageIntoNode } from "./canvas-generation";
 import { CanvasModal } from "./canvas-modal";
-import { addNode, getCanvasState } from "./canvas-store";
+import {
+  addNode,
+  connectNodes,
+  getCanvasState,
+  selectNodes,
+} from "./canvas-store";
 import { fitScale } from "./crop-geometry";
 import { loadImageBitmap } from "./load-image-bitmap";
-import { servableSourceOf } from "./prompt-panel-utils";
+import {
+  composeMaskAnnotation,
+  composeMaskEditPrompt,
+} from "./mask-annotation";
+import { setDraft } from "./prompt-drafts";
+import { servableSourceOf, usableReferencePaths } from "./prompt-panel-utils";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -43,6 +60,7 @@ export function MaskDialog({
   const [brushSize, setBrushSize] = useState(DEFAULT_BRUSH_SIZE);
   const [prompt, setPrompt] = useState("");
   const [painted, setPainted] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Canvas refs
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -240,34 +258,82 @@ export function MaskDialog({
     setPainted(false);
   }, [bitmap]);
 
-  const handleConfirm = useCallback(() => {
-    const maskCanvas = maskRef.current;
-    if (!bitmap || !maskCanvas || !sourceImage) return;
+  /**
+   * Write the annotation + result nodes, wire both images into the result, and
+   * prefill its prompt. `generateNow` decides whether the request also fires.
+   *
+   * Connection order is load-bearing: source first, annotation second, so
+   * `collectUpstream` yields them in that order and 参考图1 / 参考图2 in the
+   * prompt point at the right pictures.
+   */
+  const applyMask = useCallback(
+    async (generateNow: boolean) => {
+      const maskCanvas = maskRef.current;
+      if (!bitmap || !maskCanvas || !sourceImage) return;
 
-    const maskDataUrl = maskCanvas.toDataURL("image/png");
+      setSaving(true);
+      try {
+        const annotationDataUrl = composeMaskAnnotation(bitmap, maskCanvas);
+        const saved = await saveInboundImage(
+          annotationDataUrl,
+          "mask-annotation",
+        );
 
-    const src = getCanvasState().nodes.find((n) => n.id === nodeId);
-    const liveTitle = src?.title ?? "图片";
-    const newNode = addNode({
-      type: "image",
-      title: `${liveTitle} 重绘`,
-      position: src
-        ? { x: src.position.x + src.size.width + 40, y: src.position.y }
-        : undefined,
-      size: src?.size,
-      metadata: {},
-    });
+        const src = getCanvasState().nodes.find((n) => n.id === nodeId);
+        const liveTitle = src?.title ?? "图片";
 
-    void generateImageIntoNode(newNode.id, prompt, {
-      sourceImage,
-      maskDataUrl,
-    });
+        const annotationNode = addNode({
+          type: "image",
+          title: `${liveTitle} 遮罩标注`,
+          position: src
+            ? { x: src.position.x, y: src.position.y + src.size.height + 48 }
+            : undefined,
+          size: src?.size,
+          metadata: { content: saved.url },
+        });
+        const resultNode = addNode({
+          type: "image",
+          title: `${liveTitle} 重绘`,
+          position: src
+            ? { x: src.position.x + src.size.width + 40, y: src.position.y }
+            : undefined,
+          size: src?.size,
+          metadata: {},
+        });
+        connectNodes(nodeId, resultNode.id);
+        connectNodes(annotationNode.id, resultNode.id);
 
-    closeCanvasDialog();
-    toast.success("已创建重绘节点");
-  }, [bitmap, sourceImage, nodeId, prompt]);
+        const composed = composeMaskEditPrompt(prompt);
+        setDraft(resultNode.id, composed);
 
-  const canConfirm = prompt.trim().length > 0 && painted;
+        if (generateNow) {
+          void generateImageIntoNode(resultNode.id, composed, {
+            referenceImages: usableReferencePaths([
+              src?.metadata.content ?? "",
+              saved.url,
+            ]),
+          });
+        } else {
+          // Leave the result node selected so its panel opens with the composed
+          // prompt ready to edit — that is the whole point of not generating.
+          selectNodes([resultNode.id]);
+        }
+
+        closeCanvasDialog();
+        toast.success(
+          generateNow ? "已创建重绘节点" : "已导出到画布，可修改提示词后生成",
+        );
+      } catch (error) {
+        setSaving(false);
+        toast.error(
+          error instanceof Error ? error.message : "遮罩标注图保存失败",
+        );
+      }
+    },
+    [bitmap, sourceImage, nodeId, prompt],
+  );
+
+  const canConfirm = prompt.trim().length > 0 && painted && !saving;
 
   return (
     <CanvasModal title="重绘选区" maxWidth={720} onClose={closeCanvasDialog}>
@@ -338,7 +404,7 @@ export function MaskDialog({
                   onClick={() => setBrushMode("brush")}
                   className={`flex items-center gap-1 px-3 py-1.5 text-sm transition-colors ${
                     brushMode === "brush"
-                      ? "bg-sky-500 text-white"
+                      ? "bg-[var(--color-brand-wash)] text-[var(--color-brand-ink)]"
                       : "bg-surface-1 text-text-primary hover:bg-surface-2"
                   }`}
                 >
@@ -351,7 +417,7 @@ export function MaskDialog({
                   onClick={() => setBrushMode("eraser")}
                   className={`flex items-center gap-1 px-3 py-1.5 text-sm transition-colors ${
                     brushMode === "eraser"
-                      ? "bg-sky-500 text-white"
+                      ? "bg-[var(--color-brand-wash)] text-[var(--color-brand-ink)]"
                       : "bg-surface-1 text-text-primary hover:bg-surface-2"
                   }`}
                 >
@@ -393,22 +459,32 @@ export function MaskDialog({
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="描述要在选区内生成的内容…"
-                  className="w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm font-normal text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-sky-400"
+                  className="w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm font-normal text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-[var(--color-brand-primary)]"
                 />
               </label>
             </div>
 
-            {/* Confirm */}
-            <div className="flex justify-end">
+            {/* Confirm — two exits: review the composed prompt on the canvas,
+                or spend the request right away. */}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                data-canvas-mask-export="true"
+                disabled={!canConfirm}
+                onClick={() => void applyMask(false)}
+                className="rounded-lg border border-border bg-surface-1 px-4 py-1.5 text-sm font-medium text-text-primary hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                导出到画布
+              </button>
               <button
                 type="button"
                 data-canvas-mask-confirm="true"
                 disabled={!canConfirm}
-                onClick={handleConfirm}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => void applyMask(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-[var(--color-accent-fg)] hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Brush size={14} />
-                重绘选区
+                {saving ? "处理中…" : "立刻生成"}
               </button>
             </div>
           </div>

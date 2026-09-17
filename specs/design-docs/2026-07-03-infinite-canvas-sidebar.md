@@ -2,7 +2,8 @@
 
 > 创建：2026-07-03
 > 关联：[2026-07-02-chat-first-team-operations.md](./2026-07-02-chat-first-team-operations.md)（侧边栏 = 持续状态的定位）
-> 交互参考：github.com/basketikun/infinite-canvas（**AGPL-3.0 完整应用，只借鉴交互范式，不引入任何代码/依赖**；其渲染同为 DOM-based React 组件，验证了我们的零依赖路线）
+> 交互参考：github.com/basketikun/infinite-canvas（**只借鉴交互范式，不引入任何代码/依赖**；其渲染同为 DOM-based React 组件，验证了我们的零依赖路线）
+> 许可证提示：参考工程自 2026-08-07（v0.15.1，commit `890ba95`）起由 **AGPL-3.0 改为 MIT**。原文档写的 AGPL 约束已过期——法律上现已允许署名复用。**但本仓库仍坚持重写而非照搬**：双方 store/schema/生成链路完全不同，照搬只会引入一套无人维护的外来抽象。
 
 ## 0. 目标与结论
 
@@ -193,3 +194,70 @@ layouts/workspace-layout.tsx       右侧栏渲染 InfiniteCanvas
 **入档 Minor**:sessions.tsx 达 1870 行(S8 与 a2ui 并行内联);add_node 单轴给定时 cascadePosition 可能算两次(纯函数、无害);mirror warn-once 模块级。
 
 **收官债移交(可选,分支合并前一次清理)**:sessions.tsx 抽 `chat-message-extract.ts`(a2ui + canvas-op 已是同一 enrich-by-toolCallId 的两份并行拷贝);canvas-store.ts(1001 行)板切换逻辑可移入 `canvas-board-switch.ts`。均不阻塞。
+
+## 13. 2026-09-11 上游同步（参考工程 v0.15.0 → v0.18.0）
+
+参考工程在 2026-08-06 之后发了 4 个版本。逐项比对后落地 7 项，全部在 `apps/web/src/lib/canvas/` 内按本仓库的 store/架构重写，零新依赖、零上游代码。
+
+| 项 | 上游版本 | 落地位置 |
+|---|---|---|
+| 上游文本按【文本N】编号分块 | v0.18 | `prompt-panel-utils.ts`（`labelUpstreamTextBlocks` / `textBlockLabel`），`config-node-logic.ts` 共用同一 helper |
+| 组节点作为生成输入 | v0.17 | `resource-references.ts`（`collectUpstreamRefs` 统一 BFS + 组展开），`infinite-canvas.tsx` 句柄拆分 |
+| 视频节点截首帧/尾帧/当前帧 | v0.17 | `canvas-video-frame.ts` + 右键菜单 |
+| 多选一键打组 / 解散组 + 整体虚线选区 | v0.18 | `canvas-groups.ts`（纯几何/门控）、`canvas-group-ops.ts`（store 动作）、工具栏 + 右键菜单 + `⌘G` / `⌘⇧G` |
+| 参考内容栏 | v0.17 | `prompt-panel-utils.ts`（`buildReferenceChips`）+ `prompt-panel.tsx` |
+| 1K/2K/4K × 宽高比固定尺寸表 | v0.18 | `prompt-panel-utils.ts`（`IMAGE_SIZE_TABLE` / `resolveImagePixelSize`） |
+| 提示词弹窗放大编辑 | v0.15 | `prompt-editor-dialog.tsx`（复用 `prompt-drafts` 实现双向实时同步） |
+
+**三处需要注意的行为变更（不是纯新增）：**
+
+1. **图片 `size` 参数改发具体像素。** 档位 + 宽高比同时选中时发 `"2048x1152"` 而非 `"2K"`，两者都未选则维持原样。`buildImageGenOpts` 是共用接缝，所以**小红书生图链路**（`xhs-image-generation.ts`）一并生效——这是想要的：同一个含糊 hint 的问题在那边也存在。
+2. **组节点现在可连线（只出不进）。** 原来 `connectable` 一刀切禁用两端；现在拆成 `canReceiveUpstream` / `canFeedDownstream`，组只保留 source 句柄，drop 到组上的入边在落点处被拦掉。
+3. **视频/音频节点上游的图片不再隐藏，改为置灰 + 「不会作为参考图发送」。** 原设计怕误导所以整条隐藏，但那样用户在画布上看得见连线、面板里却什么都没有。参考内容栏的意义就是两个方向都说实话。
+
+**组语义的两个刻意取舍（与上游不同）：**
+- 打组后不自动清理变空的旧组：本仓库工具栏的「组」按钮可以主动创建空组容器，自动清理会把刚建的空组顺手删掉。
+- 选中成员单独解散 = 该成员离开组，组和其余成员保留（与上游 `applyUngroupSelection` 一致）。
+
+**验证：** web 105 文件 / 1105 用例通过（新增 `canvas-group-ops.test.ts`、`canvas-video-frame.test.ts`，共 +45 例）；`pnpm typecheck` 全绿；Biome 对改动文件零告警。真机（`pnpm dev` 栈）已逐项走通：提示词放大编辑双向同步、参考内容栏【文本1】chip 与 × 断连、`⌘G` 建组 / 右键解散组、组单边连线喂下游、视频尾帧截出 1280×704 PNG 图片节点。
+
+**未纳入本轮（按价值/成本排序，供后续排期）：**
+- 多次文本生成合并单节点 + 可展开备选（v0.17）——`canvas-batch.ts` 目前只支持图片。
+- 多图子节点独立的失败重试 / 删除 / 副本 / 单图下载（v0.15）。
+- 节点缩放期间暂停渲染提示词面板（v0.16，防高频重渲染崩溃）。
+- 视频远端任务 ID 持久化 + 刷新续查（v0.18）——需要后端 job API，`canvas-store.ts` 现在一律把中断的 generating 归一为 error。
+
+**判定为不适用（不要再重复评估）：** 本地代理页签 / WebDAV 同步、左侧元素列表树形分组（本仓库画布无元素列表侧栏）、GPT Image `response_format` / Gemini `imageConfig` / 多参考图 `image[]`（上游直连各家 API 的适配，本仓库经 `tabby-image` 技能）、Canvas Agent 凭据脱敏与权限（上游是独立 WS agent 进程）、视频 480p/720p/1080p + 4–30 秒滑杆（本仓库按 Agnes Video V2.0 用帧数/帧率，见 §10.1，回退是倒退）。
+
+## 14. 2026-09-11 上游同步第二批（§13 未纳入项清零）
+
+§13 结尾列的四项欠账 + 一项路线变更全部落地。这批里有三项动到了后端契约。
+
+| 项 | 上游版本 | 落地方式 |
+|---|---|---|
+| 文本生成次数 + 多结果合并单节点、备选可切换 | v0.16 + v0.17 | `canvas-text-alternatives.ts`：N 条结果留在**同一个**节点（图片才扇出成兄弟节点），`content` 始终镜像 `items[activeIndex]`，编辑时写回当前条。前端并发 N 次调用 `generate-text`（后端每次本就是独立 utility lane session），一条失败不拖垮其余。配置节点文本模式新增「备选 1–4 条」，与生图张数彻底分开 |
+| 多图失败项 + 逐项重试 | v0.15 | 不需要改后端：前端本就知道请求了几张。`attachBatchChildren(..., {requested, retry})` 把缺口补成 error 占位子节点，各自带**去掉 count** 的 retry，直接复用既有「重试」按钮 |
+| 节点缩放期间暂停渲染提示词面板 | v0.16 | `PromptPanel` 加 `memo`；缩放手势期间 `CanvasSurface` 传入手势开始时的节点快照，props 同一性不变 → 面板整条全图 BFS 在拖拽每一帧上都不再跑 |
+| 视频远端任务 ID 持久化 + 刷新续查 | v0.18 | `ImageGenerationJobService` 泛化为 `MediaGenerationJobService<TInput,TResult>`，新增 `POST/GET /api/v1/media/video-jobs`。图片与视频都**先提交拿 jobId、写进节点、再轮询**；`normalizeInterruptedTasks` 对带 job 的任务放行，`resumeGenerationJobs()` 在 hydrate 后重新挂上轮询 |
+| 局部遮罩改走「画布上生成遮罩标注图」 | v0.17 | 不再用接口 mask 参数。涂抹区域合成到原图副本上（半透明蓝），经新增的 `POST /api/v1/media/inbound-image` 落盘成可服务路径，作为普通图片节点放到画布；原图与标注图两条连线喂进结果节点，提示词按「参考图1/参考图2」点名。弹窗底部拆成「导出到画布」与「立刻生成」 |
+
+### 后端变更
+
+- **新增** `POST /api/v1/media/inbound-image`：把画布合成的 dataURL 落到 `media/inbound` 并返回可服务路径。原 `writeMaskFile` 的解码/校验逻辑提为共用的 `writeInboundImage`。
+- **新增** `POST /api/v1/media/video-jobs` + `GET /api/v1/media/video-jobs/{jobId}`。
+- **重命名** `image-generation-job-service.ts` → `media-generation-job-service.ts`，类泛型化（原实现对结果类型本就无依赖，只有 `run` 回调和日志 label 是通道相关）。
+
+### 两个刻意的取舍
+
+- **文本多次生成放在前端扇出**，没有给 `generate-text` 加 `count`。后端每次调用本就独立开 session，扇出到前端换来的是「一条失败不影响其余」和零契约改动。
+- **job 只活在控制器内存里**（30 分钟 TTL）。控制器重启后续查会拿到 404，节点落成 error 并保留 retry —— 这是诚实答案，比永远转圈好。
+
+### 真机验证（`pnpm dev` 全栈）
+
+- 尺寸表：面板 chip 实测显示 `3:4 · 2K（1536x2048） · 2 张`，落到 retry 里的 `size` 就是 `1536x2048`。
+- **刷新续查**：生图途中 IndexedDB 里节点带 `task.job={kind:"image",jobId}`；刷新后节点**保持 generating**（旧行为是立刻「生成已中断」）；控制器上该 job 继续跑到终态，前端 resume 把真实结果（本次是 tabby-image 中转站网络失败的原文）写回节点。这条链路完整成立。
+- **文本备选**：配置节点选「备选 3 条」→ 一个文本节点带 `1 2 3` 三个切换按钮，三条内容各不相同，来回切换内容正确。
+- 新增的两个后端路由：坏数据 400、真 PNG 200 且落盘可服务、未知 job 404，均实测。
+- 未能真机走通的两项：多图失败占位与遮罩标注流程都依赖一次**成功的**生图，而本轮 tabby-image 中转站网络不通（环境问题，非代码）。两项均有单测覆盖。
+
+**验证数据：** web 107 文件 / 1130 用例、controller 118 文件 / 1272 用例全通过；`pnpm typecheck` 七个项目全绿；Biome 对改动文件零告警。

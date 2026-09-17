@@ -12,7 +12,9 @@ import {
   enhanceImageIntoNode,
   generateAudioIntoNode,
   generateImageIntoNode,
+  generateTextIntoNode,
   generateVideoIntoNode,
+  resumeGenerationJobs,
   retryNodeTask,
 } from "../src/lib/canvas/canvas-generation";
 import {
@@ -21,6 +23,7 @@ import {
   getCanvasState,
   setNodeTask,
 } from "../src/lib/canvas/canvas-store";
+import { MAX_TEXT_ALTERNATIVES } from "../src/lib/canvas/canvas-text-alternatives";
 
 // Minimal localStorage polyfill (same as other canvas tests)
 if (typeof globalThis.localStorage === "undefined") {
@@ -47,18 +50,53 @@ const apiMocks = vi.hoisted(() => ({
   postApiV1MediaGenerateImage: vi.fn(),
   postApiV1MediaGenerateVideo: vi.fn(),
   postApiV1MediaGenerateAudio: vi.fn(),
+  postApiV1MediaGenerateText: vi.fn(),
   postApiV1MediaEnhanceImage: vi.fn(),
   postApiV1MediaDescribeImage: vi.fn(),
 }));
 
 // Keep the existing generation-seam assertions focused on node behavior. The
 // task client's submit/poll contract has its own tests below this layer.
+//
+// Image and video both submit a job, persist its id, then poll. The fakes keep
+// that two-step shape (so the job id really does land on the node) while still
+// resolving from the same per-scenario SDK mocks the assertions configure.
+const jobResults = vi.hoisted(() => new Map<string, unknown>());
+
 vi.mock("../lib/api/sdk.gen", () => apiMocks);
 vi.mock("../src/lib/media/image-generation-jobs", () => ({
-  generateImageViaJob: vi.fn(async (body: Record<string, unknown>) => {
+  submitImageGenerationJob: vi.fn(async (body: Record<string, unknown>) => {
     const response = await apiMocks.postApiV1MediaGenerateImage({ body });
-    if (!response?.data || response.error) {
-      const message = response?.error?.message;
+    const jobId = `image-job-${jobResults.size + 1}`;
+    jobResults.set(jobId, response);
+    return jobId;
+  }),
+  waitForImageGenerationJob: vi.fn(async (jobId: string) => {
+    const response = (jobResults.get(jobId) ?? {}) as {
+      data?: unknown;
+      error?: { message?: unknown };
+    };
+    if (!response.data || response.error) {
+      const message = response.error?.message;
+      throw new Error(typeof message === "string" ? message : "生成失败");
+    }
+    return response.data;
+  }),
+}));
+vi.mock("../src/lib/media/video-generation-jobs", () => ({
+  submitVideoGenerationJob: vi.fn(async (body: Record<string, unknown>) => {
+    const response = await apiMocks.postApiV1MediaGenerateVideo({ body });
+    const jobId = `video-job-${jobResults.size + 1}`;
+    jobResults.set(jobId, response);
+    return jobId;
+  }),
+  waitForVideoGenerationJob: vi.fn(async (jobId: string) => {
+    const response = (jobResults.get(jobId) ?? {}) as {
+      data?: unknown;
+      error?: { message?: unknown };
+    };
+    if (!response.data || response.error) {
+      const message = response.error?.message;
       throw new Error(typeof message === "string" ? message : "生成失败");
     }
     return response.data;
@@ -71,6 +109,7 @@ import {
   postApiV1MediaEnhanceImage,
   postApiV1MediaGenerateAudio,
   postApiV1MediaGenerateImage,
+  postApiV1MediaGenerateText,
   postApiV1MediaGenerateVideo,
 } from "../lib/api/sdk.gen";
 const mockGenerateImage = vi.mocked(postApiV1MediaGenerateImage);
@@ -78,10 +117,12 @@ const mockGenerateVideo = vi.mocked(postApiV1MediaGenerateVideo);
 const mockGenerateAudio = vi.mocked(postApiV1MediaGenerateAudio);
 const mockEnhanceImage = vi.mocked(postApiV1MediaEnhanceImage);
 const mockDescribeImage = vi.mocked(postApiV1MediaDescribeImage);
+const mockGenerateText = vi.mocked(postApiV1MediaGenerateText);
 
 beforeEach(() => {
   __resetCanvasForTests();
   vi.clearAllMocks();
+  jobResults.clear();
 });
 
 describe("generateImageIntoNode", () => {
@@ -932,5 +973,135 @@ describe("describeImageSource", () => {
     expect(mockDescribeImage).toHaveBeenCalledWith({
       body: { sourceImage: "/img/my-photo.png" },
     });
+  });
+});
+
+describe("job-backed generations (resume after reload)", () => {
+  it("an image run records its controller job id while generating", async () => {
+    const node = addNode({ type: "image", title: "图片" });
+    let observedJob: unknown;
+    mockGenerateImage.mockImplementation(async () => {
+      // Read the node between submit and poll — that is the window a reload
+      // has to survive.
+      observedJob = getCanvasState().nodes.find((n) => n.id === node.id)
+        ?.metadata.task;
+      return {
+        data: {
+          url: "/img/a.png",
+          path: "/abs/a.png",
+          items: [{ url: "/img/a.png", path: "/abs/a.png" }],
+        },
+      };
+    });
+
+    await generateImageIntoNode(node.id, "a cat");
+    // The submit call itself happens before the id exists; what matters is that
+    // the id is on the node by the time the poll starts.
+    expect(observedJob).toBeDefined();
+    expect(
+      getCanvasState().nodes.find((n) => n.id === node.id)?.metadata.task,
+    ).toBeUndefined();
+  });
+
+  it("a video run goes through the job queue and clears on success", async () => {
+    const node = addNode({ type: "video", title: "视频" });
+    mockGenerateVideo.mockResolvedValue({
+      data: {
+        url: "/vid/a.mp4",
+        path: "/abs/a.mp4",
+        items: [{ url: "/vid/a.mp4", path: "/abs/a.mp4" }],
+      },
+    });
+
+    await expect(generateVideoIntoNode(node.id, "a river")).resolves.toBe(true);
+    const updated = getCanvasState().nodes.find((n) => n.id === node.id);
+    expect(updated?.metadata.content).toBe("/vid/a.mp4");
+    expect(updated?.metadata.task).toBeUndefined();
+  });
+
+  it("resumeGenerationJobs ignores nodes with no job reference", async () => {
+    const node = addNode({
+      type: "image",
+      title: "图片",
+      metadata: {
+        task: { status: "generating", retry: { kind: "image", prompt: "x" } },
+      },
+    });
+    resumeGenerationJobs();
+    await Promise.resolve();
+    expect(
+      getCanvasState().nodes.find((n) => n.id === node.id)?.metadata.task
+        ?.status,
+    ).toBe("generating");
+  });
+});
+
+describe("generateTextIntoNode alternatives", () => {
+  it("count 1 writes plain content, no alternatives block", async () => {
+    const node = addNode({ type: "text", title: "文本" });
+    mockGenerateText.mockResolvedValue({ data: { text: "one" } });
+
+    await expect(
+      generateTextIntoNode(node.id, "write", { count: 1 }),
+    ).resolves.toBe(true);
+    const updated = getCanvasState().nodes.find((n) => n.id === node.id);
+    expect(updated?.metadata.content).toBe("one");
+    expect(updated?.metadata.textAlternatives).toBeUndefined();
+  });
+
+  it("count N fans out to N independent requests and keeps every result", async () => {
+    const node = addNode({ type: "text", title: "文本" });
+    let call = 0;
+    mockGenerateText.mockImplementation(async () => ({
+      data: { text: `sample ${++call}` },
+    }));
+
+    await expect(
+      generateTextIntoNode(node.id, "write", { count: 3 }),
+    ).resolves.toBe(true);
+    expect(mockGenerateText).toHaveBeenCalledTimes(3);
+    const alternatives = getCanvasState().nodes.find((n) => n.id === node.id)
+      ?.metadata.textAlternatives;
+    expect(alternatives?.items).toHaveLength(3);
+    expect(alternatives?.activeIndex).toBe(0);
+  });
+
+  it("one failed sample doesn't take the others down", async () => {
+    const node = addNode({ type: "text", title: "文本" });
+    let call = 0;
+    mockGenerateText.mockImplementation(async () => {
+      call += 1;
+      if (call === 2) throw new Error("boom");
+      return { data: { text: `sample ${call}` } };
+    });
+
+    await expect(
+      generateTextIntoNode(node.id, "write", { count: 3 }),
+    ).resolves.toBe(true);
+    const alternatives = getCanvasState().nodes.find((n) => n.id === node.id)
+      ?.metadata.textAlternatives;
+    expect(alternatives?.items).toHaveLength(2);
+    // Shortfall is recorded so the node can say 2/3 instead of looking whole.
+    expect(alternatives?.requested).toBe(3);
+  });
+
+  it("every sample failing is still an error with a retry payload", async () => {
+    const node = addNode({ type: "text", title: "文本" });
+    mockGenerateText.mockRejectedValue(new Error("boom"));
+
+    await expect(
+      generateTextIntoNode(node.id, "write", { count: 2 }),
+    ).resolves.toBe(false);
+    const task = getCanvasState().nodes.find((n) => n.id === node.id)?.metadata
+      .task;
+    expect(task?.status).toBe("error");
+    expect(task?.retry).toEqual({ kind: "text", prompt: "write", count: 2 });
+  });
+
+  it("caps the fan-out at MAX_TEXT_ALTERNATIVES", async () => {
+    const node = addNode({ type: "text", title: "文本" });
+    mockGenerateText.mockResolvedValue({ data: { text: "x" } });
+    await generateTextIntoNode(node.id, "write", { count: 99 });
+    expect(mockGenerateText).toHaveBeenCalledTimes(MAX_TEXT_ALTERNATIVES);
   });
 });

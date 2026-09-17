@@ -617,15 +617,42 @@ describe("group node markup", () => {
     expect(markup).not.toContain(`data-canvas-hover-toolbar="${group.id}"`);
   });
 
-  it("a group node renders no connect handles — it's not part of the connection graph", () => {
+  it("a group node feeds downstream but takes no input — source handle only", () => {
     const group = addNode({ type: "group", title: "组" });
     const markup = renderToStaticMarkup(<CanvasSurface />);
+    // No target handle: a group holds no content of its own for an incoming
+    // edge to feed.
     expect(markup).not.toContain(
       `data-canvas-connect-handle-target="${group.id}"`,
     );
-    expect(markup).not.toContain(
-      `data-canvas-connect-handle-source="${group.id}"`,
-    );
+    // Source handle: one edge out of a group references every resource in it
+    // (resource-references.ts expands members).
+    expect(markup).toContain(`data-canvas-connect-handle-source="${group.id}"`);
+  });
+
+  it("a multi-selection draws one dashed box — a preview of the group ⌘G would build", () => {
+    const a = addNode({
+      type: "text",
+      title: "A",
+      position: { x: 100, y: 100 },
+      size: { width: 200, height: 100 },
+    });
+    const b = addNode({
+      type: "text",
+      title: "B",
+      position: { x: 400, y: 300 },
+      size: { width: 200, height: 100 },
+    });
+    selectNodes([a.id, b.id]);
+    const markup = renderToStaticMarkup(<CanvasSurface />);
+    expect(markup).toContain('data-canvas-selection-box="true"');
+  });
+
+  it("a single selection draws no selection box", () => {
+    const a = addNode({ type: "text", title: "A" });
+    selectNodes([a.id]);
+    const markup = renderToStaticMarkup(<CanvasSurface />);
+    expect(markup).not.toContain('data-canvas-selection-box="true"');
   });
 
   it("a team-step node renders no connect handles either", () => {
@@ -832,10 +859,14 @@ describe("CanvasMinimap markup", () => {
     __resetCanvasUiPrefsForTests();
   });
 
-  it("toolbar has minimap toggle button", () => {
+  it("minimap toggle moved into the appearance panel (not the dock)", () => {
+    // Showing/hiding a panel is a display preference, so the switch now
+    // lives beside 网格样式 / 图片信息 rather than on the dock. Like those
+    // two it is only in the markup once the panel is open; the dock keeps
+    // the trigger that reaches it.
     const markup = renderToStaticMarkup(<CanvasSurface />);
-    expect(markup).toContain('data-canvas-minimap-toggle="true"');
-    expect(markup).toContain("小地图");
+    expect(markup).toContain("data-canvas-appearance-toggle");
+    expect(markup).not.toContain('data-canvas-minimap-toggle="true"');
   });
 
   it("minimap node rects rendered for visible nodes only (data-canvas-minimap-node)", () => {

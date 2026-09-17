@@ -138,7 +138,7 @@ export function TeamStepNodeContent({ node }: { node: CanvasNode }) {
       </div>
 
       {pending ? (
-        <div className="flex items-center gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1.5">
+        <div className="flex items-center gap-2 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] px-2 py-1.5">
           <span className="min-w-0 flex-1 truncate text-[11px]">
             {pending.prompt.slice(0, 50)}
           </span>

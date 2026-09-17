@@ -131,7 +131,7 @@ describe("buildConfigGenerationPlan", () => {
     if ("error" in result) throw new Error("expected plan");
 
     expect(result.kind).toBe("image");
-    expect(result.prompt).toBe("a cat\n\nportrait style");
+    expect(result.prompt).toBe("【文本1】\na cat\n\n【文本2】\nportrait style");
     expect(result.referenceImages).toEqual(["/abs/path/ref.png"]);
     expect(result.count).toBe(2);
   });
@@ -163,7 +163,8 @@ describe("buildConfigGenerationPlan", () => {
     expect(result.model).toBe("seedream-4");
     expect(result.quality).toBe("high");
     expect(result.aspectRatio).toBe("16:9");
-    expect(result.size).toBe("2K");
+    // Tier + aspect resolve to fixed pixels through IMAGE_SIZE_TABLE.
+    expect(result.size).toBe("2048x1152");
   });
 
   it("prepends the composer's composedPrompt before upstream prompts", () => {
@@ -183,7 +184,7 @@ describe("buildConfigGenerationPlan", () => {
 
     const result = buildConfigGenerationPlan(config.id);
     if ("error" in result) throw new Error("expected plan");
-    expect(result.prompt).toBe("cinematic base\n\na cat");
+    expect(result.prompt).toBe("cinematic base\n\n【文本1】\na cat");
   });
 
   it("composedPrompt alone (no upstream text) satisfies the no-prompt guard", () => {
@@ -214,7 +215,7 @@ describe("buildConfigGenerationPlan", () => {
     const result = buildConfigGenerationPlan(config.id);
     if ("error" in result) throw new Error("expected plan");
     if (result.kind !== "text") throw new Error("expected text plan");
-    expect(result.prompt).toBe("write a poem");
+    expect(result.prompt).toBe("【文本1】\nwrite a poem");
     expect(result.model).toBe("gpt-x");
   });
 
@@ -271,7 +272,7 @@ describe("buildConfigGenerationPlan", () => {
     const result = buildConfigGenerationPlan(config.id);
     if ("error" in result) throw new Error("expected plan");
     expect(result.kind).toBe("video");
-    expect(result.prompt).toBe("ocean waves");
+    expect(result.prompt).toBe("【文本1】\nocean waves");
     if (result.kind === "video") {
       expect(result.resolution).toBe("1080p");
       expect(result.durationSeconds).toBeUndefined();
@@ -410,7 +411,7 @@ describe("buildConfigGenerationPlan", () => {
     const result = buildConfigGenerationPlan(config.id);
     if ("error" in result) throw new Error("expected plan");
     expect(result.kind).toBe("audio");
-    expect(result.prompt).toBe("hello world");
+    expect(result.prompt).toBe("【文本1】\nhello world");
     if (result.kind === "audio") {
       expect(result.voice).toBe("en-US");
       expect(result.speed).toBe(1.5);
@@ -475,7 +476,7 @@ describe("runConfigGeneration", () => {
     // generateImageIntoNode called with result node id, prompt, {count}
     expect(generateImageIntoNode).toHaveBeenCalledWith(
       resultNode.id,
-      "a sunny day",
+      "【文本1】\na sunny day",
       { referenceImages: [], count: 3 },
     );
   });
@@ -515,7 +516,7 @@ describe("runConfigGeneration", () => {
 
     expect(generateVideoIntoNode).toHaveBeenCalledWith(
       resultNode?.id,
-      "rain forest",
+      "【文本1】\nrain forest",
       {
         resolution: "720p",
         aspectRatio: "16:9",
@@ -552,7 +553,7 @@ describe("runConfigGeneration", () => {
 
     expect(generateAudioIntoNode).toHaveBeenCalledWith(
       resultNode?.id,
-      "good morning",
+      "【文本1】\ngood morning",
       { voice: "zh-CN", speed: 1.0 },
     );
   });

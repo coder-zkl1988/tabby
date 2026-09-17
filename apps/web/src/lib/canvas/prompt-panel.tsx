@@ -18,13 +18,19 @@ import { optimizeImagePrompt } from "@/lib/media/image-prompt-optimization";
 import {
   ArrowUp,
   BookOpen,
+  FileText,
+  Film,
   LoaderCircle,
+  Maximize2,
+  Music2,
   SlidersHorizontal,
   WandSparkles,
+  X,
 } from "lucide-react";
 import {
   type KeyboardEvent,
   type MouseEvent,
+  memo,
   useCallback,
   useRef,
   useState,
@@ -38,7 +44,7 @@ import {
 } from "./canvas-generation";
 import { useCanvasModelOptions } from "./canvas-model-options";
 import type { CanvasNode } from "./canvas-store";
-import { updateNode } from "./canvas-store";
+import { removeConnection, updateNode } from "./canvas-store";
 import { ParamPill, SettingsGroup } from "./param-pills";
 import { setDraft, useDraft } from "./prompt-drafts";
 import {
@@ -47,7 +53,9 @@ import {
   audioSettingsSummary,
   buildAudioGenOpts,
   buildImageGenOpts,
+  buildReferenceChips,
   buildVideoGenOpts,
+  chipSiblingCount,
   imageQualityLabel,
   imageSettingsSummary,
   mentionQueryAt,
@@ -56,7 +64,11 @@ import {
   usableReferencePaths,
   videoSettingsSummary,
 } from "./prompt-panel-utils";
-import { collectUpstream, collectUpstreamNodes } from "./resource-references";
+import {
+  collectUpstream,
+  collectUpstreamNodes,
+  collectUpstreamRefs,
+} from "./resource-references";
 import {
   DEFAULT_VIDEO_ASPECT_RATIO,
   DEFAULT_VIDEO_RESOLUTION,
@@ -74,9 +86,22 @@ import {
 
 type PromptPanelProps = {
   node: CanvasNode;
+  /** Canvas container width in world units; the panel caps itself to it. */
+  maxWorldWidth?: number;
 };
 
-export function PromptPanel({ node }: PromptPanelProps) {
+/**
+ * Memoized so a frozen `node` prop actually stops the re-render: the panel has
+ * no store subscription of its own beyond the prompt draft, so it re-renders
+ * only because CanvasSurface does. During a resize gesture CanvasSurface hands
+ * it the pre-gesture node snapshot, and this memo turns that into zero work —
+ * without it the panel would re-run its whole-graph BFS on every frame of the
+ * drag (the reference project's v0.16 crash).
+ */
+export const PromptPanel = memo(function PromptPanel({
+  node,
+  maxWorldWidth,
+}: PromptPanelProps) {
   // Per-node draft backed by the subscribable prompt-drafts store — reactive
   // so the prompt-library dialog inserting a prompt updates the open panel.
   const nodeId = node.id;
@@ -189,6 +214,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Compute upstream info at render (cheap, selected-node only)
+  const upstreamRefs = collectUpstreamRefs(nodeId);
   const upstream = collectUpstream(nodeId);
   const upstreamNodes = collectUpstreamNodes(nodeId);
   const usablePaths = usableReferencePaths(upstream.images);
@@ -212,6 +238,10 @@ export function PromptPanel({ node }: PromptPanelProps) {
   // connected upstream text nodes (matches config-node-logic.ts's plan
   // builder so the "文本 N" badge above isn't a decoration).
   const mergedPrompt = mergeUpstreamPrompt(prompt, upstream.prompts);
+
+  // Reference bar rows. Images only count as references on an image node —
+  // video/audio generation carries no reference-image field.
+  const chips = buildReferenceChips(upstreamRefs, isImageNode);
 
   // Mention candidates: upstream nodes with non-empty titles. Image nodes
   // carry their content as a thumbnail so the dropdown shows the real
@@ -400,10 +430,15 @@ export function PromptPanel({ node }: PromptPanelProps) {
         ? "描述要生成的视频内容"
         : "描述要生成的音频内容";
 
-  // Fixed panel width, centered under the node (reference: w-[500px]
-  // -translate-x-1/2). Never tracks the node's width — a narrow node must
-  // not squeeze the bottom-row chips into wrapping their own text.
-  const PANEL_WIDTH = 500;
+  // Centered under the node, never tracking the node's own width — a narrow
+  // node must not squeeze the bottom-row chips into wrapping their text.
+  // It does cap against the canvas container though: at 500 fixed, the panel
+  // overhung both edges of a 320px sidebar and the send button was the first
+  // thing to go.
+  const PANEL_WIDTH = Math.max(
+    280,
+    Math.min(500, (maxWorldWidth ?? Number.POSITIVE_INFINITY) - 24),
+  );
 
   return (
     <div
@@ -420,30 +455,88 @@ export function PromptPanel({ node }: PromptPanelProps) {
         e.stopPropagation();
       }}
     >
-      {/* Upstream summary line: real thumbnails of the images that will feed
-          generation (max 4 = backend reference cap), then the text summary.
-          Image-only — video/audio generation has no reference-media field,
-          so showing thumbnails there would imply a feed that never happens. */}
-      <div className="mb-1.5 flex items-center gap-1.5 px-1">
-        {isImageNode
-          ? upstream.images
-              .slice(0, 4)
-              .map((src) => (
-                <img
-                  key={src}
-                  src={src}
-                  alt=""
-                  className="size-6 shrink-0 rounded object-cover ring-1 ring-border"
-                  draggable={false}
-                />
-              ))
-          : null}
-        {isImageNode && upstream.images.length > 4 ? (
-          <span className="shrink-0 text-text-tertiary">
-            +{upstream.images.length - 4}
-          </span>
-        ) : null}
-        <span className="min-w-0 truncate text-text-tertiary">{summary}</span>
+      {/* Reference bar (reference v0.17): one chip per upstream input, each
+          removable. A chip's × cuts the connection that brought it in — for a
+          group that is one edge feeding many chips, so the button says how
+          many go with it. Image chips dim when the backend can't take them as
+          references (a dataURL upload, or a video/audio node whose generate
+          call has no reference-image field at all). */}
+      <div
+        data-canvas-reference-bar={nodeId}
+        className="mb-1.5 flex flex-wrap items-center gap-1 px-1"
+      >
+        {chips.length === 0 ? (
+          <span className="min-w-0 truncate text-text-tertiary">{summary}</span>
+        ) : (
+          chips.map((chip) => {
+            const together = chipSiblingCount(chips, chip.edgeId);
+            return (
+              <span
+                key={`${chip.edgeId}:${chip.nodeId}`}
+                data-canvas-reference-chip={chip.nodeId}
+                title={
+                  chip.kind === "text"
+                    ? chip.preview
+                    : chip.usable
+                      ? chip.label
+                      : `${chip.label}（不会作为参考图发送）`
+                }
+                className={`flex max-w-[200px] items-center gap-1 rounded-md border border-border bg-surface-2 py-0.5 pl-1 pr-0.5 ${
+                  chip.usable ? "" : "opacity-50"
+                }`}
+              >
+                {chip.kind === "image" ? (
+                  <button
+                    type="button"
+                    aria-label={`预览 ${chip.label}`}
+                    onClick={() =>
+                      openCanvasDialog({ kind: "preview", nodeId: chip.nodeId })
+                    }
+                    onPointerDown={(e: React.PointerEvent) =>
+                      e.stopPropagation()
+                    }
+                  >
+                    <img
+                      src={chip.preview}
+                      alt=""
+                      className="size-5 shrink-0 rounded object-cover"
+                      draggable={false}
+                    />
+                  </button>
+                ) : (
+                  <span className="shrink-0 text-text-tertiary">
+                    {chip.kind === "text" ? (
+                      <FileText size={12} />
+                    ) : chip.kind === "video" ? (
+                      <Film size={12} />
+                    ) : (
+                      <Music2 size={12} />
+                    )}
+                  </span>
+                )}
+                <span className="min-w-0 truncate text-text-secondary">
+                  {chip.kind === "text"
+                    ? `${chip.label}${chip.preview}`
+                    : chip.label}
+                </span>
+                <button
+                  type="button"
+                  data-canvas-reference-remove={chip.edgeId}
+                  aria-label={
+                    together > 1
+                      ? `移除这组 ${together} 项参考`
+                      : `移除参考 ${chip.label}`
+                  }
+                  onClick={() => removeConnection(chip.edgeId)}
+                  onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                  className="shrink-0 rounded p-0.5 text-text-tertiary transition-colors hover:bg-surface-1 hover:text-text-primary"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            );
+          })
+        )}
       </div>
 
       {/* Prompt textarea + mention dropdown (relative container) */}
@@ -479,6 +572,20 @@ export function PromptPanel({ node }: PromptPanelProps) {
             {isOptimizingPrompt ? "优化中" : "优化"}
           </button>
         ) : null}
+
+        {/* Full-size editor (reference v0.15): same draft, taller box. Bound to
+            the prompt-drafts store, so the two stay in sync while open. */}
+        <button
+          type="button"
+          data-canvas-expand-prompt={nodeId}
+          aria-label="放大编辑提示词"
+          title="放大编辑"
+          onClick={() => openCanvasDialog({ kind: "prompt-editor", nodeId })}
+          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+          className="absolute bottom-2 right-2 rounded-md p-1 text-text-tertiary transition-colors hover:bg-surface-1 hover:text-text-primary"
+        >
+          <Maximize2 size={13} />
+        </button>
 
         {/* @-mention dropdown */}
         {mentionActive && filteredCandidates.length > 0 ? (
@@ -529,13 +636,13 @@ export function PromptPanel({ node }: PromptPanelProps) {
             openCanvasDialog({ kind: "prompt-library", nodeId });
           }}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+          className="grid size-9 shrink-0 place-items-center rounded-lg text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
         >
           <BookOpen size={15} />
         </button>
         <label
           aria-label="模型"
-          className="flex h-8 min-w-0 shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-surface-1 px-1 text-xs text-text-secondary hover:text-text-primary"
+          className="flex h-9 min-w-0 shrink-0 items-center whitespace-nowrap rounded-lg border border-border bg-surface-1 px-2 text-xs text-text-secondary hover:text-text-primary"
         >
           <span className="pl-1.5 pr-1 text-text-tertiary">模型</span>
           <select
@@ -559,7 +666,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
           aria-expanded={settingsOpen}
           onClick={() => setSettingsOpen((v) => !v)}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-          className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors ${settingsOpen ? "border-text-primary text-text-primary" : "border-border text-text-secondary hover:text-text-primary"}`}
+          className={`flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors ${settingsOpen ? "border-text-primary text-text-primary" : "border-border text-text-secondary hover:text-text-primary"}`}
         >
           <SlidersHorizontal size={13} />
           <span className="whitespace-nowrap">
@@ -593,9 +700,10 @@ export function PromptPanel({ node }: PromptPanelProps) {
           disabled={isGenerating || !mergedPrompt}
           onClick={handleGenerate}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-          className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition-opacity hover:opacity-90 disabled:opacity-40"
+          className="ml-auto flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 text-xs font-semibold text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <ArrowUp size={15} />
+          <ArrowUp size={14} />
+          生成
         </button>
 
         {/* 生成设置 popover — anchored above the bottom row (reference) */}
@@ -706,7 +814,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
                   ))}
                 </SettingsGroup>
                 <div className="flex items-center gap-2 pb-2.5 text-xs">
-                  <span className="shrink-0 text-[11px] font-medium text-text-tertiary">
+                  <span className="shrink-0 text-[12px] font-medium text-text-secondary">
                     推理步数
                   </span>
                   <input
@@ -731,7 +839,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
                   />
                 </div>
                 <div className="flex items-center gap-2 pb-2.5 text-xs">
-                  <span className="shrink-0 text-[11px] font-medium text-text-tertiary">
+                  <span className="shrink-0 text-[12px] font-medium text-text-secondary">
                     自定义帧数
                   </span>
                   <input
@@ -753,7 +861,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 pb-2.5 text-xs">
-                  <span className="shrink-0 text-[11px] font-medium text-text-tertiary">
+                  <span className="shrink-0 text-[12px] font-medium text-text-secondary">
                     帧率
                   </span>
                   <input
@@ -772,7 +880,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
                     }
                     className="w-20 rounded-lg border-0 bg-surface-2 px-2 py-1.5 text-xs text-text-primary outline-none"
                   />
-                  <span className="text-[11px] text-text-tertiary">fps</span>
+                  <span className="text-[12px] text-text-secondary">fps</span>
                 </div>
                 <SettingsGroup label="分辨率">
                   {VIDEO_RESOLUTIONS.map((r) => (
@@ -797,7 +905,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
                   ))}
                 </SettingsGroup>
                 <div className="flex items-center gap-2 pb-2.5 text-xs">
-                  <span className="shrink-0 text-[11px] font-medium text-text-tertiary">
+                  <span className="shrink-0 text-[12px] font-medium text-text-secondary">
                     种子
                   </span>
                   <input
@@ -818,7 +926,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
                     className="min-w-0 flex-1 rounded-lg border-0 bg-surface-2 px-2 py-1.5 text-xs text-text-primary outline-none"
                   />
                 </div>
-                <label className="block pb-0.5 text-[11px] font-medium text-text-tertiary">
+                <label className="block pb-0.5 text-[12px] font-medium text-text-secondary">
                   反向提示词
                   <textarea
                     value={videoNegativePrompt}
@@ -838,7 +946,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
             {node.type === "audio" && (
               <>
                 <div className="flex items-center gap-2 pb-2.5 text-xs">
-                  <span className="shrink-0 text-[11px] font-medium text-text-tertiary">
+                  <span className="shrink-0 text-[12px] font-medium text-text-secondary">
                     音色
                   </span>
                   <input
@@ -878,7 +986,7 @@ export function PromptPanel({ node }: PromptPanelProps) {
                   ))}
                 </SettingsGroup>
                 <div className="flex items-center gap-2 pt-0.5 text-xs">
-                  <span className="shrink-0 text-[11px] font-medium text-text-tertiary">
+                  <span className="shrink-0 text-[12px] font-medium text-text-secondary">
                     声音指令
                   </span>
                   <input
@@ -896,4 +1004,4 @@ export function PromptPanel({ node }: PromptPanelProps) {
       </div>
     </div>
   );
-}
+});

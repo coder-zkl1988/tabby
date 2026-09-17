@@ -68,11 +68,23 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 // Mock SDK for seam tests. Async job submission/polling is covered separately.
+// The fake keeps the real submit-then-poll shape so the node picks up a job id.
+const jobResults = vi.hoisted(() => new Map<string, unknown>());
+
 vi.mock("../lib/api/sdk.gen", () => apiMocks);
 vi.mock("../src/lib/media/image-generation-jobs", () => ({
-  generateImageViaJob: vi.fn(async (body: Record<string, unknown>) => {
+  submitImageGenerationJob: vi.fn(async (body: Record<string, unknown>) => {
     const response = await apiMocks.postApiV1MediaGenerateImage({ body });
-    if (!response?.data || response.error) throw new Error("生成失败");
+    const jobId = `image-job-${jobResults.size + 1}`;
+    jobResults.set(jobId, response);
+    return jobId;
+  }),
+  waitForImageGenerationJob: vi.fn(async (jobId: string) => {
+    const response = (jobResults.get(jobId) ?? {}) as {
+      data?: unknown;
+      error?: unknown;
+    };
+    if (!response.data || response.error) throw new Error("生成失败");
     return response.data;
   }),
 }));
@@ -84,6 +96,7 @@ beforeEach(() => {
   __resetCanvasForTests();
   __resetCanvasClipboardForTests();
   vi.clearAllMocks();
+  jobResults.clear();
 });
 
 // ── a. attachBatchChildren ─────────────────────────────────────
@@ -701,5 +714,67 @@ describe("h. markup: collapsed batch rendering", () => {
     for (const childId of childIds) {
       expect(markup).toContain(`data-canvas-batch-primary="${childId}"`);
     }
+  });
+});
+
+// ── i. partial failure: the shortfall becomes retryable placeholders ──────
+
+describe("i. partial failure placeholders", () => {
+  it("fewer pictures than requested leaves failed children, not a short grid", () => {
+    const root = addNode({ type: "image", title: "根" });
+    attachBatchChildren(
+      root.id,
+      [{ url: "/img/1.png" }, { url: "/img/2.png" }],
+      { requested: 4, retry: { kind: "image", prompt: "a cat" } },
+    );
+
+    const state = getCanvasState();
+    const rootNode = state.nodes.find((n) => n.id === root.id);
+    const childIds = rootNode?.metadata.batch?.childIds ?? [];
+    // 1 real sibling + 2 placeholders = the 4 slots that were asked for.
+    expect(childIds).toHaveLength(3);
+
+    const children = childIds.map((id) => state.nodes.find((n) => n.id === id));
+    expect(children[0]?.metadata.content).toBe("/img/2.png");
+    for (const failed of children.slice(1)) {
+      expect(failed?.metadata.content).toBeUndefined();
+      expect(failed?.metadata.task?.status).toBe("error");
+      // Retry regenerates exactly this one — no count, or it would fan out again.
+      expect(failed?.metadata.task?.retry).toEqual({
+        kind: "image",
+        prompt: "a cat",
+      });
+    }
+  });
+
+  it("a complete result adds no placeholders", () => {
+    const root = addNode({ type: "image", title: "根" });
+    attachBatchChildren(
+      root.id,
+      [{ url: "/img/1.png" }, { url: "/img/2.png" }],
+      {
+        requested: 2,
+      },
+    );
+    const rootNode = getCanvasState().nodes.find((n) => n.id === root.id);
+    expect(rootNode?.metadata.batch?.childIds).toHaveLength(1);
+  });
+
+  it("a single requested image that failed entirely is not turned into a batch", () => {
+    const root = addNode({ type: "image", title: "根" });
+    attachBatchChildren(root.id, [{ url: "/img/1.png" }], { requested: 1 });
+    const rootNode = getCanvasState().nodes.find((n) => n.id === root.id);
+    expect(rootNode?.metadata.batch).toBeUndefined();
+  });
+
+  it("deleting the root still cascades the placeholders away", () => {
+    const root = addNode({ type: "image", title: "根" });
+    attachBatchChildren(root.id, [{ url: "/img/1.png" }], {
+      requested: 3,
+      retry: { kind: "image", prompt: "a cat" },
+    });
+    expect(getCanvasState().nodes).toHaveLength(3);
+    removeNodes([root.id]);
+    expect(getCanvasState().nodes).toHaveLength(0);
   });
 });

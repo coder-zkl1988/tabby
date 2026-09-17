@@ -29,6 +29,7 @@ import {
 import {
   collectUpstream,
   collectUpstreamNodes,
+  collectUpstreamRefs,
   hasUpstream,
 } from "../src/lib/canvas/resource-references";
 
@@ -304,5 +305,85 @@ describe("hasUpstream", () => {
     connectNodes(src.id, dst.id);
 
     expect(hasUpstream(src.id)).toBe(false);
+  });
+});
+
+describe("group nodes as generation inputs", () => {
+  /** A group holding a text node and an image node, plus a target to feed. */
+  function groupFixture() {
+    const group = addNode({ type: "group", title: "素材组" });
+    const text = addNode({
+      type: "text",
+      title: "文案",
+      metadata: { content: "a cat", groupId: group.id },
+    });
+    const image = addNode({
+      type: "image",
+      title: "参考图",
+      metadata: { content: "/img/ref.png", groupId: group.id },
+    });
+    const target = addNode({ type: "image", title: "生成目标" });
+    const edge = connectNodes(group.id, target.id);
+    return { group, text, image, target, edge };
+  }
+
+  it("one edge from a group feeds every resource inside it", () => {
+    const { target } = groupFixture();
+    const upstream = collectUpstream(target.id);
+    expect(upstream.prompts).toEqual(["a cat"]);
+    expect(upstream.images).toEqual(["/img/ref.png"]);
+  });
+
+  it("the group itself contributes nothing and is not a mention candidate", () => {
+    const { group, text, image, target } = groupFixture();
+    expect(collectUpstreamNodes(target.id).map((n) => n.id)).toEqual([
+      text.id,
+      image.id,
+    ]);
+    expect(collectUpstreamRefs(target.id).map((ref) => ref.node.id)).toContain(
+      group.id,
+    );
+  });
+
+  it("members inherit the group's edge id, so one cut drops the whole group", () => {
+    const { group, text, image, target, edge } = groupFixture();
+    const refs = collectUpstreamRefs(target.id);
+    const byId = new Map(refs.map((ref) => [ref.node.id, ref]));
+    expect(byId.get(group.id)?.edgeId).toBe(edge?.id);
+    expect(byId.get(text.id)?.edgeId).toBe(edge?.id);
+    expect(byId.get(image.id)?.edgeId).toBe(edge?.id);
+    // Only the members are marked as arriving through the group.
+    expect(byId.get(group.id)?.viaGroupId).toBeUndefined();
+    expect(byId.get(text.id)?.viaGroupId).toBe(group.id);
+    expect(byId.get(image.id)?.viaGroupId).toBe(group.id);
+  });
+
+  it("a member's own upstream is traversed, exactly as a direct edge would", () => {
+    const { text, target } = groupFixture();
+    const ancestor = addNode({
+      type: "text",
+      title: "上游",
+      metadata: { content: "ancestor note" },
+    });
+    connectNodes(ancestor.id, text.id);
+    expect(collectUpstream(target.id).prompts).toEqual([
+      "a cat",
+      "ancestor note",
+    ]);
+  });
+
+  it("a node reached both directly and through a group is collected once", () => {
+    const { image, target } = groupFixture();
+    connectNodes(image.id, target.id);
+    expect(collectUpstream(target.id).images).toEqual(["/img/ref.png"]);
+  });
+
+  it("an empty group feeds nothing", () => {
+    const group = addNode({ type: "group", title: "空组" });
+    const target = addNode({ type: "image", title: "生成目标" });
+    connectNodes(group.id, target.id);
+    const upstream = collectUpstream(target.id);
+    expect(upstream.prompts).toEqual([]);
+    expect(upstream.images).toEqual([]);
   });
 });

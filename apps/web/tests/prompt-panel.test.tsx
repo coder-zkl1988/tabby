@@ -123,7 +123,7 @@ describe("PromptPanel controls per mode", () => {
         size: "2K",
         count: 3,
       }),
-    ).toBe("高 · 16:9 · 2K · 3 张");
+    ).toBe("高 · 16:9 · 2K（2048x1152） · 3 张");
     expect(
       imageSettingsSummary({
         quality: "auto",
@@ -370,7 +370,7 @@ describe("PromptPanel upstream reference thumbnails", () => {
     expect(markup).not.toContain("data:image/png");
   });
 
-  it("hides upstream image thumbnails/count for a video target — the reference never reaches the request", () => {
+  it("marks an upstream image as not-sent on a video target — video generation has no reference-image field", () => {
     const source = addNode({
       type: "image",
       title: "参考图",
@@ -379,12 +379,15 @@ describe("PromptPanel upstream reference thumbnails", () => {
     const target = addNode({ type: "video", title: "视频目标" });
     connectNodes(source.id, target.id);
 
+    // The reference bar shows the connection (hiding it left the user with an
+    // edge on the canvas and nothing to explain it) but says plainly that it
+    // is not sent.
     const markup = renderPanel(target);
-    expect(markup).not.toContain("data:image/png");
-    expect(markup).not.toContain("参考图");
+    expect(markup).toContain(`data-canvas-reference-chip="${source.id}"`);
+    expect(markup).toContain("不会作为参考图发送");
   });
 
-  it("hides upstream image thumbnails/count for an audio target", () => {
+  it("marks an upstream image as not-sent on an audio target", () => {
     const source = addNode({
       type: "image",
       title: "参考图",
@@ -394,8 +397,8 @@ describe("PromptPanel upstream reference thumbnails", () => {
     connectNodes(source.id, target.id);
 
     const markup = renderPanel(target);
-    expect(markup).not.toContain("data:image/png");
-    expect(markup).not.toContain("参考图");
+    expect(markup).toContain(`data-canvas-reference-chip="${source.id}"`);
+    expect(markup).toContain("不会作为参考图发送");
   });
 
   it("never shows upstream video/audio counts — no consumer forwards them to any generation call", () => {
@@ -450,5 +453,80 @@ describe("PromptPanel upstream text feeds the merged prompt", () => {
     const node = addNode({ type: "image", title: "孤立节点" });
     const markup = renderPanel(node);
     expect(generateButtonDisabled(markup)).toBe(true);
+  });
+});
+
+describe("PromptPanel reference bar", () => {
+  it("shows a numbered chip per upstream text, matching the prompt's 【文本N】", () => {
+    const t1 = addNode({
+      type: "text",
+      title: "文案一",
+      metadata: { content: "a cat" },
+    });
+    const t2 = addNode({
+      type: "text",
+      title: "文案二",
+      metadata: { content: "portrait style" },
+    });
+    const target = addNode({ type: "image", title: "生成目标" });
+    connectNodes(t1.id, target.id);
+    connectNodes(t2.id, target.id);
+
+    const markup = renderPanel(target);
+    expect(markup).toContain("【文本1】");
+    expect(markup).toContain("【文本2】");
+    expect(markup).toContain(`data-canvas-reference-chip="${t1.id}"`);
+  });
+
+  it("each chip carries a remove button bound to the edge that brought it in", () => {
+    const source = addNode({
+      type: "image",
+      title: "参考图",
+      metadata: { content: "data:image/png;base64,AAAA" },
+    });
+    const target = addNode({ type: "image", title: "生成目标" });
+    const edge = connectNodes(source.id, target.id);
+
+    const markup = renderPanel(target);
+    expect(markup).toContain(`data-canvas-reference-remove="${edge?.id}"`);
+  });
+
+  it("a group reference expands into a chip per member, all on the one edge", () => {
+    const group = addNode({ type: "group", title: "素材组" });
+    const text = addNode({
+      type: "text",
+      title: "文案",
+      metadata: { content: "a cat", groupId: group.id },
+    });
+    const image = addNode({
+      type: "image",
+      title: "参考图",
+      metadata: { content: "data:image/png;base64,AAAA", groupId: group.id },
+    });
+    const target = addNode({ type: "image", title: "生成目标" });
+    const edge = connectNodes(group.id, target.id);
+
+    const markup = renderPanel(target);
+    expect(markup).toContain(`data-canvas-reference-chip="${text.id}"`);
+    expect(markup).toContain(`data-canvas-reference-chip="${image.id}"`);
+    // One edge feeds both, so the remove button says what goes with it.
+    expect(markup).toContain("移除这组 2 项参考");
+    expect(markup).toContain(`data-canvas-reference-remove="${edge?.id}"`);
+  });
+
+  it("falls back to the summary line when nothing is connected", () => {
+    const node = addNode({ type: "image", title: "孤立节点" });
+    const markup = renderPanel(node);
+    expect(markup).toContain("无上游输入");
+    expect(markup).not.toContain("data-canvas-reference-chip");
+  });
+
+  it("offers the full-size prompt editor on every generatable node", () => {
+    for (const type of ["image", "video", "audio"] as const) {
+      const node = addNode({ type, title: `${type} 节点` });
+      expect(renderPanel(node)).toContain(
+        `data-canvas-expand-prompt="${node.id}"`,
+      );
+    }
   });
 });

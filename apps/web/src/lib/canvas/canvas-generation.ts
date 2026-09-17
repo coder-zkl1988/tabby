@@ -12,12 +12,29 @@ import {
   postApiV1MediaEnhanceImage,
   postApiV1MediaGenerateAudio,
   postApiV1MediaGenerateText,
-  postApiV1MediaGenerateVideo,
 } from "../../../lib/api/sdk.gen";
-import { generateImageViaJob } from "../media/image-generation-jobs";
+import {
+  submitImageGenerationJob,
+  waitForImageGenerationJob,
+} from "../media/image-generation-jobs";
+import {
+  submitVideoGenerationJob,
+  waitForVideoGenerationJob,
+} from "../media/video-generation-jobs";
 import { attachBatchChildren } from "./canvas-batch";
+import type { CanvasNodeMetadata } from "./canvas-store";
 import { getCanvasState, setNodeTask, updateNode } from "./canvas-store";
+import {
+  MAX_TEXT_ALTERNATIVES,
+  attachTextAlternatives,
+} from "./canvas-text-alternatives";
 import type { VideoAspectRatio } from "./video-generation-params";
+
+/** The image branch of a node's persisted retry payload. */
+type ImageRetry = Extract<
+  NonNullable<NonNullable<CanvasNodeMetadata["task"]>["retry"]>,
+  { kind: "image" }
+>;
 
 // ── Image ──────────────────────────────────────────────────────
 
@@ -77,7 +94,9 @@ export async function generateImageIntoNode(
   setNodeTask(nodeId, { status: "generating", retry });
 
   try {
-    const data = await generateImageViaJob({
+    // Submit first, record the job id on the node, THEN wait: a reload in the
+    // middle of a run resumes the poll instead of losing it.
+    const jobId = await submitImageGenerationJob({
       prompt,
       ...(opts?.referenceImages !== undefined
         ? { referenceImages: opts.referenceImages }
@@ -99,20 +118,20 @@ export async function generateImageIntoNode(
         ? { transparentBackground: opts.transparentBackground }
         : {}),
     });
+    if (!getCanvasState().nodes.some((n) => n.id === nodeId)) return false;
+    setNodeTask(nodeId, {
+      status: "generating",
+      retry,
+      job: { kind: "image", jobId },
+    });
+
+    const data = await waitForImageGenerationJob(jobId);
 
     // Check if the node still exists (may have been deleted during the async call).
     const stillExists = getCanvasState().nodes.some((n) => n.id === nodeId);
     if (!stillExists) return false;
 
-    // T6: batch fan-out — image only. attachBatchChildren owns root content
-    // and child creation for multi-item results; single-item path is preserved.
-    updateNode(nodeId, { title: prompt.slice(0, 30) });
-    if (data.items && data.items.length > 1) {
-      attachBatchChildren(nodeId, data.items);
-    } else {
-      updateNode(nodeId, { metadata: { content: data.url } });
-    }
-    setNodeTask(nodeId, null);
+    applyImageJobResult(nodeId, data, prompt, opts?.count ?? 1, retry);
     return true;
   } catch (error) {
     // Check node existence before writing error state.
@@ -141,6 +160,36 @@ function readMediaErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Write a finished image job onto its node.
+ *
+ * Shared by the live path and the post-reload resume, so a run that finished
+ * while the app was closed lands exactly like one that finished in front of you
+ * — batch fan-out, failed placeholders and all.
+ *
+ * T6: batch fan-out is image-only. attachBatchChildren owns root content and
+ * child creation for multi-item results; the single-item path is preserved. The
+ * lane can return FEWER pictures than requested; the shortfall becomes failed
+ * placeholders whose retry regenerates exactly one (count omitted).
+ */
+function applyImageJobResult(
+  nodeId: string,
+  data: { url: string; items?: ReadonlyArray<{ url: string }> },
+  prompt: string,
+  requested: number,
+  retry: ImageRetry,
+): void {
+  updateNode(nodeId, { title: prompt.slice(0, 30) });
+  const items = data.items ?? [];
+  if (items.length > 1 || (requested > 1 && items.length < requested)) {
+    const { count: _dropped, ...singleRetry } = retry;
+    attachBatchChildren(nodeId, items, { requested, retry: singleRetry });
+  } else {
+    updateNode(nodeId, { metadata: { content: data.url } });
+  }
+  setNodeTask(nodeId, null);
+}
+
 // ── Video ──────────────────────────────────────────────────────
 
 /**
@@ -158,50 +207,51 @@ function readMediaErrorMessage(error: unknown, fallback: string): string {
 export async function generateTextIntoNode(
   nodeId: string,
   prompt: string,
-  opts?: { sourceText?: string; model?: string },
+  opts?: { sourceText?: string; model?: string; count?: number },
 ): Promise<boolean> {
   const retry = {
     kind: "text" as const,
     prompt,
     ...(opts?.sourceText !== undefined ? { sourceText: opts.sourceText } : {}),
     ...(opts?.model !== undefined ? { model: opts.model } : {}),
+    ...(opts?.count !== undefined ? { count: opts.count } : {}),
   };
+
+  // Alternatives are independent samples, so they are independent requests —
+  // the backend gives each call its own utility-lane session anyway. Fanning
+  // out here (rather than adding a count to the endpoint) also means one
+  // failed sample doesn't take the others down with it.
+  const requested = Math.min(
+    Math.max(1, Math.floor(opts?.count ?? 1)),
+    MAX_TEXT_ALTERNATIVES,
+  );
 
   setNodeTask(nodeId, { status: "generating", retry });
 
-  try {
-    const { data, error } = await postApiV1MediaGenerateText({
-      body: {
-        prompt,
-        ...(opts?.sourceText !== undefined
-          ? { sourceText: opts.sourceText }
-          : {}),
-        ...(opts?.model !== undefined ? { model: opts.model } : {}),
-      },
-    });
+  const body = {
+    prompt,
+    ...(opts?.sourceText !== undefined ? { sourceText: opts.sourceText } : {}),
+    ...(opts?.model !== undefined ? { model: opts.model } : {}),
+  };
 
-    const stillExists = getCanvasState().nodes.some((n) => n.id === nodeId);
-    if (!stillExists) return false;
+  const settled = await Promise.allSettled(
+    Array.from({ length: requested }, () =>
+      postApiV1MediaGenerateText({ body }),
+    ),
+  );
 
-    if (!data || error) {
-      setNodeTask(nodeId, {
-        status: "error",
-        error: "生成失败，请重试",
-        retry,
-      });
-      return false;
-    }
+  const stillExists = getCanvasState().nodes.some((n) => n.id === nodeId);
+  if (!stillExists) return false;
 
-    updateNode(nodeId, {
-      title: prompt.slice(0, 30),
-      metadata: { content: data.text },
-    });
-    setNodeTask(nodeId, null);
-    return true;
-  } catch {
-    const stillExists = getCanvasState().nodes.some((n) => n.id === nodeId);
-    if (!stillExists) return false;
+  const texts: string[] = [];
+  for (const outcome of settled) {
+    if (outcome.status !== "fulfilled") continue;
+    const { data, error } = outcome.value;
+    if (!data || error) continue;
+    texts.push(data.text);
+  }
 
+  if (texts.length === 0) {
     setNodeTask(nodeId, {
       status: "error",
       error: "生成失败，请重试",
@@ -209,6 +259,11 @@ export async function generateTextIntoNode(
     });
     return false;
   }
+
+  updateNode(nodeId, { title: prompt.slice(0, 30) });
+  attachTextAlternatives(nodeId, texts, requested);
+  setNodeTask(nodeId, null);
+  return true;
 }
 
 // ── Video ──────────────────────────────────────────────────────
@@ -259,46 +314,45 @@ export async function generateVideoIntoNode(
   setNodeTask(nodeId, { status: "generating", retry });
 
   try {
-    const { data, error } = await postApiV1MediaGenerateVideo({
-      body: {
-        prompt,
-        ...(opts?.durationSeconds !== undefined
-          ? { durationSeconds: opts.durationSeconds }
-          : {}),
-        ...(opts?.resolution !== undefined
-          ? { resolution: opts.resolution }
-          : {}),
-        ...(opts?.model !== undefined ? { model: opts.model } : {}),
-        ...(opts?.aspectRatio !== undefined
-          ? { aspectRatio: opts.aspectRatio }
-          : {}),
-        ...(opts?.numFrames !== undefined ? { numFrames: opts.numFrames } : {}),
-        ...(opts?.frameRate !== undefined ? { frameRate: opts.frameRate } : {}),
-        ...(opts?.numInferenceSteps !== undefined
-          ? { numInferenceSteps: opts.numInferenceSteps }
-          : {}),
-        ...(opts?.negativePrompt !== undefined
-          ? { negativePrompt: opts.negativePrompt }
-          : {}),
-        ...(opts?.seed !== undefined ? { seed: opts.seed } : {}),
-        ...(opts?.generateAudio !== undefined
-          ? { generateAudio: opts.generateAudio }
-          : {}),
-        ...(opts?.watermark !== undefined ? { watermark: opts.watermark } : {}),
-      },
+    // Video runs for minutes, so it goes through the controller job queue and
+    // its id is persisted — a reload resumes the poll.
+    const jobId = await submitVideoGenerationJob({
+      prompt,
+      ...(opts?.durationSeconds !== undefined
+        ? { durationSeconds: opts.durationSeconds }
+        : {}),
+      ...(opts?.resolution !== undefined
+        ? { resolution: opts.resolution }
+        : {}),
+      ...(opts?.model !== undefined ? { model: opts.model } : {}),
+      ...(opts?.aspectRatio !== undefined
+        ? { aspectRatio: opts.aspectRatio }
+        : {}),
+      ...(opts?.numFrames !== undefined ? { numFrames: opts.numFrames } : {}),
+      ...(opts?.frameRate !== undefined ? { frameRate: opts.frameRate } : {}),
+      ...(opts?.numInferenceSteps !== undefined
+        ? { numInferenceSteps: opts.numInferenceSteps }
+        : {}),
+      ...(opts?.negativePrompt !== undefined
+        ? { negativePrompt: opts.negativePrompt }
+        : {}),
+      ...(opts?.seed !== undefined ? { seed: opts.seed } : {}),
+      ...(opts?.generateAudio !== undefined
+        ? { generateAudio: opts.generateAudio }
+        : {}),
+      ...(opts?.watermark !== undefined ? { watermark: opts.watermark } : {}),
     });
+    if (!getCanvasState().nodes.some((n) => n.id === nodeId)) return false;
+    setNodeTask(nodeId, {
+      status: "generating",
+      retry,
+      job: { kind: "video", jobId },
+    });
+
+    const data = await waitForVideoGenerationJob(jobId);
 
     const stillExists = getCanvasState().nodes.some((n) => n.id === nodeId);
     if (!stillExists) return false;
-
-    if (!data || error) {
-      setNodeTask(nodeId, {
-        status: "error",
-        error: "生成失败，请重试",
-        retry,
-      });
-      return false;
-    }
 
     // Video and audio stay single-result (no batch fan-out).
     updateNode(nodeId, {
@@ -541,6 +595,7 @@ export function retryNodeTask(nodeId: string): void {
     void generateTextIntoNode(nodeId, retry.prompt, {
       sourceText: retry.sourceText,
       model: retry.model,
+      count: retry.count,
     });
   } else if (retry.kind === "enhance") {
     void enhanceImageIntoNode(nodeId, {
@@ -553,5 +608,70 @@ export function retryNodeTask(nodeId: string): void {
       wideAngle: retry.wideAngle,
       prompt: retry.prompt,
     });
+  }
+}
+
+// ── Resume after a reload ──────────────────────────────────────
+
+/**
+ * Re-attach to a controller job that was still running when the page went away.
+ *
+ * `normalizeInterruptedTasks` deliberately leaves job-backed tasks `generating`
+ * on hydrate; this is the other half of that bargain. If the controller no
+ * longer knows the job — it restarted, or the 30-minute retention lapsed — the
+ * poll fails and the node lands in `error` with a retry, which is the honest
+ * outcome rather than a spinner that never resolves.
+ */
+export async function resumeGenerationJob(nodeId: string): Promise<boolean> {
+  const task = getCanvasState().nodes.find((n) => n.id === nodeId)?.metadata
+    .task;
+  const job = task?.job;
+  if (!task || task.status !== "generating" || !job) return false;
+  const retry = task.retry;
+
+  try {
+    if (job.kind === "image") {
+      const data = await waitForImageGenerationJob(job.jobId);
+      if (!getCanvasState().nodes.some((n) => n.id === nodeId)) return false;
+      // A job-backed image task always carries an image retry payload; the
+      // fallback keeps the applier total if a hand-written board lacks one.
+      const imageRetry: ImageRetry =
+        retry?.kind === "image" ? retry : { kind: "image", prompt: "" };
+      applyImageJobResult(
+        nodeId,
+        data,
+        imageRetry.prompt,
+        imageRetry.count ?? 1,
+        imageRetry,
+      );
+      return true;
+    }
+
+    const data = await waitForVideoGenerationJob(job.jobId);
+    if (!getCanvasState().nodes.some((n) => n.id === nodeId)) return false;
+    updateNode(nodeId, { metadata: { content: data.url } });
+    setNodeTask(nodeId, null);
+    return true;
+  } catch (error) {
+    if (!getCanvasState().nodes.some((n) => n.id === nodeId)) return false;
+    setNodeTask(nodeId, {
+      status: "error",
+      error: error instanceof Error ? error.message : "生成失败，请重试",
+      ...(retry ? { retry } : {}),
+    });
+    return false;
+  }
+}
+
+/**
+ * Resume every job-backed generation on the current board. Call once after
+ * hydration; nodes without a job reference are untouched.
+ */
+export function resumeGenerationJobs(): void {
+  for (const node of getCanvasState().nodes) {
+    const task = node.metadata.task;
+    if (task?.status === "generating" && task.job) {
+      void resumeGenerationJob(node.id);
+    }
   }
 }

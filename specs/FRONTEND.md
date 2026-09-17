@@ -49,6 +49,20 @@ After any API route/schema change: `pnpm generate-types` then `pnpm typecheck`.
 - A one-click update is shown only when an installed `managed` skill has the exact same owner-scoped identity and the catalog version is newer. The detail page follows the local queue until completion and then refreshes the installed version.
 - Active updates cannot be cancelled or uninstalled because the underlying atomic replacement cannot be interrupted safely after the staged directory swap. Legacy ownerless installs remain available under `Yours` but are never attributed to an owner-scoped catalog card.
 
+### KOC startup preparation
+
+KOC setup follows explicit stages: customer inputs → confirmed target profile → generated and reviewed account personas → reviewed eight-field profile materials → phone installation/login and target-account check → application and independent read-only verification → nurturing. The profile card reloads persisted data; generation, editing, and confirmation use revisions so stale cards cannot overwrite newer work. Changing upstream inputs invalidates dependent reviews and phone verification while preserving drafts for correction.
+
+The account planner generates the requested number of personas (default ten), compares actual age/gender/region distribution with the target, and records the operator's review note. Persona archive tags (one or two vertical tags and two or three general tags) are separate from the long-term keyword pools. Similar interests are warnings that operators can review; exact duplicate account names/personas are rejected. New accounts default to ninety posts per day in two segments and at least eleven seconds per post. Existing accounts without a historical daily target retain their previous behavior.
+
+The material card collects nickname, introduction, gender, explicit birthday, region, platform interest tags, avatar, and cover, plus the intended platform account identifier. Generation proposes a birthday derived from the persona age, with the month/day matching the star sign the generated bio states; the operator still confirms it, and a birthday they already entered is never overwritten. Material review alone does not enable nurturing. RunPlanner shows the missing stage and links back to the relevant card; pending/running/history cards and cancellation remain available while new execution is blocked. Application failures and incomplete verification stay visible and cannot be treated as completed setup.
+
+The XHS run planner explains that browsing first checks installation and login. The run progress, result summary, and dashboard detail display the optional `run.preparation` state and its fixed controller reason. Preparation has its own status and does not add to browsing counts or interaction quotas. Human intervention stops the current run and queued work; after completing the required steps on the phone, the operator creates a new run. Historical records without preparation remain readable.
+
+The daily schedule controls keep the label on one line and use a fixed 112px time input. The help text wraps independently and explains that different phones execute concurrently while tasks on the same phone queue.
+
+The account planner loads device ownership across all projects. Device choices show the owning project and account before saving. A conflicting row offers a confirmed transfer that saves the target account and releases the previous binding atomically, retaining the previous account and its history. Unfinished runs and active profile application block transfer. Transferring a row does not start phone work; the normal save action advances the card. Failed ownership loading is visible and retryable, and bound rows cannot be saved until ownership is known.
+
 ## Layouts
 
 - **`AuthLayout`** — Requires authenticated session, wraps all workspace routes.

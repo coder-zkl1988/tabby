@@ -195,7 +195,7 @@ export function XhsNodeContent({ node }: { node: CanvasNode }) {
       className="flex h-full w-full flex-col overflow-hidden bg-surface-1 text-text-primary"
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-        <span className="grid size-8 place-items-center rounded-lg bg-red-50 text-red-600">
+        <span className="grid size-8 place-items-center rounded-lg bg-[var(--color-xhs-wash)] text-[var(--color-xhs)]">
           <Sparkles size={16} />
         </span>
         <div className="min-w-0">
@@ -216,13 +216,13 @@ export function XhsNodeContent({ node }: { node: CanvasNode }) {
               }
             }}
             placeholder="输入主题，让 AI 填写整篇文案"
-            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface-0 px-3 text-xs outline-none focus:border-red-300"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface-0 px-3 text-xs outline-none focus:border-[var(--color-xhs)]"
           />
           <button
             type="button"
             onClick={() => void handleCopyGeneration()}
             disabled={copyPending || !post.theme?.trim()}
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-xhs)] px-3 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-45"
           >
             {copyPending ? (
               <Loader2 size={14} className="animate-spin" />
@@ -294,7 +294,7 @@ export function XhsNodeContent({ node }: { node: CanvasNode }) {
               maxLength={20}
               onChange={(event) => patchPost({ title: event.target.value })}
               placeholder="填写标题"
-              className="h-10 w-full rounded-lg border border-border bg-surface-0 px-3 pr-12 text-sm font-medium outline-none focus:border-red-300"
+              className="h-10 w-full rounded-lg border border-border bg-surface-0 px-3 pr-12 text-sm font-medium outline-none focus:border-[var(--color-xhs)]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted">
               {post.title.length}/20
@@ -307,7 +307,7 @@ export function XhsNodeContent({ node }: { node: CanvasNode }) {
             value={post.content}
             onChange={(event) => patchPost({ content: event.target.value })}
             placeholder="写下帖子正文..."
-            className="h-full min-h-[120px] w-full resize-none rounded-lg border border-border bg-surface-0 px-3 py-2 text-sm leading-6 outline-none focus:border-red-300"
+            className="h-full min-h-[120px] w-full resize-none rounded-lg border border-border bg-surface-0 px-3 py-2 text-sm leading-6 outline-none focus:border-[var(--color-xhs)]"
           />
         </div>
 
@@ -323,7 +323,7 @@ export function XhsNodeContent({ node }: { node: CanvasNode }) {
                     hashtags: post.hashtags.filter((item) => item !== tag),
                   })
                 }
-                className="rounded-full bg-red-50 px-2 py-1 text-[11px] text-red-700"
+                className="rounded-md bg-[var(--color-xhs-wash)] px-2.5 py-1 text-[12px] text-[var(--color-xhs)]"
               >
                 #{tag}
               </button>
@@ -350,7 +350,7 @@ export function XhsNodeContent({ node }: { node: CanvasNode }) {
           type="button"
           onClick={() => void handlePublish()}
           disabled={publishPending || !publishDeviceId}
-          className="flex h-9 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-45"
+          className="flex h-9 items-center gap-1.5 rounded-lg bg-[var(--color-xhs)] px-3 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-45"
         >
           {publishPending ? (
             <Loader2 size={14} className="animate-spin" />

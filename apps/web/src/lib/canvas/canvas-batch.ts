@@ -10,10 +10,14 @@
 
 import {
   type CanvasNode,
+  type CanvasNodeMetadata,
   addNode,
   getCanvasState,
   updateNode,
 } from "./canvas-store";
+
+/** Retry payload copied onto a failed placeholder so its 重试 button works. */
+type BatchRetry = NonNullable<CanvasNodeMetadata["task"]>["retry"];
 
 /**
  * Attach batch children to an existing root node.
@@ -23,19 +27,29 @@ import {
  *   with a cascading offset.
  * - No-op for batch group when items.length <= 1 (single-item stays independent).
  *
+ * When `requested` exceeds `items.length`, the shortfall becomes failed
+ * placeholder children (reference v0.15): the lane returned fewer pictures than
+ * were asked for, and dropping them silently made a partial failure look like a
+ * complete result. Each placeholder carries `retry`, so the error node's
+ * existing 重试 button regenerates just that one.
+ *
  * Owns both root content and child creation atomically.
  */
 export function attachBatchChildren(
   rootId: string,
   items: ReadonlyArray<{ url: string }>,
+  options?: { requested?: number; retry?: BatchRetry },
 ): void {
   const root = getCanvasState().nodes.find((n) => n.id === rootId);
   if (!root) return;
 
+  const requested = options?.requested ?? items.length;
+  const missing = Math.max(0, requested - items.length);
+
   // Always set root content from items[0]
   updateNode(rootId, { metadata: { content: items[0]?.url } });
 
-  if (items.length <= 1) {
+  if (items.length <= 1 && missing === 0) {
     // Single item: no batch group
     return;
   }
@@ -59,6 +73,30 @@ export function attachBatchChildren(
       metadata: {
         content: childUrl,
         batch: { rootId },
+      },
+    });
+    childIds.push(child.id);
+  }
+
+  // Failed slots: one placeholder per missing image, positioned after the real
+  // children so the grid keeps the requested shape.
+  for (let i = 0; i < missing; i++) {
+    const slot = items.length + i;
+    const child = addNode({
+      type: "image",
+      title: `${root.title} #${slot + 1}`,
+      position: {
+        x: root.position.x + root.size.width + 24 + (slot - 1) * 24,
+        y: root.position.y + (slot - 1) * 24,
+      },
+      size: { ...root.size },
+      metadata: {
+        batch: { rootId },
+        task: {
+          status: "error",
+          error: "这一张没有生成出来",
+          ...(options?.retry ? { retry: options.retry } : {}),
+        },
       },
     });
     childIds.push(child.id);

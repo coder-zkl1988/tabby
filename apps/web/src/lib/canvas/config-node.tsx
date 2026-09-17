@@ -202,7 +202,7 @@ export function ConfigNodeContent({ node }: { node: CanvasNode }) {
 
       {/* Model picker + per-mode settings toggle (reference two-column grid) */}
       <div
-        className={`grid min-w-0 items-center gap-1.5 ${mode === "text" ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_auto]"}`}
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5"
         onPointerDown={stopProp}
       >
         <label className="flex h-9 min-w-0 items-center rounded-lg border border-border px-2 text-xs text-text-secondary">
@@ -220,6 +220,35 @@ export function ConfigNodeContent({ node }: { node: CanvasNode }) {
             ))}
           </select>
         </label>
+        {/* Text mode has its own count — the reference's v0.16 fix was exactly
+            that alternatives were reusing the image fan-out number. */}
+        {mode === "text" && (
+          <label
+            className="flex h-9 shrink-0 items-center rounded-lg border border-border px-2 text-xs text-text-secondary"
+            title="生成几条备选文本"
+          >
+            <span className="shrink-0 pr-1.5 text-text-tertiary">备选</span>
+            <select
+              data-canvas-config-text-count={node.id}
+              value={cfg?.textCount ?? 1}
+              onChange={(e) =>
+                setParam({
+                  textCount:
+                    Number(e.target.value) > 1
+                      ? Number(e.target.value)
+                      : undefined,
+                })
+              }
+              className="cursor-pointer bg-transparent text-xs outline-none"
+            >
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n} 条
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {mode !== "text" && (
           <button
             type="button"

@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 import { ensureAssetsLoaded, useCanvasAssets } from "./canvas-assets";
 import {
   isHiddenBatchChild,
@@ -34,8 +35,17 @@ import { createConnectedNode } from "./canvas-create";
 import { CanvasDialogs } from "./canvas-dialogs-mount";
 import { exportNodesAsZip } from "./canvas-export";
 import { FloatingMenu, clampMenuPosition } from "./canvas-floating-menu";
+import { resumeGenerationJobs } from "./canvas-generation";
 import { type ResizeCorner, computeResizeGeometry } from "./canvas-geometry";
-import { groupIdForPoint, memberIdsOf } from "./canvas-groups";
+import { groupSelectedNodes, ungroupSelectedNodes } from "./canvas-group-ops";
+import {
+  canGroupSelection,
+  canUngroupSelection,
+  groupIdForPoint,
+  groupSelectionMembers,
+  groupWrapRect,
+  memberIdsOf,
+} from "./canvas-groups";
 import {
   ingestFilesAsNodes,
   ingestTextAsNode,
@@ -66,6 +76,11 @@ import {
 } from "./canvas-store";
 import { CanvasToolbar } from "./canvas-toolbar";
 import { useCanvasUiPrefs } from "./canvas-ui-prefs";
+import {
+  type VideoFramePosition,
+  captureVideoFrameIntoNode,
+  currentTimeOfNodeVideo,
+} from "./canvas-video-frame";
 import { applyConnectionEffects } from "./connection-effects";
 import { HoverToolbar } from "./hover-toolbar";
 import { NodeBody } from "./node-views";
@@ -366,6 +381,12 @@ export function CanvasSurface({ className }: { className?: string }) {
     current: { x: number; y: number };
   } | null>(null);
   const [gestureActive, setGestureActive] = useState(false);
+  // Id of the node being resized right now, or null. Set once per gesture (not
+  // per frame) — it exists only to freeze the prompt panel below.
+  const [resizingNodeId, setResizingNodeId] = useState<string | null>(null);
+  // The panel's node as of the gesture's first frame. Held by ref so the panel
+  // keeps ONE prop identity for the whole drag and its memo can bail out.
+  const frozenPanelNodeRef = useRef<CanvasNode | null>(null);
   const [connectPreview, setConnectPreview] = useState<{
     x: number;
     y: number;
@@ -381,7 +402,12 @@ export function CanvasSurface({ className }: { className?: string }) {
 
   // Hydrate canvas content from IndexedDB on mount (once).
   useEffect(() => {
-    void hydrateCanvasFromStorage();
+    void hydrateCanvasFromStorage().then(() => {
+      // Generations that were still running when the page went away keep their
+      // `generating` task (they carry a controller job id); re-attach to those
+      // polls so a reload mid-run resumes instead of losing the result.
+      resumeGenerationJobs();
+    });
     // Hydrate the saved asset library too so the first mirror push already
     // carries any assets the agent can insert.
     void ensureAssetsLoaded();
@@ -486,6 +512,10 @@ export function CanvasSurface({ className }: { className?: string }) {
         rafRef.current = null;
       }
       setGestureActive(false);
+      if (gesture.kind === "resize") {
+        setResizingNodeId(null);
+        frozenPanelNodeRef.current = null;
+      }
       pointerRef.current = { x: event.clientX, y: event.clientY };
 
       if (gesture.kind === "resize") {
@@ -533,7 +563,12 @@ export function CanvasSurface({ className }: { className?: string }) {
             gesture.handleType === "source" ? gesture.fromId : target.id;
           const toId =
             gesture.handleType === "source" ? target.id : gesture.fromId;
-          const created = connectNodes(fromId, toId);
+          // A group is a container, never a sink: it has no content of its own
+          // for an incoming edge to feed. Dropping onto one from a source
+          // handle is a no-op rather than a dead edge.
+          const toNodeType = liveNodes.find((node) => node.id === toId)?.type;
+          const created =
+            toNodeType === "group" ? null : connectNodes(fromId, toId);
           const fromNode = liveNodes.find((node) => node.id === fromId);
           const toNode = liveNodes.find((node) => node.id === toId);
           if (created && fromNode && toNode) {
@@ -685,6 +720,8 @@ export function CanvasSurface({ className }: { className?: string }) {
         (node.type === "image" || node.type === "video") &&
         Boolean(node.metadata.content) &&
         node.metadata.freeResize !== true;
+      frozenPanelNodeRef.current = node;
+      setResizingNodeId(nodeId);
       beginGesture(event, {
         kind: "resize",
         id: nodeId,
@@ -759,6 +796,13 @@ export function CanvasSurface({ className }: { className?: string }) {
       } else if (meta && event.key.toLowerCase() === "c") {
         const copied = copySelection();
         if (copied >= 1) event.preventDefault();
+      } else if (meta && event.key.toLowerCase() === "g") {
+        // ⌘G groups the selection, ⌘⇧G releases it. Always preventDefault:
+        // the browser's own ⌘G (find-next) is useless here and would steal
+        // the key whenever the canvas selection can't be grouped.
+        event.preventDefault();
+        if (event.shiftKey) ungroupSelectedNodes();
+        else groupSelectedNodes();
       } else if (event.key === "Delete" || event.key === "Backspace") {
         deleteSelection();
       } else if (event.key === "Escape") {
@@ -863,6 +907,10 @@ export function CanvasSurface({ className }: { className?: string }) {
     <div
       ref={containerRef}
       data-infinite-canvas="true"
+      // Node content scales with the canvas, so a 12px label is 6px at 50%
+      // zoom. Below 0.6 the cards drop their body text and keep only the
+      // title, which is what a thumbnail needs to stay identifiable.
+      data-canvas-lod={viewport.scale < 0.6 ? "low" : undefined}
       className={cn(
         "relative h-full w-full select-none overflow-hidden",
         gestureActive ? "cursor-grabbing" : "cursor-default",
@@ -966,6 +1014,30 @@ export function CanvasSurface({ className }: { className?: string }) {
           height={1}
           aria-hidden="true"
         >
+          <defs>
+            <marker
+              id="canvas-edge-arrow"
+              viewBox="0 0 8 8"
+              refX="7"
+              refY="4"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 1 L 7 4 L 0 7 z" fill="var(--color-canvas-edge)" />
+            </marker>
+            <marker
+              id="canvas-edge-arrow-selected"
+              viewBox="0 0 8 8"
+              refX="7"
+              refY="4"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 1 L 7 4 L 0 7 z" fill="var(--color-brand-primary)" />
+            </marker>
+          </defs>
           {connections.map((connection) => {
             const from = nodeById.get(connection.fromNodeId);
             const to = nodeById.get(connection.toNodeId);
@@ -979,9 +1051,16 @@ export function CanvasSurface({ className }: { className?: string }) {
                 fill="none"
                 className={cn(
                   "pointer-events-auto cursor-pointer",
-                  isSelected ? "stroke-sky-500" : "stroke-border",
+                  isSelected
+                    ? "stroke-[var(--color-brand-primary)]"
+                    : "stroke-[var(--color-canvas-edge)]",
                 )}
-                strokeWidth={isSelected ? 3 : 2}
+                strokeWidth={isSelected ? 2 : 1.5}
+                markerEnd={`url(#${
+                  isSelected
+                    ? "canvas-edge-arrow-selected"
+                    : "canvas-edge-arrow"
+                })`}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   selectConnection(connection.id);
@@ -997,7 +1076,7 @@ export function CanvasSurface({ className }: { className?: string }) {
                 connectPreview,
               )}
               fill="none"
-              className="stroke-sky-500"
+              className="stroke-[var(--color-brand-primary)]"
               strokeWidth={2}
               strokeDasharray="6 4"
             />
@@ -1027,21 +1106,64 @@ export function CanvasSurface({ className }: { className?: string }) {
             and the node is not a hidden batch child. */}
         {selectedNodeIds.length === 1 &&
           (() => {
-            const panelNode = nodeById.get(selectedNodeIds[0] as string);
+            const selectedId = selectedNodeIds[0] as string;
+            // While THIS node is being resized, hand the panel the snapshot
+            // taken at gesture start. Identical props + memo = the panel skips
+            // its whole-graph BFS for every frame of the drag; it re-anchors
+            // when the gesture ends. Resizing some OTHER node still updates it.
+            const panelNode =
+              resizingNodeId === selectedId && frozenPanelNodeRef.current
+                ? frozenPanelNodeRef.current
+                : nodeById.get(selectedId);
             return panelNode &&
               !isHiddenBatchChild(panelNode, nodes) &&
               (panelNode.type === "image" ||
                 panelNode.type === "video" ||
                 panelNode.type === "audio") ? (
-              <PromptPanel key={panelNode.id} node={panelNode} />
+              <PromptPanel
+                key={panelNode.id}
+                node={panelNode}
+                maxWorldWidth={
+                  (containerRef.current?.clientWidth ?? 0) > 0
+                    ? (containerRef.current?.clientWidth ?? 0) / viewport.scale
+                    : undefined
+                }
+              />
             ) : null;
           })()}
+
+        {/* Multi-select outline (reference v0.18): one dashed box around the
+            whole selection. It is drawn from the SAME rect ⌘G would give the
+            group, so the outline doubles as a preview of the box you get. */}
+        {(() => {
+          const selectedIds = new Set(selectedNodeIds);
+          if (!canGroupSelection(selectedIds, nodes)) return null;
+          const rect = groupWrapRect(
+            groupSelectionMembers(selectedIds, nodes).filter(
+              (node) => !isHiddenBatchChild(node, nodes),
+            ),
+          );
+          if (rect.size.width <= 0 || rect.size.height <= 0) return null;
+          return (
+            <div
+              data-canvas-selection-box="true"
+              aria-hidden="true"
+              className="pointer-events-none absolute z-0 rounded-2xl border border-dashed border-[var(--color-brand-primary)]/60"
+              style={{
+                left: rect.position.x,
+                top: rect.position.y,
+                width: rect.size.width,
+                height: rect.size.height,
+              }}
+            />
+          );
+        })()}
 
         {/* Marquee rectangle */}
         {marqueeBox ? (
           <div
             data-canvas-marquee="true"
-            className="absolute border border-sky-500/70 bg-sky-500/10"
+            className="absolute border border-[var(--color-brand-primary)]/70 bg-[var(--color-brand-subtle)]"
             style={{
               left: Math.min(marqueeBox.start.x, marqueeBox.current.x),
               top: Math.min(marqueeBox.start.y, marqueeBox.current.y),
@@ -1084,6 +1206,53 @@ export function CanvasSurface({ className }: { className?: string }) {
                   setContextMenu(null);
                 }}
               />
+              {/* Video stills (reference v0.17): pull a frame out as its own
+                  image node so the next shot can reference it. */}
+              {nodes.find((node) => node.id === contextMenu.id)?.type ===
+                "video" &&
+              nodes.find((node) => node.id === contextMenu.id)?.metadata.content
+                ? (
+                    [
+                      ["first", "截取首帧"],
+                      ["last", "截取尾帧"],
+                      ["current", "截取当前帧"],
+                    ] as ReadonlyArray<[VideoFramePosition, string]>
+                  ).map(([position, label]) => (
+                    <ContextMenuItem
+                      key={position}
+                      label={label}
+                      onClick={() => {
+                        const id = contextMenu.id;
+                        setContextMenu(null);
+                        void captureVideoFrameIntoNode(
+                          id,
+                          position,
+                          currentTimeOfNodeVideo(id),
+                        ).catch(() => {
+                          toast.error("截帧失败，无法读取该视频画面");
+                        });
+                      }}
+                    />
+                  ))
+                : null}
+              {canGroupSelection(new Set(selectedNodeIds), nodes) ? (
+                <ContextMenuItem
+                  label={`打组（${selectedNodeIds.length} 个元素）`}
+                  onClick={() => {
+                    groupSelectedNodes();
+                    setContextMenu(null);
+                  }}
+                />
+              ) : null}
+              {canUngroupSelection(new Set(selectedNodeIds), nodes) ? (
+                <ContextMenuItem
+                  label="解散组"
+                  onClick={() => {
+                    ungroupSelectedNodes();
+                    setContextMenu(null);
+                  }}
+                />
+              ) : null}
               <ContextMenuItem
                 label={
                   selectedNodeIds.length > 1 &&
@@ -1118,15 +1287,32 @@ export function CanvasSurface({ className }: { className?: string }) {
               }}
             />
           ) : (
-            <ContextMenuItem
-              label="粘贴到此处"
-              disabled={!clipboardHasContent()}
-              onClick={() => {
-                if (!clipboardHasContent()) return;
-                pasteClipboard(contextMenu.worldPoint);
-                setContextMenu(null);
-              }}
-            />
+            <>
+              <ContextMenuItem
+                label="粘贴到此处"
+                disabled={!clipboardHasContent()}
+                onClick={() => {
+                  if (!clipboardHasContent()) return;
+                  pasteClipboard(contextMenu.worldPoint);
+                  setContextMenu(null);
+                }}
+              />
+              {/* Moved off the dock: a destructive whole-board action does
+                  not belong one mis-click away from the zoom controls. */}
+              <ContextMenuItem
+                label="清空画布"
+                disabled={nodes.length === 0}
+                onClick={() => {
+                  setContextMenu(null);
+                  if (
+                    nodes.length > 0 &&
+                    window.confirm("清空画布上的全部节点？")
+                  ) {
+                    removeNodes(nodes.map((node) => node.id));
+                  }
+                }}
+              />
+            </>
           )}
         </FloatingMenu>
       ) : null}
@@ -1215,10 +1401,13 @@ const CanvasNodeView = memo(function CanvasNodeView({
   // selected — "groups render behind everything else" must hold in every state.
   const isGroup = node.type === "group";
 
-  // Groups and team-step nodes take no upstream/downstream data — connecting
-  // to/from them is a no-op wiring dead end, so don't show handles that
-  // invite it.
-  const connectable = node.type !== "group" && node.type !== "team-step";
+  // team-step nodes take no upstream/downstream data — connecting to/from
+  // them is a no-op wiring dead end, so don't show handles that invite it.
+  // A group has no content of its own, so nothing can feed INTO it, but one
+  // edge OUT of it references every valid resource it contains
+  // (resource-references.ts expands group members).
+  const canReceiveUpstream = node.type !== "group" && node.type !== "team-step";
+  const canFeedDownstream = node.type !== "team-step";
 
   // Batch group state
   const batchChildIds = node.metadata.batch?.childIds;
@@ -1232,14 +1421,20 @@ const CanvasNodeView = memo(function CanvasNodeView({
       data-canvas-node={node.id}
       data-canvas-node-selected={selected || undefined}
       className={cn(
-        "group absolute flex flex-col rounded-3xl border-2 transition-shadow duration-200",
+        // 16px / 1px, not 24px / 2px: a 24px radius around a 12px A2UI
+        // CardShell leaves two non-concentric corners, and the 2px border
+        // reads a weight heavier than anything inside the node.
+        "group absolute flex flex-col rounded-2xl border transition-shadow duration-200",
         isGroup
           ? "border-dashed bg-surface-1/40"
           : bareMedia
             ? "bg-transparent"
             : "bg-surface-1",
+        // Selection is a double ring drawn with box-shadow, not a border
+        // colour swap: swapping the border would keep the box the same size
+        // here but any future width change shifts the content by 1px.
         selected
-          ? "border-sky-500 shadow-xl shadow-sky-500/10"
+          ? "border-transparent shadow-[0_0_0_2px_var(--color-brand-primary),0_0_0_6px_var(--color-brand-subtle),0_8px_24px_rgba(0,0,0,0.08)]"
           : bareMedia
             ? "border-transparent shadow-lg shadow-black/10"
             : "border-border shadow-lg shadow-black/5",
@@ -1284,7 +1479,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
           onHeaderDown(event, node.id);
         }}
       >
-        <span className="block truncate text-xs font-medium text-text-secondary opacity-75">
+        <span className="block truncate text-[12px] font-medium text-text-secondary">
           {node.title}
         </span>
       </div>
@@ -1295,7 +1490,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
           <div
             data-canvas-batch-ghost="2"
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 rounded-3xl border-2 border-border bg-surface-2"
+            className="pointer-events-none absolute inset-0 rounded-2xl border border-border bg-surface-2"
             style={{
               transform: "translate(6px, 6px) rotate(2deg)",
               zIndex: -1,
@@ -1304,7 +1499,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
           <div
             data-canvas-batch-ghost="1"
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 rounded-3xl border-2 border-border bg-surface-2"
+            className="pointer-events-none absolute inset-0 rounded-2xl border border-border bg-surface-2"
             style={{
               transform: "translate(12px, 12px) rotate(4deg)",
               zIndex: -2,
@@ -1367,9 +1562,10 @@ const CanvasNodeView = memo(function CanvasNodeView({
         node.type === "phone"
           ? { "data-canvas-no-drag": "true" }
           : {})}
+        data-canvas-node-body="true"
         className={cn(
           "min-h-0 flex-1",
-          fullBleed ? "overflow-hidden rounded-[22px]" : "overflow-y-auto p-3",
+          fullBleed ? "overflow-hidden rounded-2xl" : "overflow-y-auto p-3",
         )}
       >
         <NodeBody node={node} />
@@ -1386,10 +1582,10 @@ const CanvasNodeView = memo(function CanvasNodeView({
       {/* Connect handles: 48px hit zone with a 12px dot on each side
           (reference paradigm) — left = target (drag out for an upstream
           feed), right = source (drag out to feed a downstream node). Shown
-          on hover/selection, drag to another node. Groups and team-step
-          nodes don't participate in the connection graph, so they get no
-          handles at all — see `connectable` above. */}
-      {connectable ? (
+          on hover/selection, drag to another node. team-step nodes don't
+          participate in the connection graph at all; a group gets only the
+          source handle — see `canReceiveUpstream` / `canFeedDownstream`. */}
+      {canReceiveUpstream ? (
         <>
           <button
             type="button"
@@ -1403,8 +1599,12 @@ const CanvasNodeView = memo(function CanvasNodeView({
             )}
             onPointerDown={(event) => onConnectDown(event, node.id, "target")}
           >
-            <span className="size-3 rounded-full border-2 border-sky-500 bg-surface-1 transition-transform hover:scale-125" />
+            <span className="size-3.5 rounded-full border-2 border-[var(--color-brand-primary)] bg-surface-1 transition-transform hover:scale-125" />
           </button>
+        </>
+      ) : null}
+      {canFeedDownstream ? (
+        <>
           <button
             type="button"
             aria-label="connect from node"
@@ -1417,7 +1617,7 @@ const CanvasNodeView = memo(function CanvasNodeView({
             )}
             onPointerDown={(event) => onConnectDown(event, node.id, "source")}
           >
-            <span className="size-3 rounded-full border-2 border-sky-500 bg-surface-1 transition-transform hover:scale-125" />
+            <span className="size-3.5 rounded-full border-2 border-[var(--color-brand-primary)] bg-surface-1 transition-transform hover:scale-125" />
           </button>
         </>
       ) : null}

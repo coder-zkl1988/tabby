@@ -108,6 +108,9 @@ export type CanvasNodeMetadata = {
     instructions?: string;
     /** composer: base prompt prepended to the upstream prompt */
     composedPrompt?: string;
+    /** text: how many alternatives to generate (1-4). Separate from `count`,
+     *  which is the image fan-out — sharing them was the reference's v0.16 bug. */
+    textCount?: number;
   };
   /** xhs: canvas-native Xiaohongshu post editor state. */
   xhs?: CanvasXhsPost;
@@ -115,6 +118,17 @@ export type CanvasNodeMetadata = {
   phone?: CanvasPhonePreview;
   /** batch group: root carries childIds+expanded; children carry rootId. */
   batch?: { childIds?: string[]; expanded?: boolean; rootId?: string };
+  /**
+   * text: several generated alternatives held in ONE node (reference v0.17 —
+   * unlike images, which fan out into sibling nodes). `content` always mirrors
+   * `items[activeIndex]`; `requested` records how many were asked for, so a
+   * partial failure shows as "2/4" instead of silently looking complete.
+   */
+  textAlternatives?: {
+    items: string[];
+    activeIndex: number;
+    requested?: number;
+  };
   /**
    * Group membership: set on a member node; points at its group node's id.
    * Groups never nest — a group node never carries a groupId. Distinct from
@@ -150,6 +164,13 @@ export type CanvasNodeMetadata = {
    */
   task?: {
     status: "generating" | "error";
+    /**
+     * Controller-side job backing an in-flight generation. Persisted, so a
+     * reload can pick the poll back up instead of declaring the run lost —
+     * `normalizeInterruptedTasks` leaves these alone and canvas-task-resume.ts
+     * re-attaches. Absent for channels with no job queue (audio, text, …).
+     */
+    job?: { kind: "image" | "video"; jobId: string };
     error?: string;
     /** Params to re-run the generation (retry). */
     retry?:
@@ -195,6 +216,8 @@ export type CanvasNodeMetadata = {
           prompt: string;
           sourceText?: string;
           model?: string;
+          /** How many alternatives the original run asked for (1-4). */
+          count?: number;
         }
       | {
           kind: "enhance";
@@ -1095,10 +1118,17 @@ export async function switchCanvasBoard(boardId: string): Promise<void> {
  * Normalize a persisted `generating` task to `error` — a reloaded (or
  * board-switched-into) canvas must never show an eternal spinner. Nodes
  * without a generating task pass through unchanged.
+ *
+ * A task carrying a controller job id is the exception: the run is still alive
+ * on the controller, so it stays `generating` and canvas-task-resume.ts picks
+ * the poll back up. If the job turns out to be gone (controller restarted, TTL
+ * expired), the resume marks it failed — which is the honest answer, and one
+ * this function cannot give on its own.
  */
 function normalizeInterruptedTasks(nodes: CanvasNode[]): CanvasNode[] {
   return nodes.map((n) => {
     if (n.metadata.task?.status !== "generating") return n;
+    if (n.metadata.task.job !== undefined) return n;
     return {
       ...n,
       metadata: {

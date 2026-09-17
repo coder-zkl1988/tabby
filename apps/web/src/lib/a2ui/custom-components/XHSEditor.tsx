@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getApiV1Devices } from "../../../../lib/api/sdk.gen";
+import { StatusPill, type StatusTone } from "../a2ui-status";
 import type { CustomComponentProps } from "./registry";
 import {
   clearPostImageGeneration,
@@ -51,6 +52,14 @@ type PublishStatus =
   | { state: "success" }
   | { state: "unknown"; message: string }
   | { state: "error"; message: string };
+
+const PUBLISH_TONE: Record<PublishStatus["state"], StatusTone> = {
+  idle: "idle",
+  publishing: "running",
+  success: "done",
+  unknown: "blocked",
+  error: "failed",
+};
 
 export function XHSEditor({ comp, onAction }: XHSEditorProps) {
   const data = comp as unknown as XHSCompData;
@@ -291,7 +300,7 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
             height="20"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#bb0028"
+            stroke="var(--color-xhs)"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -299,7 +308,13 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
             <path d="M12 20h9" />
             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
           </svg>
-          <span style={{ fontSize: 15, fontWeight: 600, color: "#1a1a1a" }}>
+          <span
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: "var(--color-text-heading)",
+            }}
+          >
             小红书内容编辑
           </span>
         </div>
@@ -322,7 +337,7 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(6, 1fr)",
+              gridTemplateColumns: "repeat(auto-fill, minmax(64px, 1fr))",
               gap: 8,
             }}
           >
@@ -424,7 +439,7 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 3,
-                color: "#bb0028",
+                color: "var(--color-xhs)",
                 fontSize: 11,
                 opacity: displayedPendingImageSlots.length > 0 ? 0.55 : 1,
               }}
@@ -461,7 +476,7 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
                 borderRadius: 8,
                 fontSize: 14,
                 outline: "none",
-                color: "#1a1a1a",
+                color: "var(--color-text-primary)",
                 boxSizing: "border-box",
               }}
             />
@@ -505,7 +520,7 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
               fontSize: 14,
               outline: "none",
               resize: "none",
-              color: "#1a1a1a",
+              color: "var(--color-text-primary)",
               boxSizing: "border-box",
               fontFamily: "inherit",
             }}
@@ -522,8 +537,14 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>
-              添加话题
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--color-text-secondary)",
+                fontWeight: 500,
+              }}
+            >
+              话题
             </span>
             {hashtags.map((tag) => (
               <span
@@ -531,11 +552,11 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 4,
-                  padding: "2px 8px",
-                  borderRadius: 4,
-                  background: "#fff1f0",
-                  color: "#bb0028",
+                  gap: 6,
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  background: "var(--color-xhs-wash)",
+                  color: "var(--color-xhs)",
                   fontSize: 12,
                 }}
               >
@@ -548,7 +569,8 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
                     border: "none",
                     cursor: "pointer",
                     padding: 0,
-                    color: "#bb0028",
+                    color: "var(--color-xhs)",
+                    opacity: 0.6,
                     fontSize: 12,
                     lineHeight: 1,
                   }}
@@ -584,23 +606,27 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
                   borderRadius: 4,
                   fontSize: 12,
                   outline: "none",
-                  color: "#1a1a1a",
+                  color: "var(--color-text-primary)",
                 }}
               />
               <button
                 type="button"
                 onClick={addHashtag}
                 style={{
-                  background: "none",
-                  border: "1px solid #bb0028",
-                  borderRadius: 4,
-                  padding: "2px 8px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  height: 28,
+                  background: "#fff",
+                  border: "1px solid var(--color-border-strong)",
+                  borderRadius: 6,
+                  padding: "0 12px",
                   cursor: "pointer",
-                  color: "#bb0028",
+                  color: "var(--color-text-primary)",
                   fontSize: 12,
+                  fontWeight: 500,
                 }}
               >
-                +添加
+                + 话题
               </button>
             </div>
           </div>
@@ -613,13 +639,29 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 8,
-          padding: "12px 16px 16px",
+          gap: 12,
+          flexWrap: "wrap",
+          padding: "14px 20px",
+          borderTop: "1px solid var(--color-border-subtle)",
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-          <span style={{ fontSize: 12, color: "#666", whiteSpace: "nowrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: "1 1 200px",
+            minWidth: 0,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 12,
+              color: "var(--color-text-secondary)",
+              whiteSpace: "nowrap",
+            }}
+          >
             发布到
           </span>
           <select
@@ -632,7 +674,7 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
               border: "1px solid #e5e5e5",
               borderRadius: 6,
               fontSize: 12,
-              color: "#1a1a1a",
+              color: "var(--color-text-primary)",
               background: "#fff",
               outline: "none",
             }}
@@ -657,48 +699,50 @@ export function XHSEditor({ comp, onAction }: XHSEditorProps) {
             publish.state === "publishing" || devices.length === 0 || !deviceId
           }
           style={{
-            padding: "6px 16px",
-            borderRadius: 6,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "var(--a2ui-control-lg)",
+            padding: "0 24px",
+            borderRadius: 10,
             border: "none",
-            background:
-              publish.state === "publishing" || devices.length === 0
-                ? "#e3a3b0"
-                : "#bb0028",
+            background: "var(--color-xhs)",
+            opacity:
+              publish.state === "publishing" || devices.length === 0 ? 0.38 : 1,
             cursor:
               publish.state === "publishing" || devices.length === 0
                 ? "not-allowed"
                 : "pointer",
-            fontSize: 13,
+            fontSize: 14,
             color: "#fff",
-            fontWeight: 500,
+            fontWeight: 600,
             whiteSpace: "nowrap",
+            flex: "1 1 auto",
           }}
         >
           {publish.state === "publishing" ? "发布中…" : "发布"}
         </button>
       </div>
 
-      {/* Status line */}
+      {/* Status line. The red belongs to the channel (icon, topics, 发布);
+          failure is the design system's error colour, so the two stop
+          meaning the same thing. */}
       {publish.state !== "idle" && (
-        <div
-          style={{
-            padding: "0 16px 14px",
-            fontSize: 12,
-            flexShrink: 0,
-            color:
-              publish.state === "error"
-                ? "#bb0028"
-                : publish.state === "unknown"
-                  ? "#8A5A00"
-                  : publish.state === "success"
-                    ? "#00a365"
-                    : "#666",
-          }}
-        >
-          {publish.state === "publishing" && publish.step}
-          {publish.state === "success" && "✅ 手机端已完成发布"}
-          {publish.state === "unknown" && `发布结果待确认：${publish.message}`}
-          {publish.state === "error" && `⚠️ ${publish.message}`}
+        <div style={{ padding: "0 20px 16px", flexShrink: 0 }}>
+          <StatusPill
+            tone={PUBLISH_TONE[publish.state]}
+            className={
+              publish.state === "error" || publish.state === "unknown"
+                ? "a2ui-status-pill--wrap"
+                : undefined
+            }
+          >
+            {publish.state === "publishing" && publish.step}
+            {publish.state === "success" && "手机端已完成发布"}
+            {publish.state === "unknown" &&
+              `发布结果待确认：${publish.message}`}
+            {publish.state === "error" && publish.message}
+          </StatusPill>
         </div>
       )}
 

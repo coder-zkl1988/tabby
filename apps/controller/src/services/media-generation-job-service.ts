@@ -1,9 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type {
-  GenerateImageRequest,
-  GenerateImageResponse,
-  ImageGenerationJob,
-} from "@nexu/shared";
 import { logger } from "../lib/logger.js";
 import {
   ImageGenerationFailedError,
@@ -14,26 +9,47 @@ const DEFAULT_MAX_ACTIVE_JOBS = 8;
 const DEFAULT_TERMINAL_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_RETAINED_JOBS = 100;
 
-type JobRecord = ImageGenerationJob;
+/**
+ * Shape every media result shares — enough for the service to hand callers a
+ * defensive copy without knowing whether it holds images or videos.
+ */
+type MediaJobResult = { items: ReadonlyArray<{ path: string; url: string }> };
 
-type QueuedJob = {
+/** Job record, generic over the result payload. */
+type JobRecord<TResult> = {
   jobId: string;
-  input: GenerateImageRequest;
+  status: "queued" | "running" | "succeeded" | "failed";
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  result?: TResult;
+  error?: string;
 };
 
-export class ImageGenerationQueueFullError extends Error {
-  constructor() {
-    super("图片生成任务较多，请稍后再试");
-    this.name = "ImageGenerationQueueFullError";
+type QueuedJob<TInput> = {
+  jobId: string;
+  input: TInput;
+};
+
+export class MediaGenerationQueueFullError extends Error {
+  constructor(label: string) {
+    super(`${label}任务较多，请稍后再试`);
+    this.name = "MediaGenerationQueueFullError";
   }
 }
 
-export class ImageGenerationJobService {
-  private readonly jobs = new Map<string, JobRecord>();
-  private readonly queue: QueuedJob[] = [];
-  private readonly generateImage: (
-    input: GenerateImageRequest,
-  ) => Promise<GenerateImageResponse>;
+/**
+ * Controller-owned async job queue for a slow media channel.
+ *
+ * Generic over input/result so image and video share one queue implementation —
+ * the only channel-specific pieces are the `run` callback and the `label` used
+ * in logs and the queue-full message.
+ */
+export class MediaGenerationJobService<TInput, TResult extends MediaJobResult> {
+  private readonly jobs = new Map<string, JobRecord<TResult>>();
+  private readonly queue: QueuedJob<TInput>[] = [];
+  private readonly run_: (input: TInput) => Promise<TResult>;
+  private readonly label: string;
   private readonly genId: () => string;
   private readonly now: () => number;
   private readonly maxActiveJobs: number;
@@ -43,16 +59,17 @@ export class ImageGenerationJobService {
   private draining = false;
 
   constructor(options: {
-    generateImage: (
-      input: GenerateImageRequest,
-    ) => Promise<GenerateImageResponse>;
+    run: (input: TInput) => Promise<TResult>;
+    /** Human label for logs and the queue-full message, e.g. "图片生成". */
+    label: string;
     genId?: () => string;
     now?: () => number;
     maxActiveJobs?: number;
     terminalTtlMs?: number;
     maxRetainedJobs?: number;
   }) {
-    this.generateImage = options.generateImage;
+    this.run_ = options.run;
+    this.label = options.label;
     this.genId = options.genId ?? randomUUID;
     this.now = options.now ?? Date.now;
     this.maxActiveJobs = options.maxActiveJobs ?? DEFAULT_MAX_ACTIVE_JOBS;
@@ -60,14 +77,14 @@ export class ImageGenerationJobService {
     this.maxRetainedJobs = options.maxRetainedJobs ?? DEFAULT_MAX_RETAINED_JOBS;
   }
 
-  submit(input: GenerateImageRequest): ImageGenerationJob {
+  submit(input: TInput): JobRecord<TResult> {
     this.pruneTerminalJobs();
     if (this.activeJobCount >= this.maxActiveJobs) {
-      throw new ImageGenerationQueueFullError();
+      throw new MediaGenerationQueueFullError(this.label);
     }
 
     const jobId = this.genId();
-    const job: JobRecord = {
+    const job: JobRecord<TResult> = {
       jobId,
       status: "queued",
       createdAt: this.toIso(this.now()),
@@ -79,7 +96,7 @@ export class ImageGenerationJobService {
     return this.snapshot(job);
   }
 
-  get(jobId: string): ImageGenerationJob | null {
+  get(jobId: string): JobRecord<TResult> | null {
     this.pruneTerminalJobs();
     const job = this.jobs.get(jobId);
     return job ? this.snapshot(job) : null;
@@ -106,7 +123,7 @@ export class ImageGenerationJobService {
     }
   }
 
-  private async run(queued: QueuedJob): Promise<void> {
+  private async run(queued: QueuedJob<TInput>): Promise<void> {
     const job = this.jobs.get(queued.jobId);
     if (!job) {
       this.activeJobCount = Math.max(0, this.activeJobCount - 1);
@@ -115,12 +132,15 @@ export class ImageGenerationJobService {
 
     job.status = "running";
     job.startedAt = this.toIso(this.now());
-    logger.info({ jobId: job.jobId }, "image generation job started");
+    logger.info({ jobId: job.jobId, kind: this.label }, "media job started");
 
     try {
-      job.result = await this.generateImage(queued.input);
+      job.result = await this.run_(queued.input);
       job.status = "succeeded";
-      logger.info({ jobId: job.jobId }, "image generation job succeeded");
+      logger.info(
+        { jobId: job.jobId, kind: this.label },
+        "media job succeeded",
+      );
     } catch (error) {
       job.status = "failed";
       job.error = this.publicErrorMessage(error);
@@ -129,13 +149,13 @@ export class ImageGenerationJobService {
         !(error instanceof InvalidMediaReferenceError)
       ) {
         logger.error(
-          { err: error, jobId: job.jobId },
-          "image generation job failed unexpectedly",
+          { err: error, jobId: job.jobId, kind: this.label },
+          "media job failed unexpectedly",
         );
       } else {
         logger.warn(
-          { jobId: job.jobId, error: job.error },
-          "image generation job failed",
+          { jobId: job.jobId, kind: this.label, error: job.error },
+          "media job failed",
         );
       }
     } finally {
@@ -175,7 +195,7 @@ export class ImageGenerationJobService {
     }
   }
 
-  private snapshot(job: JobRecord): ImageGenerationJob {
+  private snapshot(job: JobRecord<TResult>): JobRecord<TResult> {
     return {
       ...job,
       ...(job.result

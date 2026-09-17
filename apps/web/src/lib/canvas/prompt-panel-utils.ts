@@ -11,6 +11,7 @@
  *   dataURLs or mention tokens.
  */
 
+import type { UpstreamRef } from "./resource-references";
 import type { VideoAspectRatio } from "./video-generation-params";
 
 // ── servablePathFromUrl ────────────────────────────────────────
@@ -185,19 +186,44 @@ export function upstreamSummary(
 }
 
 /**
+ * Label one upstream text block by its 1-based reference-bar position.
+ *
+ * Numbering is what makes a `@` reference resolvable: several upstream text
+ * nodes appended with only a blank line between them are indistinguishable to
+ * the model, so a prompt saying "rewrite 文本2" has nothing to bind to.
+ */
+export function textBlockLabel(index: number): string {
+  return `文本${index + 1}`;
+}
+
+/**
+ * Number the non-empty upstream text blocks, in the same order the reference
+ * bar shows them (= `collectUpstream`'s BFS order). Empty items are dropped
+ * BEFORE numbering so the labels stay contiguous and match the bar 1:1.
+ */
+export function labelUpstreamTextBlocks(
+  upstreamPrompts: ReadonlyArray<string>,
+): string[] {
+  return upstreamPrompts
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .map((p, index) => `【${textBlockLabel(index)}】\n${p}`);
+}
+
+/**
  * Merge the panel's own typed prompt with connected upstream text-node
  * content, matching config-node-logic.ts's buildConfigGenerationPlan
  * pattern exactly: local prompt first, then each non-empty trimmed upstream
- * prompt, joined with a blank line. Without this, the "文本 N" upstream
- * summary badge implies a connected text node feeds generation when it
- * previously didn't — see resource-references.ts's own docstring ("an edge
- * INTO a node means this feeds your generation").
+ * prompt as a 【文本N】-labeled block, joined with a blank line. Without this,
+ * the "文本 N" upstream summary badge implies a connected text node feeds
+ * generation when it previously didn't — see resource-references.ts's own
+ * docstring ("an edge INTO a node means this feeds your generation").
  */
 export function mergeUpstreamPrompt(
   localPrompt: string,
   upstreamPrompts: ReadonlyArray<string>,
 ): string {
-  return [localPrompt.trim(), ...upstreamPrompts.map((p) => p.trim())]
+  return [localPrompt.trim(), ...labelUpstreamTextBlocks(upstreamPrompts)]
     .filter((p) => p.length > 0)
     .join("\n\n");
 }
@@ -241,7 +267,53 @@ export type ImageGenOpts = {
   transparentBackground?: boolean;
 };
 
+/**
+ * Fixed pixel size per (tier, aspect ratio) — reference v0.18.
+ *
+ * A tier alone ("2K") leaves the backend to guess a shape, so the same setting
+ * produced different pixel counts across models. Pinning a concrete `W x H` per
+ * pair makes the hint say exactly one thing. Values are the reference project's
+ * table, restricted to the aspect ratios this panel offers.
+ */
+export const IMAGE_SIZE_TABLE: Record<string, Record<string, string>> = {
+  "1K": {
+    "1:1": "1024x1024",
+    "3:4": "768x1024",
+    "4:3": "1024x768",
+    "9:16": "864x1536",
+    "16:9": "1536x864",
+  },
+  "2K": {
+    "1:1": "2048x2048",
+    "3:4": "1536x2048",
+    "4:3": "2048x1536",
+    "9:16": "1152x2048",
+    "16:9": "2048x1152",
+  },
+  "4K": {
+    "1:1": "2880x2880",
+    "3:4": "2480x3312",
+    "4:3": "3312x2480",
+    "9:16": "2160x3840",
+    "16:9": "3840x2160",
+  },
+};
+
+/**
+ * Concrete `"WxH"` for a tier + aspect pair, or undefined when either is unset
+ * (or the pair has no entry) — in which case the tier is sent on its own, the
+ * pre-table behavior.
+ */
+export function resolveImagePixelSize(
+  tier: string,
+  aspectRatio: string,
+): string | undefined {
+  if (tier === "" || aspectRatio === "") return undefined;
+  return IMAGE_SIZE_TABLE[tier]?.[aspectRatio];
+}
+
 export function buildImageGenOpts(s: ImageGenSettings): ImageGenOpts {
+  const pixelSize = resolveImagePixelSize(s.size, s.aspectRatio);
   return {
     ...(s.referenceImages && s.referenceImages.length > 0
       ? { referenceImages: s.referenceImages }
@@ -250,7 +322,7 @@ export function buildImageGenOpts(s: ImageGenSettings): ImageGenOpts {
     ...(s.model !== "" ? { model: s.model } : {}),
     ...(s.quality !== "auto" ? { quality: s.quality } : {}),
     ...(s.aspectRatio !== "" ? { aspectRatio: s.aspectRatio } : {}),
-    ...(s.size !== "" ? { size: s.size } : {}),
+    ...(s.size !== "" ? { size: pixelSize ?? s.size } : {}),
     ...(s.transparentBackground === true
       ? { transparentBackground: true }
       : {}),
@@ -362,7 +434,12 @@ export function imageSettingsSummary(s: {
   count: number;
 }): string {
   const parts = [imageQualityLabel(s.quality), s.aspectRatio || "默认"];
-  if (s.size !== "") parts.push(s.size);
+  if (s.size !== "") {
+    // Show the pixels actually requested, so the chip never implies a size the
+    // request doesn't carry.
+    const pixelSize = resolveImagePixelSize(s.size, s.aspectRatio);
+    parts.push(pixelSize ? `${s.size}（${pixelSize}）` : s.size);
+  }
   parts.push(`${s.count} 张`);
   return parts.join(" · ");
 }
@@ -395,4 +472,96 @@ export function audioSettingsSummary(s: {
   const parts = [s.voice.trim() || "默认音色", `${s.speed}x`];
   if (s.format !== "") parts.push(s.format);
   return parts.join(" · ");
+}
+
+// ── reference bar (reference v0.17) ────────────────────────────
+
+export type ReferenceChip = {
+  nodeId: string;
+  /** Connection to cut to drop this reference. */
+  edgeId: string;
+  kind: "text" | "image" | "video" | "audio";
+  /** 【文本N】 for text, the node title otherwise. */
+  label: string;
+  /** Text excerpt, or the image's content URL for a thumbnail. */
+  preview: string;
+  /**
+   * Image only: whether the backend can actually take it as a reference.
+   * A dataURL upload shows in the bar but is not sent — saying so beats
+   * silently dropping it.
+   */
+  usable: boolean;
+  /** Set when the reference came in through a group node. */
+  viaGroupId?: string;
+};
+
+const TEXT_PREVIEW_MAX = 40;
+
+/**
+ * Build the reference bar's chips from the upstream refs.
+ *
+ * Text chips are numbered over the SAME filtered sequence as
+ * `labelUpstreamTextBlocks`, so 【文本2】 in the bar is 【文本2】 in the prompt.
+ * `imagesAreReferences` is false for video/audio nodes, whose generation calls
+ * carry no reference-image field at all — the chips then render as context
+ * rather than promising a feed that never happens.
+ */
+export function buildReferenceChips(
+  refs: ReadonlyArray<UpstreamRef>,
+  imagesAreReferences: boolean,
+): ReferenceChip[] {
+  const chips: ReferenceChip[] = [];
+  let textIndex = 0;
+
+  for (const ref of refs) {
+    const { node, edgeId } = ref;
+    const content = node.metadata.content ?? "";
+    const via =
+      ref.viaGroupId !== undefined ? { viaGroupId: ref.viaGroupId } : {};
+
+    if (node.type === "text") {
+      const trimmed = content.trim();
+      if (trimmed === "") continue;
+      chips.push({
+        nodeId: node.id,
+        edgeId,
+        kind: "text",
+        label: `【${textBlockLabel(textIndex++)}】`,
+        preview:
+          trimmed.length > TEXT_PREVIEW_MAX
+            ? `${trimmed.slice(0, TEXT_PREVIEW_MAX)}…`
+            : trimmed,
+        usable: true,
+        ...via,
+      });
+    } else if (
+      node.type === "image" ||
+      node.type === "video" ||
+      node.type === "audio"
+    ) {
+      if (content === "") continue;
+      chips.push({
+        nodeId: node.id,
+        edgeId,
+        kind: node.type,
+        label: node.title,
+        preview: content,
+        usable:
+          node.type === "image"
+            ? imagesAreReferences && servableSourceOf(node) !== null
+            : true,
+        ...via,
+      });
+    }
+  }
+
+  return chips;
+}
+
+/** Node ids a reference chip's edge would drop if it were cut. */
+export function chipSiblingCount(
+  chips: ReadonlyArray<ReferenceChip>,
+  edgeId: string,
+): number {
+  return chips.filter((chip) => chip.edgeId === edgeId).length;
 }

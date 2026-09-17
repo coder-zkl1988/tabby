@@ -185,7 +185,7 @@ export function XHSImageGenerationPopover({
     >
       <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-          <Sparkles size={16} className="text-rose-600" />
+          <Sparkles size={16} className="text-[var(--color-xhs)]" />
           AI 生成帖子图片
         </div>
         <button
@@ -193,7 +193,7 @@ export function XHSImageGenerationPopover({
           onClick={() => onOpenChange(false)}
           title="关闭"
           aria-label="关闭"
-          className="flex size-7 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-2 hover:text-text-primary"
+          className="flex size-7 items-center justify-center rounded-md text-text-secondary hover:bg-surface-2 hover:text-text-primary"
         >
           <X size={15} />
         </button>
@@ -209,7 +209,7 @@ export function XHSImageGenerationPopover({
               type="button"
               onClick={() => void handleGeneratePrompt()}
               disabled={!hasPostContent || isGeneratingPrompt}
-              className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-[var(--color-xhs)] transition-colors hover:bg-[var(--color-xhs-wash)] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {isGeneratingPrompt ? (
                 <LoaderCircle size={13} className="animate-spin" />
@@ -323,7 +323,7 @@ export function XHSImageGenerationPopover({
           type="button"
           onClick={handleSubmit}
           disabled={!prompt.trim() || isGeneratingPrompt}
-          className="flex h-9 items-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+          className="flex h-9 items-center gap-2 rounded-lg bg-[var(--color-xhs)] px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
         >
           <ImagePlus size={15} />
           生成并添加
