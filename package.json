@@ -6,6 +6,7 @@
     "dev": "pnpm --dir ./tools/dev exec tsx ./src/index.ts",
     "build": "pnpm -r build",
     "check:esm-imports": "node scripts/check-esm-specifiers.mjs",
+    "check:design-ladders": "node scripts/check-design-ladders.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",
     "lint:fix": "biome check --write --unsafe .",
