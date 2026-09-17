@@ -126,30 +126,30 @@ P0 为进入养号的前置完整性与结果真实性；P1 为明确需求遗�
 
 | 引用 | 文件及起始位置 |
 |---|---|
-| E01 | [shared 业务/画像/人设/浏览配置](/Volumes/CloneData/workspace/nexu/packages/shared/src/schemas/xhs-ops.ts:16) |
-| E02 | [项目保存与输入项](/Volumes/CloneData/workspace/nexu/apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsProjectForm.tsx:111) |
-| E03 | [对话阶段指引](/Volumes/CloneData/workspace/nexu/apps/controller/static/platform-templates/en/TOOLS.md:93)；[A2UI 人设契约](/Volumes/CloneData/workspace/nexu/apps/controller/static/runtime-plugins/nexu-a2ui/index.js:507) |
-| E04 | [画像卡初始化/确认](/Volumes/CloneData/workspace/nexu/apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsProfileCard.tsx:36) |
-| E05 | [运营账号创建](/Volumes/CloneData/workspace/nexu/apps/controller/src/store/xhs-ops-store.ts:516)；[账号路由](/Volumes/CloneData/workspace/nexu/apps/controller/src/routes/xhs-ops-routes.ts:687) |
-| E06 | [项目更新](/Volumes/CloneData/workspace/nexu/apps/controller/src/store/xhs-ops-store.ts:175) |
-| E07 | [账号加载/保存/建议](/Volumes/CloneData/workspace/nexu/apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsAccountPlanner.tsx:178) |
-| E08 | [人设重叠检查](/Volumes/CloneData/workspace/nexu/apps/web/src/lib/a2ui/custom-components/xhs-ops/xhs-ops-types.ts:423) |
-| E09 | [已有项目选择能力](/Volumes/CloneData/workspace/nexu/apps/web/src/lib/a2ui/custom-components/xhs-ops/xhs-ops-project-picker.tsx:36) |
-| E10 | [兴趣池取词、比例与分段](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-plan-suggest.ts:66) |
-| E11 | [素材生成及手机应用/结果解释](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-profile-service.ts:70) |
-| E12 | [草稿 Ready](/Volumes/CloneData/workspace/nexu/packages/shared/src/schemas/xhs-ops.ts:212)；[编辑失效与确认](/Volumes/CloneData/workspace/nexu/apps/controller/src/store/xhs-ops-store.ts:563) |
-| E13 | [素材编辑、确认、应用、选图](/Volumes/CloneData/workspace/nexu/apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsProfileMaterial.tsx:244) |
-| E14 | [安装登录准备](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-preparation.ts:97)；[手机登录技能](/Volumes/CloneData/workspace/tabby-control/phone-skills/apps/xhs/references/login.md:3) |
-| E15 | [四项手机资料任务及回执](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-task-builder.ts:307) |
-| E16 | [手机资料编辑技能](/Volumes/CloneData/workspace/tabby-control/phone-skills/apps/xhs/references/profile.md:27) |
-| E17 | [创建/启动养号检查](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-run-service.ts:513) |
-| E18 | [浏览任务头与动作要求](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-task-builder.ts:50) |
-| E19 | [研究浏览技能](/Volumes/CloneData/workspace/tabby-control/phone-skills/apps/xhs/references/research.md:17) |
-| E20 | [帖子/任务结果数据结构](/Volumes/CloneData/workspace/nexu/packages/shared/src/schemas/xhs-ops.ts:342) |
-| E21 | [单块互动配额](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-run-service.ts:260)；[每日累计](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-run-service.ts:1353) |
-| E22 | [评论长度/过滤/配额](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-comment-service.ts:25) |
-| E23 | [浏览回执解释](/Volumes/CloneData/workspace/nexu/apps/controller/src/services/xhs-ops-run-service.ts:393) |
-| E24 | [复盘看板](/Volumes/CloneData/workspace/nexu/apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsDashboard.tsx:1) |
-| E25 | [此前修复与实机验证记录](/Volumes/CloneData/workspace/nexu/docs/plans/2026-09-07-koc-review-fixes.md:83) |
+| E01 | shared 业务/画像/人设/浏览配置（`packages/shared/src/schemas/xhs-ops.ts:16`） |
+| E02 | 项目保存与输入项（`apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsProjectForm.tsx:111`） |
+| E03 | 对话阶段指引（`apps/controller/static/platform-templates/en/TOOLS.md:93`）；A2UI 人设契约（`apps/controller/static/runtime-plugins/nexu-a2ui/index.js:507`） |
+| E04 | 画像卡初始化/确认（`apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsProfileCard.tsx:36`） |
+| E05 | 运营账号创建（`apps/controller/src/store/xhs-ops-store.ts:516`）；账号路由（`apps/controller/src/routes/xhs-ops-routes.ts:687`） |
+| E06 | 项目更新（`apps/controller/src/store/xhs-ops-store.ts:175`） |
+| E07 | 账号加载/保存/建议（`apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsAccountPlanner.tsx:178`） |
+| E08 | 人设重叠检查（`apps/web/src/lib/a2ui/custom-components/xhs-ops/xhs-ops-types.ts:423`） |
+| E09 | 已有项目选择能力（`apps/web/src/lib/a2ui/custom-components/xhs-ops/xhs-ops-project-picker.tsx:36`） |
+| E10 | 兴趣池取词、比例与分段（`apps/controller/src/services/xhs-ops-plan-suggest.ts:66`） |
+| E11 | 素材生成及手机应用/结果解释（`apps/controller/src/services/xhs-ops-profile-service.ts:70`） |
+| E12 | 草稿 Ready（`packages/shared/src/schemas/xhs-ops.ts:212`）；编辑失效与确认（`apps/controller/src/store/xhs-ops-store.ts:563`） |
+| E13 | 素材编辑、确认、应用、选图（`apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsProfileMaterial.tsx:244`） |
+| E14 | 安装登录准备（`apps/controller/src/services/xhs-ops-preparation.ts:97`）；手机登录技能（`tabby-control/phone-skills/apps/xhs/references/login.md:3`） |
+| E15 | 四项手机资料任务及回执（`apps/controller/src/services/xhs-ops-task-builder.ts:307`） |
+| E16 | 手机资料编辑技能（`tabby-control/phone-skills/apps/xhs/references/profile.md:27`） |
+| E17 | 创建/启动养号检查（`apps/controller/src/services/xhs-ops-run-service.ts:513`） |
+| E18 | 浏览任务头与动作要求（`apps/controller/src/services/xhs-ops-task-builder.ts:50`） |
+| E19 | 研究浏览技能（`tabby-control/phone-skills/apps/xhs/references/research.md:17`） |
+| E20 | 帖子/任务结果数据结构（`packages/shared/src/schemas/xhs-ops.ts:342`） |
+| E21 | 单块互动配额（`apps/controller/src/services/xhs-ops-run-service.ts:260`）；每日累计（`apps/controller/src/services/xhs-ops-run-service.ts:1353`） |
+| E22 | 评论长度/过滤/配额（`apps/controller/src/services/xhs-ops-comment-service.ts:25`） |
+| E23 | 浏览回执解释（`apps/controller/src/services/xhs-ops-run-service.ts:393`） |
+| E24 | 复盘看板（`apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsDashboard.tsx:1`） |
+| E25 | 此前修复与实机验证记录（`docs/plans/2026-09-07-koc-review-fixes.md:83`） |
 
 团队知识库约定目录 `agent-digital-cowork/clone/` 在本工作区及父目录不存在，报告保存在本仓库；未声称已同步。
