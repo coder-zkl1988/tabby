@@ -109,9 +109,9 @@ export function WorkflowDagCanvas({
               rx={10}
               className={cn(
                 "fill-background stroke-border",
-                status === "done" && "stroke-emerald-500",
-                status === "running" && "stroke-sky-500",
-                status === "blocked" && "stroke-amber-500",
+                status === "done" && "stroke-[var(--color-success)]",
+                status === "running" && "stroke-[var(--color-brand-primary)]",
+                status === "blocked" && "stroke-[var(--color-warning-ink)]",
                 selectedStepId === step.id && "stroke-foreground",
               )}
               strokeWidth={selectedStepId === step.id ? 2.5 : 1.5}
@@ -123,7 +123,7 @@ export function WorkflowDagCanvas({
             >
               {truncate(step.name ?? step.id, 12)}
             </text>
-            <text x={12} y={44} className="fill-muted-foreground text-[11px]">
+            <text x={12} y={44} className="fill-muted-foreground text-[12px]">
               {step.type === "approval"
                 ? "⏸ approval"
                 : truncate(step.assigneeSlug, 20)}
@@ -134,9 +134,10 @@ export function WorkflowDagCanvas({
               r={5}
               className={cn(
                 "fill-muted-foreground/40",
-                status === "done" && "fill-emerald-500",
-                status === "running" && "fill-sky-500 animate-pulse",
-                status === "blocked" && "fill-amber-500",
+                status === "done" && "fill-[var(--color-success)]",
+                status === "running" &&
+                  "fill-[var(--color-brand-primary)] animate-pulse",
+                status === "blocked" && "fill-[var(--color-warning-ink)]",
               )}
             />
           </g>

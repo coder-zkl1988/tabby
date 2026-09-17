@@ -46,9 +46,9 @@ describe("openclawConfigSchema local automation", () => {
       createMinimalConfig({
         mcp: {
           servers: {
-            peekaboo: {
+            "custom-driver": {
               enabled: true,
-              command: "/runtime/computer-use/peekaboo",
+              command: "/runtime/custom-driver/bin",
               args: ["mcp", "serve"],
               transport: "stdio",
             },
@@ -59,7 +59,7 @@ describe("openclawConfigSchema local automation", () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.mcp?.servers.peekaboo).toBeDefined();
+      expect(result.data.mcp?.servers["custom-driver"]).toBeDefined();
     }
   });
 

@@ -61,18 +61,18 @@ describe("generatePlist", () => {
     );
     const env = {
       ...mockEnv,
-      computerUseBackend: "peekaboo" as const,
+      computerUseBackend: "cua-driver" as const,
       computerUseBinPath:
-        "/Users/testuser/.nexu/runtime/computer-use/peekaboo-a&b/peekaboo",
+        "/Users/testuser/.nexu/runtime/computer-use/cua-driver-a&b/cua-driver",
     };
 
     const controllerPlist = generatePlist("controller", env);
     const openclawPlist = generatePlist("openclaw", env);
 
     expect(controllerPlist).toContain("<key>COMPUTER_USE_BACKEND</key>");
-    expect(controllerPlist).toContain("<string>peekaboo</string>");
+    expect(controllerPlist).toContain("<string>cua-driver</string>");
     expect(controllerPlist).toContain(
-      "/computer-use/peekaboo-a&amp;b/peekaboo",
+      "/computer-use/cua-driver-a&amp;b/cua-driver",
     );
     expect(openclawPlist).not.toContain("COMPUTER_USE_BACKEND");
     expect(openclawPlist).not.toContain("COMPUTER_USE_BIN");

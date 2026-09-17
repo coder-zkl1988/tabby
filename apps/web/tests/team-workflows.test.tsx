@@ -400,7 +400,8 @@ describe("TeamRunPanel", () => {
         <TeamRunPanel {...customProps(RUN)} />
       </QueryClientProvider>,
     );
-    expect(markup).toContain("运行中");
+    // TeamRunPanel and TeamRunCard share one status vocabulary now.
+    expect(markup).toContain("团队执行中");
     expect(markup).not.toContain("有步骤受阻");
   });
 });

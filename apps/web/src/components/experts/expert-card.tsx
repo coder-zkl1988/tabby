@@ -164,7 +164,7 @@ export function ExpertCardFace({
     <div className="w-full h-full rounded-[20px] overflow-hidden flex flex-col border-2 border-white/10">
       {/* Image zone */}
       <div
-        className="w-full h-48 relative overflow-hidden shrink-0"
+        className="w-full h-[170px] relative overflow-hidden shrink-0"
         style={{ background: theme.gradient }}
       >
         <div
@@ -184,7 +184,7 @@ export function ExpertCardFace({
         ) : (
           <span
             aria-hidden
-            className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[72px] leading-none z-[2]"
+            className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[68px] leading-none z-[2]"
           >
             {expert.emoji}
           </span>
@@ -198,20 +198,20 @@ export function ExpertCardFace({
 
       {/* Info zone */}
       <div
-        className="px-3.5 pt-[30px] pb-3 flex flex-col items-center gap-[7px] -mt-[30px] relative z-[4] flex-1"
+        className="px-4 pt-7 pb-3.5 flex flex-col items-center gap-2 -mt-7 relative z-[4] flex-1"
         style={{
-          background: `linear-gradient(to bottom, transparent 0px, ${theme.infoBg} 30px)`,
+          background: `linear-gradient(to bottom, transparent 0px, ${theme.infoBg} 28px)`,
         }}
       >
         <div
-          className="text-sm font-black tracking-[0.5px] text-center"
+          className="text-[15px] font-black tracking-[0.5px] text-center"
           style={{ color: "#111" }}
         >
           {expert.name}
         </div>
         {expert.description && (
           <p
-            className="text-[11px] text-[#666] text-center leading-[1.5] px-1 line-clamp-2"
+            className="text-[12px] text-[#5c5c5c] text-center leading-[1.5] px-1 line-clamp-2"
             title={expert.description}
           >
             {expert.description}
@@ -222,7 +222,7 @@ export function ExpertCardFace({
             {expert.tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="text-[9px] font-extrabold px-2 py-[3px] rounded-[20px] tracking-[0.2px] shrink-0"
+                className="text-[11px] font-bold px-2.5 py-[3px] rounded-[20px] tracking-[0.2px] shrink-0"
                 style={{
                   background: theme.tagBg,
                   color: theme.tagText,
@@ -238,10 +238,10 @@ export function ExpertCardFace({
 
       {/* Footer */}
       <div
-        className="border-t border-black/[0.07] px-3.5 py-2 flex items-center justify-between gap-1.5 relative z-[4]"
+        className="border-t border-black/[0.07] px-4 py-2.5 flex items-center justify-between gap-1.5 relative z-[4]"
         style={{ background: theme.footerBg }}
       >
-        <span className="text-[9px] font-extrabold text-[#999] tracking-[0.4px]">
+        <span className="text-[11px] font-extrabold text-[#8a8a8a] tracking-[0.4px]">
           {expert.category ?? ""}
         </span>
         <BarcodeLines color={theme.barcodeColor} />

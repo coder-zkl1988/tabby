@@ -1,5 +1,11 @@
 import { pinTeamRunToCanvas } from "@/lib/canvas/team-step-node";
 import {
+  Spinner,
+  StatusMark,
+  StatusPill,
+  type StatusTone,
+} from "../a2ui-status";
+import {
   exportRunMarkdown,
   parseTeamRunInfo,
   useRunApprovals,
@@ -7,16 +13,26 @@ import {
 } from "./TeamRunPanel";
 import type { CustomComponentProps } from "./registry";
 
-function statusDotClass(status: string | undefined): string {
+/**
+ * `waiting` means "this row is asking you for something right now", so it
+ * comes from the live approvals set — not from `step.type === "approval"`,
+ * which is a static DAG property and would mark every gate in the run even
+ * though only one of them can be acted on.
+ */
+function stepTone(
+  status: string | undefined,
+  awaitingApproval: boolean,
+): StatusTone {
+  if (awaitingApproval) return "waiting";
   switch (status) {
     case "done":
-      return "bg-emerald-500";
+      return "done";
     case "running":
-      return "bg-sky-500 animate-pulse";
+      return "running";
     case "blocked":
-      return "bg-amber-500";
+      return "blocked";
     default:
-      return "bg-border";
+      return "idle";
   }
 }
 
@@ -37,49 +53,65 @@ export function TeamRunCard({ comp, resolve }: CustomComponentProps) {
   const lastStep = run.steps[run.steps.length - 1];
   const finalOutput = lastStep ? cardsById.get(lastStep.cardId)?.output : null;
 
+  const pendingStepIds = new Set(pending.map((a) => a.stepId));
+
+  const [runTone, runLabel]: [StatusTone, string] = allDone
+    ? ["done", "已完成"]
+    : anyBlocked && pending.length === 0
+      ? ["blocked", "有步骤受阻"]
+      : pending.length > 0
+        ? ["waiting", "等待审批"]
+        : ["running", "团队执行中"];
+
   return (
+    // 360 is the *ceiling*, not a fixed width: the inline host floors at
+    // min-w-[20rem] (320), so a fixed w-[360px] silently loses 40px —
+    // "查看详情" and the assignee names go first.
+    //
+    // Deliberately NOT `a2ui-framed`: that marker promises the card fills
+    // the host, and this one caps at 360 inside a bubble up to 704 wide.
+    // Marking it made the host drop its padding and left 343px of empty
+    // bordered white beside the card.
     <div
-      className="flex w-[320px] flex-col gap-2 rounded-lg border border-border bg-surface-1 p-3"
+      className="flex w-full max-w-[360px] flex-col overflow-hidden rounded-xl border border-border bg-surface-1"
       data-team-run-card={run.parentCardId}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold">{run.title}</div>
-          <div className="text-[11px] text-text-secondary">
-            {allDone
-              ? "✅ 已完成"
-              : anyBlocked && pending.length === 0
-                ? "⚠️ 有步骤受阻"
-                : pending.length > 0
-                  ? "⏸ 等待审批"
-                  : "⏳ 团队执行中…"}
+      <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="truncate text-[15px] font-semibold leading-[1.4] text-text-heading">
+            {run.title}
           </div>
+          <StatusPill tone={runTone} className="self-start">
+            {runLabel}
+          </StatusPill>
         </div>
         <button
           type="button"
           onClick={() => pinTeamRunToCanvas(run)}
-          className="shrink-0 rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-text-secondary hover:bg-surface-2"
+          className="inline-flex h-7 shrink-0 items-center rounded-md border border-border-strong px-2.5 text-[12px] font-medium text-text-primary transition-colors hover:border-[var(--color-accent)]"
         >
           查看详情
         </button>
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col px-4 py-2">
         {run.steps.map((step) => (
           <div
             key={step.id}
             data-run-step={step.id}
             data-run-step-status={statusByStepId[step.id] ?? "pending"}
-            className="flex items-center gap-2 text-[12px]"
+            className="flex h-7 items-center gap-2.5 text-[13px]"
           >
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(statusByStepId[step.id])}`}
+            <StatusMark
+              tone={stepTone(
+                statusByStepId[step.id],
+                pendingStepIds.has(step.id),
+              )}
             />
-            <span className="min-w-0 flex-1 truncate">
-              {step.type === "approval" ? "⏸ " : ""}
+            <span className="min-w-0 flex-1 truncate text-text-primary">
               {step.name}
             </span>
-            <span className="shrink-0 text-[11px] text-text-secondary">
+            <span className="shrink-0 text-[12px] text-text-secondary">
               {step.assigneeName}
             </span>
           </div>
@@ -89,11 +121,13 @@ export function TeamRunCard({ comp, resolve }: CustomComponentProps) {
       {pending.map((approval) => (
         <div
           key={`${approval.runId}:${approval.stepId}`}
-          className="flex items-center gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1.5"
+          className="flex flex-col gap-3 border-t border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] px-4 py-3.5"
         >
-          <span className="min-w-0 flex-1 truncate text-[11px]">
+          <span className="text-[13px] leading-[1.55] text-text-primary">
             {approval.prompt.slice(0, 60)}
           </span>
+          {/* 36px, not the 20px this used to be: approving a step is the
+              least reversible thing this card can do. */}
           <button
             type="button"
             disabled={approve.isPending}
@@ -105,23 +139,24 @@ export function TeamRunCard({ comp, resolve }: CustomComponentProps) {
                 stepId: approval.stepId,
               })
             }
-            className="shrink-0 rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-bold text-[var(--color-accent-fg)] hover:opacity-90 disabled:opacity-50"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 self-start rounded-lg bg-[var(--color-accent)] px-5 text-[13px] font-semibold text-[var(--color-accent-fg)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {approve.isPending ? "批准中…" : "批准"}
+            {approve.isPending ? <Spinner /> : null}
+            {approve.isPending ? "批准中" : "批准"}
           </button>
         </div>
       ))}
 
       {allDone && finalOutput ? (
-        <div className="flex flex-col gap-1 border-t border-border pt-2">
-          <pre className="max-h-24 overflow-hidden whitespace-pre-wrap text-[11px] text-text-secondary">
+        <div className="flex flex-col gap-2 border-t border-border-subtle px-4 py-3.5">
+          <pre className="max-h-24 overflow-hidden whitespace-pre-wrap text-[12px] leading-[1.5] text-text-secondary">
             {finalOutput.slice(0, 160)}
             {finalOutput.length > 160 ? "…" : ""}
           </pre>
           <button
             type="button"
             onClick={() => exportRunMarkdown(run, cardsById)}
-            className="self-start rounded-md border border-border px-2 py-0.5 text-[11px] font-medium hover:bg-surface-2"
+            className="inline-flex h-7 items-center self-start rounded-md border border-border-strong px-2.5 text-[12px] font-medium text-text-primary transition-colors hover:border-[var(--color-accent)]"
           >
             导出 Markdown
           </button>

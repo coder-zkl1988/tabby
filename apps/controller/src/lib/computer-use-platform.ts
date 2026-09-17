@@ -5,8 +5,8 @@ export type ComputerUseBackend = "cua-driver";
 
 /**
  * CuaDriver.app declares `LSMinimumSystemVersion 13.0`, so macOS 13 (Darwin 22)
- * is the floor. This is wider than the macOS 15 floor the Peekaboo backend
- * required before the backends were unified.
+ * is the floor. This is wider than the macOS 15 floor the previous
+ * macOS-only backend required before the backends were unified.
  */
 const MIN_DARWIN_MAJOR = 22;
 
