@@ -1,6 +1,14 @@
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
-import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  access,
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -14,6 +22,56 @@ const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
 function getRequiredDiagnosticsUnitIds(mode) {
   return mode === "dev" ? ["openclaw"] : ["controller", "openclaw"];
+}
+
+function resolveOpenclawLogDir(mode) {
+  if (mode === "dev") {
+    return resolve(repoRoot, ".tmp/desktop/nexu-home/logs/openclaw");
+  }
+  // `desktop-check-dist` points the packaged app's HOME at PACKAGED_HOME, and
+  // NEXU_HOME defaults to `<home>/.nexu`.
+  const home = process.env.NEXU_HOME
+    ? resolve(process.env.NEXU_HOME)
+    : join(process.env.PACKAGED_HOME ?? homedir(), ".nexu");
+  return join(home, "logs", "openclaw");
+}
+
+async function dumpLatestOpenclawLog(mode, tailLines = 60) {
+  const logDir = resolveOpenclawLogDir(mode);
+  let newest = null;
+  try {
+    for (const entry of await readdir(logDir)) {
+      if (!entry.endsWith(".log")) continue;
+      const filePath = join(logDir, entry);
+      const mtimeMs = (await stat(filePath)).mtimeMs;
+      if (!newest || mtimeMs > newest.mtimeMs) {
+        newest = { filePath, mtimeMs };
+      }
+    }
+  } catch {
+    // No directory at all means OpenClaw never got far enough to open a log,
+    // which is itself worth saying out loud.
+  }
+
+  if (!newest) {
+    console.error(`\n--- no OpenClaw log found under ${logDir} ---`);
+    return;
+  }
+
+  try {
+    const content = await readFile(newest.filePath, "utf8");
+    const tail = content.split("\n").filter(Boolean).slice(-tailLines);
+    console.error(`\n--- ${newest.filePath} (tail) ---`);
+    for (const line of tail) {
+      console.error(line);
+    }
+  } catch (error) {
+    console.error(
+      `\n--- unable to read ${newest.filePath}: ${
+        error instanceof Error ? error.message : String(error)
+      } ---`,
+    );
+  }
 }
 
 function createCommandSpec(command, args) {
@@ -1347,6 +1405,37 @@ async function verifyRuntime(context) {
     );
     for (const issue of readableIssues) {
       console.error(issue);
+    }
+  }
+
+  // OpenClaw is spawned by the controller rather than being a runtime unit, so
+  // its log is not in `context.logs` and nothing above prints it. When OpenClaw
+  // is the process that died — `openclaw:stopped` in the snapshot, with the
+  // controller looping on `openclaw_ws_error` — this is the only place its own
+  // startup error is recorded.
+  await dumpLatestOpenclawLog(context.mode);
+
+  // The controller's side of that story. The warn/error filter above keeps only
+  // `openclaw_ws_error`, which is the symptom; the spawn attempt and its exit
+  // code are logged at info level and would otherwise never be printed.
+  const controllerContent = contents.controller;
+  if (controllerContent) {
+    const spawnLines = controllerContent
+      .split("\n")
+      .filter(
+        (line) =>
+          /openclaw/i.test(line) &&
+          !line.includes("openclaw_ws_error") &&
+          !line.includes("openclaw_ws_connecting") &&
+          !line.includes("openclaw_ws_closed") &&
+          !line.includes("openclaw_ws_reconnect_scheduled"),
+      )
+      .slice(-40);
+    if (spawnLines.length > 0) {
+      console.error("\n--- controller log: OpenClaw lifecycle lines ---");
+      for (const line of spawnLines) {
+        console.error(line);
+      }
     }
   }
 
