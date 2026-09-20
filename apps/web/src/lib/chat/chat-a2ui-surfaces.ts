@@ -6,7 +6,7 @@ export interface A2UITranscriptEntry<TMessage> {
   extracted: ExtractedMessage;
 }
 
-function surfaceIds(messages: A2UIMessage[]): string[] {
+export function surfaceIds(messages: A2UIMessage[]): string[] {
   const ids = new Set<string>();
   for (const message of messages) {
     if ("createSurface" in message) {
