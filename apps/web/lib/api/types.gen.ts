@@ -7154,6 +7154,81 @@ export type GetApiV1RuntimeOperationsResponses = {
 
 export type GetApiV1RuntimeOperationsResponse = GetApiV1RuntimeOperationsResponses[keyof GetApiV1RuntimeOperationsResponses];
 
+export type GetApiV1RuntimeQuestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/runtime/questions';
+};
+
+export type GetApiV1RuntimeQuestionsResponses = {
+    /**
+     * Pending interactive agent questions
+     */
+    200: {
+        connected: boolean;
+        available: boolean;
+        questions: Array<{
+            id: string;
+            questions: Array<{
+                questionId: string;
+                header: string;
+                question: string;
+                options: Array<{
+                    label: string;
+                    description?: string;
+                }>;
+                multiSelect?: boolean;
+                isSecret?: boolean;
+            }>;
+            sessionKey?: string;
+            agentId?: string;
+            runId?: string;
+            createdAtMs: number;
+            expiresAtMs: number;
+            status: 'pending' | 'answered' | 'cancelled' | 'expired';
+        }>;
+    };
+};
+
+export type GetApiV1RuntimeQuestionsResponse = GetApiV1RuntimeQuestionsResponses[keyof GetApiV1RuntimeQuestionsResponses];
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveData = {
+    body?: {
+        answers?: {
+            [key: string]: Array<string>;
+        };
+        skip?: boolean;
+    };
+    path: {
+        questionId: string;
+    };
+    query?: never;
+    url: '/api/v1/runtime/questions/{questionId}/resolve';
+};
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveErrors = {
+    /**
+     * Runtime unavailable, or the question already resolved
+     */
+    409: {
+        message: string;
+    };
+};
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveError = PostApiV1RuntimeQuestionsByQuestionIdResolveErrors[keyof PostApiV1RuntimeQuestionsByQuestionIdResolveErrors];
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveResponses = {
+    /**
+     * Question answered or declined
+     */
+    200: {
+        ok: true;
+    };
+};
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveResponse = PostApiV1RuntimeQuestionsByQuestionIdResolveResponses[keyof PostApiV1RuntimeQuestionsByQuestionIdResolveResponses];
+
 export type GetApiV1RuntimeApprovalsData = {
     body?: never;
     path?: never;

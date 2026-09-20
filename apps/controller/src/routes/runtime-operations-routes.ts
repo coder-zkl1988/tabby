@@ -193,6 +193,45 @@ const runtimeApprovalsResponseSchema = z.object({
   approvals: z.array(approvalSchema),
 });
 
+// ---- Interactive questions (`ask_user`) -----------------------------------
+// Mirrors the Gateway's QuestionRecord. `answers` is intentionally the wire
+// shape (every value an array, even single-select) so the UI does not have to
+// reason about two different envelopes.
+const questionOptionSchema = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+});
+
+const questionItemSchema = z.object({
+  questionId: z.string(),
+  header: z.string(),
+  question: z.string(),
+  options: z.array(questionOptionSchema),
+  multiSelect: z.boolean().optional(),
+  isSecret: z.boolean().optional(),
+});
+
+const runtimeQuestionSchema = z.object({
+  id: z.string(),
+  questions: z.array(questionItemSchema),
+  sessionKey: z.string().optional(),
+  agentId: z.string().optional(),
+  runId: z.string().optional(),
+  createdAtMs: z.number(),
+  expiresAtMs: z.number(),
+  status: z.enum(["pending", "answered", "cancelled", "expired"]),
+});
+
+const runtimeQuestionsResponseSchema = z.object({
+  connected: z.boolean(),
+  available: z.boolean(),
+  questions: z.array(runtimeQuestionSchema),
+});
+
+const rawQuestionListSchema = z.object({
+  questions: z.array(runtimeQuestionSchema.passthrough()),
+});
+
 const recordSchema = z.record(z.unknown());
 const rawApprovalSchema = z.object({
   id: z.string(),
@@ -902,6 +941,115 @@ export function registerRuntimeOperationsRoutes(
         },
         200,
       );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/runtime/questions",
+      tags: ["Runtime Operations"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: runtimeQuestionsResponseSchema },
+          },
+          description: "Pending interactive agent questions",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        return c.json(
+          { connected: false, available: false, questions: [] },
+          200,
+        );
+      }
+
+      try {
+        const raw = await container.gatewayService.listQuestions();
+        const parsed = rawQuestionListSchema.safeParse(raw);
+        if (!parsed.success) {
+          return c.json(
+            { connected: true, available: false, questions: [] },
+            200,
+          );
+        }
+        // Only pending records are actionable; resolved ones are kept by the
+        // Gateway briefly so other surfaces can show the answer summary.
+        const questions = parsed.data.questions
+          .filter((question) => question.status === "pending")
+          .sort((left, right) => left.expiresAtMs - right.expiresAtMs);
+        return c.json({ connected: true, available: true, questions }, 200);
+      } catch {
+        return c.json(
+          { connected: true, available: false, questions: [] },
+          200,
+        );
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/runtime/questions/{questionId}/resolve",
+      tags: ["Runtime Operations"],
+      request: {
+        params: z.object({ questionId: z.string() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                // Omit `answers` (or send `skip: true`) to decline the prompt.
+                answers: z.record(z.string(), z.array(z.string())).optional(),
+                skip: z.boolean().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: z.object({ ok: z.literal(true) }) },
+          },
+          description: "Question answered or declined",
+        },
+        409: {
+          content: {
+            "application/json": { schema: z.object({ message: z.string() }) },
+          },
+          description: "Runtime unavailable, or the question already resolved",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        throw new HTTPException(409, {
+          message: "OpenClaw gateway is not connected",
+        });
+      }
+      const { questionId } = c.req.valid("param");
+      const body = c.req.valid("json");
+      try {
+        if (body.skip === true || body.answers === undefined) {
+          await container.gatewayService.cancelQuestion({ id: questionId });
+        } else {
+          await container.gatewayService.answerQuestion({
+            id: questionId,
+            answers: body.answers,
+          });
+        }
+        return c.json({ ok: true as const }, 200);
+      } catch (error) {
+        throw new HTTPException(409, {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to resolve the question",
+        });
+      }
     },
   );
 

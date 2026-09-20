@@ -474,6 +474,51 @@ export class OpenClawGatewayService {
     });
   }
 
+  // ---- Interactive questions (OpenClaw >=2026.9.1 `ask_user`) -------------
+  // The agent's `ask_user` tool parks a structured question on the Gateway and
+  // blocks its turn until someone answers or it expires (default 900s). Our
+  // operator connection already carries `operator.admin`, which satisfies
+  // `operator.questions`, so no extra scope negotiation is needed.
+
+  /** Pending + recently resolved questions visible to this operator client. */
+  async listQuestions(): Promise<unknown> {
+    return this.wsClient.request("question.list", {});
+  }
+
+  /** One question by id. Throws NOT_FOUND once the record is evicted. */
+  async getQuestion(id: string): Promise<unknown> {
+    return this.wsClient.request("question.get", { id });
+  }
+
+  /**
+   * Answer a question. `answers` is keyed by `questionId`; every value is an
+   * array even for single-select, matching the protocol's QuestionAnswers
+   * envelope.
+   */
+  async answerQuestion(params: {
+    id: string;
+    answers: Record<string, string[]>;
+    resolvedBy?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("question.resolve", {
+      id: params.id,
+      answers: { answers: params.answers },
+      ...(params.resolvedBy ? { resolvedBy: params.resolvedBy } : {}),
+    });
+  }
+
+  /** Decline the whole prompt; the agent continues with its best judgment. */
+  async cancelQuestion(params: {
+    id: string;
+    resolvedBy?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("question.resolve", {
+      id: params.id,
+      cancel: true,
+      ...(params.resolvedBy ? { resolvedBy: params.resolvedBy } : {}),
+    });
+  }
+
   /** Detached OpenClaw task ledger, optionally scoped to one session. */
   async listTasks(params: {
     sessionKey?: string;

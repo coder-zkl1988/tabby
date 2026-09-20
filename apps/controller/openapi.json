@@ -22485,6 +22485,207 @@
         }
       }
     },
+    "/api/v1/runtime/questions": {
+      "get": {
+        "tags": [
+          "Runtime Operations"
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending interactive agent questions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "questions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "questions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "questionId": {
+                                  "type": "string"
+                                },
+                                "header": {
+                                  "type": "string"
+                                },
+                                "question": {
+                                  "type": "string"
+                                },
+                                "options": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "description": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "label"
+                                    ]
+                                  }
+                                },
+                                "multiSelect": {
+                                  "type": "boolean"
+                                },
+                                "isSecret": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "questionId",
+                                "header",
+                                "question",
+                                "options"
+                              ]
+                            }
+                          },
+                          "sessionKey": {
+                            "type": "string"
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "runId": {
+                            "type": "string"
+                          },
+                          "createdAtMs": {
+                            "type": "number"
+                          },
+                          "expiresAtMs": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "answered",
+                              "cancelled",
+                              "expired"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "questions",
+                          "createdAtMs",
+                          "expiresAtMs",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "available",
+                    "questions"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runtime/questions/{questionId}/resolve": {
+      "post": {
+        "tags": [
+          "Runtime Operations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "questionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "answers": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "skip": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Question answered or declined",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Runtime unavailable, or the question already resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/runtime/approvals": {
       "get": {
         "tags": [

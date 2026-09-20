@@ -1,3 +1,4 @@
+import { AgentQuestionPanel } from "@/components/agent-question-panel";
 import {
   type BotItem,
   ChatInputArea,
@@ -3460,6 +3461,7 @@ export function SessionsPage() {
               onDismiss={() => setSideQuestion(null)}
             />
           )}
+          <AgentQuestionPanel sessionKey={session?.sessionKey ?? undefined} />
           {pendingRunMessageChoice && replyInProgress && (
             <RunMessageChoicePanel
               message={pendingRunMessageChoice}
