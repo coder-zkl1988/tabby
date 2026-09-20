@@ -1,6 +1,8 @@
+import { mkdirSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ControllerEnv } from "../src/app/env.js";
 import {
@@ -93,6 +95,11 @@ function writeAgentAuthProfiles(
     "agent",
     "openclaw-agent.sqlite",
   );
+  // OpenClaw owns the database file; since 2026.9 the controller refuses to
+  // create one, because a database without schema ownership metadata blocks
+  // gateway startup and cannot be repaired. Stand in for OpenClaw here.
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  new DatabaseSync(filePath).close();
   writeAgentAuthStore(filePath, {
     version: data.version,
     profiles: data.profiles,

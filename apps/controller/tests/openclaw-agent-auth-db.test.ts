@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -10,10 +10,14 @@ import {
 } from "../src/runtime/openclaw-agent-auth-db.js";
 
 /**
- * Pins the controller's side of the OpenClaw (>= 2026.6.5) auth-profile SQLite
- * contract. If an OpenClaw upgrade changes the table/column names, the
- * `store_json` shape, or the database-adoption preconditions, these assertions
- * must be revisited before bumping the bundled runtime.
+ * Pins the controller's side of the OpenClaw auth-profile SQLite contract. If
+ * an OpenClaw upgrade changes the table/column names or the `store_json`
+ * shape, these assertions must be revisited before bumping the bundled runtime.
+ *
+ * The database itself is OpenClaw's to create. Until 2026.8.x the controller
+ * created it when absent and OpenClaw adopted the partial file; 2026.9 rejects
+ * a database with no schema ownership metadata and doctor will not repair one,
+ * so these tests simulate OpenClaw having created it first.
  */
 describe("openclaw-agent-auth-db", () => {
   let tmpDir: string;
@@ -34,6 +38,12 @@ describe("openclaw-agent-auth-db", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  /** Stand in for OpenClaw having created the agent database. */
+  function createOpenclawOwnedDatabase(): void {
+    mkdirSync(path.dirname(dbPath), { recursive: true });
+    new DatabaseSync(dbPath).close();
+  }
+
   it("identifies agent database paths", () => {
     expect(isAgentDatabasePath(dbPath)).toBe(true);
     expect(isAgentDatabasePath(path.join(tmpDir, "auth-profiles.json"))).toBe(
@@ -45,7 +55,8 @@ describe("openclaw-agent-auth-db", () => {
     expect(readAgentAuthStore(dbPath)).toBeNull();
   });
 
-  it("creates the database and round-trips the secrets store", () => {
+  it("round-trips the secrets store", () => {
+    createOpenclawOwnedDatabase();
     const cell = {
       version: 1,
       profiles: {
@@ -65,6 +76,7 @@ describe("openclaw-agent-auth-db", () => {
   });
 
   it("upserts the primary row instead of appending", () => {
+    createOpenclawOwnedDatabase();
     writeAgentAuthStore(dbPath, { version: 1, profiles: { a: { v: 1 } } });
     writeAgentAuthStore(dbPath, { version: 1, profiles: { b: { v: 2 } } });
 
@@ -84,6 +96,7 @@ describe("openclaw-agent-auth-db", () => {
   });
 
   it("persists the exact OpenClaw contract: table, columns, primary row key, store_json shape", () => {
+    createOpenclawOwnedDatabase();
     writeAgentAuthStore(dbPath, {
       version: 1,
       profiles: { a: { type: "api_key" } },
@@ -120,27 +133,21 @@ describe("openclaw-agent-auth-db", () => {
     }
   });
 
-  it("creates an adoptable database: user_version 0 and no schema_meta", () => {
-    // OpenClaw adopts a controller-created database only when its schema guard
-    // is satisfied: missing schema_meta (no ownership conflict) and
-    // user_version <= 1. If either changes, OpenClaw would reject the database.
-    writeAgentAuthStore(dbPath, { version: 1, profiles: {} });
+  // A database the controller creates has no schema ownership metadata, which
+  // since 2026.9 blocks gateway startup ("uses schema version 0") and cannot be
+  // repaired — doctor skips it with "has no schema ownership metadata". So the
+  // seed has to wait for OpenClaw rather than creating the file itself.
+  it("refuses to create the database and reports that it skipped", () => {
+    expect(writeAgentAuthStore(dbPath, { version: 1, profiles: {} })).toBe(
+      false,
+    );
+    expect(existsSync(dbPath)).toBe(false);
+  });
 
-    const db = new DatabaseSync(dbPath, { readOnly: true });
-    try {
-      const userVersion = db.prepare("PRAGMA user_version").get() as {
-        user_version: number;
-      };
-      expect(userVersion.user_version).toBe(0);
-
-      const schemaMeta = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_meta'",
-        )
-        .get();
-      expect(schemaMeta).toBeUndefined();
-    } finally {
-      db.close();
-    }
+  it("reports that it wrote once OpenClaw owns the database", () => {
+    createOpenclawOwnedDatabase();
+    expect(writeAgentAuthStore(dbPath, { version: 1, profiles: {} })).toBe(
+      true,
+    );
   });
 });

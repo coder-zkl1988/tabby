@@ -1,5 +1,4 @@
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
 /**
@@ -13,13 +12,19 @@ import { DatabaseSync } from "node:sqlite";
  * `specs/design-docs/2026-04-14-openclaw-registry-cache-invalidation.md` for the
  * companion restart-on-change rule.
  *
- * Database creation: the controller pre-seeds credentials before OpenClaw boots
- * (the "seed config before runtime start" bootstrap optimization). To make that
- * work for SQLite, the controller creates the database with ONLY the
- * `auth_profile_store` table when absent. OpenClaw adopts such a database on
- * boot: its schema guard tolerates a missing `schema_meta` row and a zero
- * `user_version`, and its `CREATE TABLE IF NOT EXISTS` schema materialization
- * preserves the controller-written row while filling in the remaining tables.
+ * Database creation: the controller must NOT create this file. It used to, to
+ * pre-seed credentials before OpenClaw booted, and OpenClaw adopted the partial
+ * database because its schema guard tolerated a missing `schema_meta` row and a
+ * zero `user_version`. OpenClaw 2026.9 removed that tolerance: a database
+ * without schema ownership metadata (`schema_meta` with role `agent` and
+ * version 19) now fails the runtime guard, so the gateway refuses to start
+ * ("uses schema version 0 ... run openclaw doctor --fix"), and doctor in turn
+ * refuses to migrate it ("has no schema ownership metadata"). A pre-created
+ * database is therefore a dead end that no repair path can recover.
+ *
+ * Writing only into a database OpenClaw already owns costs the pre-boot seed:
+ * credentials land on the first write after the runtime has created the file,
+ * which the provider/OAuth mutation path already performs (syncAll + restart).
  * The contract (table/column names + `store_json` shape) is pinned by
  * `openclaw-agent-auth-db.test.ts` so an upstream format change is caught.
  */
@@ -112,8 +117,14 @@ export function readAgentAuthStore(
 export function writeAgentAuthStore(
   databasePath: string,
   cell: AgentAuthStoreCell,
-): void {
-  mkdirSync(path.dirname(databasePath), { recursive: true });
+): boolean {
+  // Never bring this database into existence — see the note above. An absent
+  // file means OpenClaw has not created the agent yet; the caller retries on a
+  // later write rather than poisoning the agent permanently.
+  if (!existsSync(databasePath)) {
+    return false;
+  }
+
   const db = new DatabaseSync(databasePath);
   try {
     db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
@@ -135,6 +146,7 @@ export function writeAgentAuthStore(
   } finally {
     db.close();
   }
+  return true;
 }
 
 /** Derive the OpenClaw agent SQLite path that sits beside an `agent/` dir. */
