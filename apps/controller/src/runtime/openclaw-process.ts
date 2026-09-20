@@ -38,6 +38,17 @@ const MAINTENANCE_REQUIRED_MARKERS = [
   "requires offline media migration",
   "openclaw doctor --fix",
 ];
+
+/**
+ * 2026.9 also exits EX_CONFIG for startup gates a plain restart clears — the
+ * config and plugin inventory changing while it boots, which happens every time
+ * the controller finishes writing them after OpenClaw has started ("migration
+ * inputs changed during startup ... Restart OpenClaw"). Treating 78 as
+ * terminal left the gateway down for good. Retry it, but on a much tighter
+ * budget than an ordinary crash: a genuinely broken openclaw.json must still
+ * stop quickly instead of looping.
+ */
+const MAX_CONFIG_ERROR_RESTARTS = 3;
 // OpenClaw full-process restarts can take tens of seconds before the successor
 // starts listening again (observed ~20s during first-time Feishu enablement).
 // Keep a generous grace window so the outer supervisor does not spawn a second
@@ -63,6 +74,7 @@ export class OpenClawProcessManager {
   private vlmCredentialRepush: (() => Promise<void>) | null = null;
   private maintenanceRequired = false;
   private maintenanceRepairAttempted = false;
+  private configErrorRestarts = 0;
 
   constructor(private readonly env: ControllerEnv) {}
 
@@ -250,6 +262,23 @@ export class OpenClawProcessManager {
           return;
         }
         if (code === EXIT_CONFIG_ERROR) {
+          if (Date.now() - this.lastStartTime > RESTART_WINDOW_MS) {
+            this.configErrorRestarts = 0;
+          }
+          this.configErrorRestarts += 1;
+          if (this.configErrorRestarts <= MAX_CONFIG_ERROR_RESTARTS) {
+            logger.warn(
+              {
+                code,
+                attempt: this.configErrorRestarts,
+                maxAttempts: MAX_CONFIG_ERROR_RESTARTS,
+                event: "openclaw_exit_config_error_retry",
+              },
+              "openclaw exited with EX_CONFIG; 2026.9 also uses it for startup gates a restart clears, so retrying",
+            );
+            this.scheduleRestart(code, signal);
+            return;
+          }
           logger.error(
             { code, event: "openclaw_exit_config_error" },
             "openclaw exited with EX_CONFIG (configuration error) — auto-restart suppressed; fix openclaw.json and restart manually",
