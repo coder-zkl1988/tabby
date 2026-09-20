@@ -1,4 +1,5 @@
 import { BudgetWarningBanner } from "@/components/budget-warning-banner";
+import { PinnedA2UIPanel } from "@/components/pinned-a2ui-panel";
 import { PlatformIcon } from "@/components/platform-icons";
 import { SessionRecoveryDialog } from "@/components/session-recovery-dialog";
 import {
@@ -18,6 +19,11 @@ import {
 import { useDesktopCloudStatus } from "@/hooks/use-desktop-cloud-status";
 import { useDesktopRewardsStatus } from "@/hooks/use-desktop-rewards";
 import {
+  closePinnedPanel,
+  forgetPinnedSession,
+  usePinnedPanel,
+} from "@/lib/a2ui/a2ui-pinned-panel-store";
+import {
   A2UISidebarProvider,
   useA2UISidebar,
 } from "@/lib/a2ui/a2ui-sidebar-context";
@@ -26,6 +32,7 @@ import {
   closeBrowserPanel,
   closeBrowserPanelForRouting,
   closeBrowserPanelForSessionNavigation,
+  syncBrowserPanelToSession,
   useBrowserPanel,
 } from "@/lib/browser/browser-panel-store";
 import {
@@ -33,6 +40,7 @@ import {
   forgetBrowserSession,
 } from "@/lib/browser/embedded-browser";
 import { exportBoardAsZip } from "@/lib/canvas/canvas-export";
+import { setPanelOpen } from "@/lib/canvas/canvas-store";
 import { CanvasBoardTitle } from "@/lib/canvas/canvas-toolbar";
 import { CanvasSurface } from "@/lib/canvas/infinite-canvas";
 import {
@@ -583,9 +591,11 @@ function WorkspaceLayoutContent() {
   const { isOpen: canvasSidebarOpen, close: closeCanvasSidebar } =
     useA2UISidebar();
   const browserPanel = useBrowserPanel();
+  const pinnedPanel = usePinnedPanel();
   // Listens from the layout, not the panel: the agent's first command is
   // usually the one that opens the panel.
-  const rightSidebarOpen = canvasSidebarOpen || browserPanel.isOpen;
+  const rightSidebarOpen =
+    canvasSidebarOpen || browserPanel.isOpen || pinnedPanel.isOpen;
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
     const saved = localStorage.getItem("nexu_right_sidebar_width");
     return saved
@@ -735,10 +745,16 @@ function WorkspaceLayoutContent() {
       return;
     }
 
-    closeBrowserPanelForSessionNavigation(
-      previousSessionPath,
-      location.pathname,
-    );
+    // Leaving sessions entirely still closes a user-opened browser; switching
+    // BETWEEN sessions no longer does. The panel belongs to the session that
+    // opened it, so it is hidden elsewhere and restored on return — handled by
+    // syncBrowserPanelToSession once the session key for this route is known.
+    if (previousSessionPath === null) {
+      closeBrowserPanelForSessionNavigation(
+        previousSessionPath,
+        location.pathname,
+      );
+    }
   }, [isSessionRoute, location.pathname, rightSidebarOpen, closeCanvasSidebar]);
   const { data: session } = authClient.useSession();
   const { data: skillsData } = useCommunitySkillStatus();
@@ -857,6 +873,7 @@ function WorkspaceLayoutContent() {
         (candidate) => candidate.id === deletedId,
       )?.sessionKey;
       if (deletedKey) void forgetBrowserSession(deletedKey);
+      forgetPinnedSession(deletedId);
       // If the deleted session is currently viewed, navigate away
       if (selectedSessionId === deletedId) {
         navigate("/workspace");
@@ -1003,6 +1020,43 @@ function WorkspaceLayoutContent() {
 
   const sessionMatch = location.pathname.match(/\/workspace\/sessions\/(.+)/);
   const selectedSessionId = sessionMatch?.[1] ?? null;
+  /**
+   * The browser panel belongs to the session that opened it — above all to an
+   * agent working in it. Show it only there: hiding elsewhere never disposes
+   * the view, so an agent mid-task keeps running off screen and the page
+   * resumes when its own session is opened again.
+   */
+  const selectedSessionKey =
+    sessions.find((candidate) => candidate.id === selectedSessionId)
+      ?.sessionKey ?? null;
+  useEffect(() => {
+    syncBrowserPanelToSession(selectedSessionKey);
+  }, [selectedSessionKey]);
+
+  /**
+   * The canvas panel's VISIBILITY follows the conversation, the way the
+   * browser and pinned panels do: opening it in one session must not leave it
+   * covering the next one. Its CONTENT stays global — boards are named by the
+   * user ("画布 1"), shared across conversations on purpose, so they are not
+   * re-keyed per session here.
+   */
+  const canvasOpenBySessionRef = useRef(new Map<string, boolean>());
+  const canvasOpenRef = useRef(canvasSidebarOpen);
+  canvasOpenRef.current = canvasSidebarOpen;
+  const previousCanvasSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousCanvasSessionRef.current;
+    if (previous === selectedSessionId) return;
+    previousCanvasSessionRef.current = selectedSessionId;
+    if (previous) {
+      canvasOpenBySessionRef.current.set(previous, canvasOpenRef.current);
+    }
+    setPanelOpen(
+      selectedSessionId
+        ? (canvasOpenBySessionRef.current.get(selectedSessionId) ?? false)
+        : false,
+    );
+  }, [selectedSessionId]);
   const isHomePage =
     location.pathname === "/workspace" ||
     location.pathname === "/workspace/home";
@@ -2326,6 +2380,47 @@ function WorkspaceLayoutContent() {
               onToggleMaximize={toggleRightSidebarMaximize}
               onClose={closeBrowserPanel}
             />
+          ) : pinnedPanel.isOpen ? (
+            /* Pinned chat cards get their own panel rather than canvas nodes:
+               the whole point is that the card stays visible without panning
+               or zooming to find it. */
+            <>
+              <div className="flex min-h-[34px] items-center justify-between border-b border-[var(--color-border-subtle)] px-4 pb-2 pt-2 md:pt-[40px]">
+                <span className="min-w-0 flex-1 truncate pr-2 text-[13px] font-medium text-[var(--color-text-primary)]">
+                  {t("sessions.chat.pinnedPanelTitle", {
+                    defaultValue: "Pinned",
+                  })}
+                </span>
+                <button
+                  type="button"
+                  onClick={closePinnedPanel}
+                  aria-label="close pinned panel"
+                  style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+                  className="p-1 rounded-md hover:bg-[var(--color-surface-2)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
+                >
+                  <svg
+                    aria-hidden="true"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                  >
+                    <path
+                      d="M4 4L12 12M12 4L4 12"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+              {selectedSessionId && (
+                <PinnedA2UIPanel
+                  sessionId={selectedSessionId}
+                  surfaces={pinnedPanel.surfaces}
+                />
+              )}
+            </>
           ) : (
             <>
               {/* Header band matches the chat header's top clearance + height so the

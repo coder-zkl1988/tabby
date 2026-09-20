@@ -13466,6 +13466,8 @@ export type PostApiV1BrowserAgentActData = {
             url: string;
         } | {
             action: 'snapshot';
+            maxNodes?: number;
+            visibleOnly?: boolean;
         } | {
             action: 'click';
             ref: string;
@@ -13474,9 +13476,26 @@ export type PostApiV1BrowserAgentActData = {
             ref: string;
             text: string;
             submit?: boolean;
+            append?: boolean;
+        } | {
+            action: 'press';
+            key: string;
+            ref?: string;
+        } | {
+            action: 'select';
+            ref: string;
+            option: string;
+        } | {
+            action: 'hover';
+            ref: string;
         } | {
             action: 'scroll';
             deltaY: number;
+        } | {
+            action: 'navigate';
+            to: 'back' | 'forward' | 'reload';
+        } | {
+            action: 'screenshot';
         };
     };
     path?: never;
@@ -13517,11 +13536,14 @@ export type PostApiV1BrowserAgentActResponses = {
             url: string;
             title: string;
             truncated: boolean;
+            visibleOnly?: boolean;
             nodes: Array<{
                 ref: string;
                 role: string;
                 name: string;
                 value?: string;
+                href?: string;
+                checked?: boolean;
                 disabled?: boolean;
                 depth: number;
             }>;
@@ -13536,10 +13558,36 @@ export type PostApiV1BrowserAgentActResponses = {
                 role: string;
                 name: string;
                 value?: string;
+                href?: string;
+                checked?: boolean;
                 disabled?: boolean;
                 depth: number;
             };
             navigated: boolean;
+            changedInPlace?: boolean;
+            loading?: boolean;
+            dialogs?: Array<{
+                type: 'alert' | 'confirm' | 'prompt' | 'beforeunload';
+                message: string;
+            }>;
+            pageErrors?: Array<{
+                message: string;
+                source?: string;
+            }>;
+            scroll?: {
+                y: number;
+                maxY: number;
+            };
+        };
+    } | {
+        ok: true;
+        screenshot: {
+            url: string;
+            title: string;
+            mimeType: string;
+            base64: string;
+            width: number;
+            height: number;
         };
     } | {
         ok: false;
@@ -13578,11 +13626,14 @@ export type PostApiV1BrowserAgentResultData = {
                 url: string;
                 title: string;
                 truncated: boolean;
+                visibleOnly?: boolean;
                 nodes: Array<{
                     ref: string;
                     role: string;
                     name: string;
                     value?: string;
+                    href?: string;
+                    checked?: boolean;
                     disabled?: boolean;
                     depth: number;
                 }>;
@@ -13597,10 +13648,36 @@ export type PostApiV1BrowserAgentResultData = {
                     role: string;
                     name: string;
                     value?: string;
+                    href?: string;
+                    checked?: boolean;
                     disabled?: boolean;
                     depth: number;
                 };
                 navigated: boolean;
+                changedInPlace?: boolean;
+                loading?: boolean;
+                dialogs?: Array<{
+                    type: 'alert' | 'confirm' | 'prompt' | 'beforeunload';
+                    message: string;
+                }>;
+                pageErrors?: Array<{
+                    message: string;
+                    source?: string;
+                }>;
+                scroll?: {
+                    y: number;
+                    maxY: number;
+                };
+            };
+        } | {
+            ok: true;
+            screenshot: {
+                url: string;
+                title: string;
+                mimeType: string;
+                base64: string;
+                width: number;
+                height: number;
             };
         } | {
             ok: false;

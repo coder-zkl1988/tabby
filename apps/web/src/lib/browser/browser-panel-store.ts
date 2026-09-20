@@ -100,6 +100,28 @@ export function closeBrowserPanelForRouting(): boolean {
 }
 
 /**
+ * Show the panel only while its own conversation is on screen.
+ *
+ * The browser belongs to the session that opened it — above all to an agent
+ * working in it — so another conversation must not display that page. Hiding
+ * is safe even mid-task: collapsing the panel only hides the view, it is never
+ * disposed, so the page, its login state and the agent's element refs survive
+ * and the run keeps going off screen (see embedded-browser.tsx). Returning to
+ * that session re-mounts the panel and resumes where it left off.
+ *
+ * `sessionKey` is the conversation now on screen, or null when none is.
+ */
+export function syncBrowserPanelToSession(sessionKey: string | null): void {
+  const belongsHere =
+    state.sessionKey !== null && state.sessionKey === sessionKey;
+  if (state.isOpen === belongsHere) return;
+  // Keep sessionKey/openedByAgent: they are what lets the panel come back when
+  // its own session is opened again.
+  state = { ...state, isOpen: belongsHere };
+  emit();
+}
+
+/**
  * The agent's run is over: keep the panel open — the user may be reading the
  * result — but drop the pin, so it goes back to closing on navigation like
  * any other workbench. The pin exists to protect an agent mid-task; without a

@@ -186,11 +186,16 @@ export function LocalAutomationSettingsSection() {
           />
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-5 py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <Globe2 className="h-4 w-4 shrink-0 text-text-secondary" />
-            <div className="text-[13px] font-medium text-text-primary">
-              {t("automation.browser.title")}
+        <div className="flex items-start justify-between gap-4 px-5 py-4">
+          <div className="flex min-w-0 gap-3">
+            <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-text-primary">
+                {t("automation.browser.title")}
+              </div>
+              <div className="mt-1 text-[11px] leading-relaxed text-text-tertiary">
+                {t("automation.browser.description")}
+              </div>
             </div>
           </div>
           <Switch

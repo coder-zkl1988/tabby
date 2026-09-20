@@ -84,7 +84,12 @@ describe("LocalAutomationSettingsSection", () => {
     expect(markup).toContain("devices.settings.title");
     expect(markup).toContain("automation.browser.title");
     expect(markup).toContain("automation.computer.title");
-    expect(markup).not.toContain("automation.browser.description");
+    // The browser row now explains what turning it on lets the assistant do;
+    // a bare switch labelled "Browser control" told the user nothing about
+    // what they were authorising. The rest of this block is the reason the
+    // description was withheld in the first place: whatever it says, the
+    // settings page must not name the machinery behind it.
+    expect(markup).toContain("automation.browser.description");
     expect(markup).not.toContain("automation.computer.description");
     expect(markup).not.toContain("WebSocket");
     expect(markup).not.toContain("Peekaboo");

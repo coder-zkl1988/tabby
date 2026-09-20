@@ -47,6 +47,7 @@ vi.mock("electron", () => {
       return this;
     }
     setWindowOpenHandler(): void {}
+    setZoomFactor(): void {}
     getURL(): string {
       return this.url;
     }
@@ -70,8 +71,11 @@ vi.mock("electron", () => {
 
   class MockWebContentsView {
     readonly webContents = new MockWebContents();
+    visible = false;
     setBackgroundColor(): void {}
-    setVisible(): void {}
+    setVisible(value: boolean): void {
+      this.visible = value;
+    }
     setBounds(): void {}
   }
 
@@ -88,10 +92,16 @@ vi.mock("../../apps/desktop/main/services/embedded-browser-cdp", () => ({
   BrowserRefTable: class {
     reset(): void {}
   },
+  captureScreenshot: vi.fn(),
   captureSnapshot: vi.fn(),
   clickRef: vi.fn(),
+  describeRef: vi.fn(),
   detachDebugger: vi.fn(),
+  hoverRef: vi.fn(),
+  pressKey: vi.fn(),
   scrollBy: vi.fn(),
+  selectOption: vi.fn(),
+  trackPageEvents: vi.fn(async () => undefined),
   typeIntoRef: vi.fn(),
 }));
 
@@ -125,15 +135,24 @@ class MockDownloadItem extends NodeEventEmitter {
 
 function createOwner(id: number): BrowserWindow {
   const events = new NodeEventEmitter();
+  const views: Array<{ visible: boolean }> = [];
   return {
     id,
     contentView: {
-      addChildView: vi.fn(),
+      addChildView: vi.fn((view: { visible: boolean }) => views.push(view)),
       removeChildView: vi.fn(),
     },
     getContentBounds: () => ({ x: 0, y: 0, width: 1200, height: 800 }),
     once: events.once.bind(events),
+    // Test-only handle on the native views this window is compositing.
+    __views: views,
   } as unknown as BrowserWindow;
+}
+
+function visibleViewCount(owner: BrowserWindow): number {
+  const views = (owner as unknown as { __views: Array<{ visible: boolean }> })
+    .__views;
+  return views.filter((view) => view.visible).length;
 }
 
 describe("embedded browser control center", () => {
@@ -184,6 +203,51 @@ describe("embedded browser control center", () => {
       agentSharingEnabled: false,
       tabs: [],
     });
+  });
+
+  it("takes a window's views off screen without destroying the pages", async () => {
+    // The panel hides its view from a React cleanup, which a renderer that
+    // reloads or crashes never runs. Measured live after a Vite reload: the
+    // last shown page stayed composited over the app with no address bar, no
+    // tabs and no close button. This is the main process's own way out, so it
+    // must not need the renderer — and must not throw the page away either.
+    const manager = new EmbeddedBrowserManager();
+    const owner = createOwner(21);
+    const other = createOwner(22);
+    const tabId = agentTabId("agent:bot:main");
+    const otherTabId = agentTabId("agent:other:main");
+    manager.ensureAgentTab(owner, tabId);
+    manager.ensureAgentTab(other, otherTabId);
+
+    await manager.controlWindow(owner, {
+      action: "show",
+      tabId,
+      url: "https://example.test/",
+      bounds: { x: 0, y: 0, width: 400, height: 400 },
+    });
+    await manager.controlWindow(other, {
+      action: "show",
+      tabId: otherTabId,
+      url: "https://example.test/other",
+      bounds: { x: 0, y: 0, width: 400, height: 400 },
+    });
+    expect(visibleViewCount(owner)).toBe(1);
+    expect(manager.isAgentTabPanelHosted(owner, tabId)).toBe(true);
+
+    manager.hideViewsForWindow(owner);
+
+    expect(visibleViewCount(owner)).toBe(0);
+    // Mutating clicks refuse to act on a view the panel is not hosting.
+    expect(manager.isAgentTabPanelHosted(owner, tabId)).toBe(false);
+    // The page survives, so the panel resumes rather than restarts.
+    await expect(
+      manager.controlWindow(owner, { action: "center-state" }),
+    ).resolves.toMatchObject({
+      tabs: [{ id: tabId, url: "https://example.test/" }],
+    });
+    // One window's renderer going away must not blank another window's panel.
+    expect(visibleViewCount(other)).toBe(1);
+    expect(manager.isAgentTabPanelHosted(other, otherTabId)).toBe(true);
   });
 
   it("tracks download progress, reveals completed files, and clears history", async () => {

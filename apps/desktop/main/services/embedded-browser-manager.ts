@@ -6,11 +6,19 @@ import type {
   DesktopBrowserViewportMode,
 } from "../../shared/host";
 import {
+  type BrowserDialog,
+  type BrowserPageError,
   BrowserRefTable,
+  captureScreenshot,
   captureSnapshot,
   clickRef,
+  describeRef,
   detachDebugger,
+  hoverRef,
+  pressKey,
   scrollBy,
+  selectOption,
+  trackPageEvents,
   typeIntoRef,
 } from "./embedded-browser-cdp";
 
@@ -21,7 +29,78 @@ type ManagedTab = {
   pendingUrl: string | null;
   pendingLoad: Promise<void> | null;
   refs: BrowserRefTable;
+  /** Main-frame cross-document navigations so far; refs reset with each. */
+  navigationEpoch: number;
+  /** Main-frame same-document navigations (pushState, hash) so far. */
+  inPageEpoch: number;
+  /** Dialogs raised since the last settle read them. Agent tabs only. */
+  dialogs: BrowserDialog[];
+  /** Uncaught page errors since the last settle read them. Agent tabs only. */
+  pageErrors: BrowserPageError[];
 };
+
+/**
+ * Most page errors carried out of one action.
+ *
+ * A page that throws from a timer or a render loop can raise the same error
+ * dozens of times inside one action window. The agent needs to know something
+ * broke, not to read it forty times, so identical messages collapse and the
+ * list stops here.
+ */
+const MAX_PAGE_ERRORS_PER_ACTION = 5;
+
+/** How an agent action is waited out before its evidence is read. */
+export type ActionSettleTiming = {
+  /** How long a navigation gets to *start* after the action. */
+  quietMs: number;
+  /** How long a started load gets to finish before evidence is read anyway. */
+  loadTimeoutMs: number;
+  /** Paint time after the page settles, for frameworks that render async. */
+  renderMs: number;
+};
+
+export type ActionSettle = {
+  /** The main frame moved to a new document since the watch began. */
+  navigated: boolean;
+  /** The main frame changed URL without leaving the document. */
+  inPageNavigated: boolean;
+  /** A load was still in flight when the wait budget ran out. */
+  loading: boolean;
+  /** Dialogs the page raised in the meantime, in order. */
+  dialogs: BrowserDialog[];
+  /** Uncaught exceptions the page threw in the meantime, deduplicated. */
+  pageErrors: BrowserPageError[];
+};
+
+export type ActionWatch = {
+  settle: (timing: ActionSettleTiming) => Promise<ActionSettle>;
+};
+
+/** Resolves true when any of the events fires, false when the time runs out. */
+function waitForAnyEvent(
+  contents: Electron.WebContents,
+  events: string[],
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Electron types each event name as its own overload; the listener takes
+    // no arguments, so one nominal name satisfies the checker for all of them.
+    const listeners = new Map<"did-stop-loading", () => void>();
+    const finish = (fired: boolean): void => {
+      clearTimeout(timer);
+      for (const [event, listener] of listeners) {
+        contents.removeListener(event, listener);
+      }
+      resolve(fired);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    for (const event of events) {
+      const listener = (): void => finish(true);
+      listeners.set(event as "did-stop-loading", listener);
+      contents.on(event as "did-stop-loading", listener);
+    }
+  });
+}
 
 type ManagedDownload = {
   id: string;
@@ -429,12 +508,19 @@ export class EmbeddedBrowserManager {
       return existing;
     }
 
+    const agentTab = isAgentTabId(tabId);
     const view = new WebContentsView({
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
         partition: "persist:nexu-browser",
+        // An agent's page must not be able to park the run on a modal. With
+        // dialogs disabled Chromium closes each one at once — alerts
+        // acknowledged, confirms and prompts cancelled — and the CDP session
+        // still hears about it, so the dismissal reaches the agent as
+        // evidence (see trackDialogs). The user's own tabs keep real dialogs.
+        disableDialogs: agentTab,
       },
     });
     view.setBackgroundColor("#ffffff");
@@ -451,9 +537,13 @@ export class EmbeddedBrowserManager {
       pendingUrl: null,
       pendingLoad: null,
       refs: new BrowserRefTable(),
+      navigationEpoch: 0,
+      inPageEpoch: 0,
+      dialogs: [],
+      pageErrors: [],
     };
     this.tabs.set(key, tab);
-    if (isAgentTabId(tabId)) this.touchAgentTab(key);
+    if (agentTab) this.touchAgentTab(key);
     this.ensureDownloadTracking(owner, view.webContents.session);
 
     view.webContents.setWindowOpenHandler(({ url }) => {
@@ -466,9 +556,40 @@ export class EmbeddedBrowserManager {
     });
     // Refs point at DOM nodes of the page that produced them. Surviving a
     // navigation would let a click land on whatever now occupies that id.
-    view.webContents.on("did-start-navigation", (_event, _url, isInPlace) => {
-      if (!isInPlace) tab.refs.reset();
+    // Only the main frame counts: an ad iframe navigating on its own used to
+    // wipe the refs of the page the agent was working on.
+    view.webContents.on(
+      "did-start-navigation",
+      (_event, _url, isInPlace, isMainFrame) => {
+        if (isInPlace || !isMainFrame) return;
+        tab.refs.reset();
+        tab.navigationEpoch += 1;
+      },
+    );
+    view.webContents.on("did-navigate-in-page", (_event, _url, isMainFrame) => {
+      if (isMainFrame) tab.inPageEpoch += 1;
     });
+    if (agentTab) {
+      // A `beforeunload` handler would otherwise cancel the navigation
+      // silently — Electron shows no dialog for it — and the agent would see a
+      // click that "did nothing". Let the page unload; the CDP session reports
+      // the dialog (Chromium raises it as type "beforeunload" before Electron
+      // gets here, measured live), so recording it again would double it.
+      view.webContents.on("will-prevent-unload", (event) => {
+        event.preventDefault();
+      });
+      void trackPageEvents(view.webContents, {
+        onDialog: (dialog) => tab.dialogs.push(dialog),
+        onPageError: (error) => {
+          if (tab.pageErrors.length >= MAX_PAGE_ERRORS_PER_ACTION) return;
+          if (tab.pageErrors.some((seen) => seen.message === error.message))
+            return;
+          tab.pageErrors.push(error);
+        },
+      }).catch(() => {
+        // Reporting is best-effort; actions still work without it.
+      });
+    }
     owner.once("closed", () => this.disposeOwner(owner));
     return tab;
   }
@@ -560,6 +681,80 @@ export class EmbeddedBrowserManager {
     this.ensureTab(owner, tabId);
   }
 
+  /**
+   * Takes every browser view of a window off screen, keeping the pages alive.
+   *
+   * Visibility is otherwise driven entirely from the renderer, through React
+   * effects that run `hide` when the panel unmounts. A renderer that goes away
+   * without running them — a reload, a dev-server full refresh, a crashed
+   * render process — leaves the last shown view composited over the app with
+   * no address bar, no tabs and no close button: exactly the undismissable
+   * page the panel exists to prevent. Measured live after a Vite reload.
+   *
+   * Hiding rather than disposing keeps the contract the panel already relies
+   * on: pages, login state and the agent's element refs survive, and the panel
+   * puts the view back on screen itself once it mounts again.
+   */
+  hideViewsForWindow(owner: BrowserWindow): void {
+    for (const tab of this.tabs.values()) {
+      if (tab.owner !== owner) continue;
+      if (tab.view.webContents.isDestroyed()) continue;
+      tab.view.setVisible(false);
+    }
+    this.markPanelHosted(owner, null);
+  }
+
+  /**
+   * Begins watching a tab across an agent action.
+   *
+   * Call before the action, then `settle` after it: the watch remembers where
+   * the page stood, gives a navigation the action may have started time to
+   * begin and then to finish, and reports what changed. A fixed delay in its
+   * place measured wrong in both directions — a click into a slow site was
+   * read back half-loaded with the URL as its title, while a click that did
+   * nothing still waited the full budget.
+   */
+  watchAction(owner: BrowserWindow, tabId: string): ActionWatch {
+    const tab = this.ensureTab(owner, tabId);
+    const navigationBefore = tab.navigationEpoch;
+    const inPageBefore = tab.inPageEpoch;
+    // Dialogs and errors from before the action are not this action's
+    // evidence — page-load failures would otherwise be blamed on the first
+    // click that followed them.
+    tab.dialogs.length = 0;
+    tab.pageErrors.length = 0;
+    return {
+      settle: async (timing) => {
+        const contents = tab.view.webContents;
+        const moved = (): boolean =>
+          tab.navigationEpoch !== navigationBefore ||
+          tab.inPageEpoch !== inPageBefore;
+        if (!moved() && !contents.isLoading()) {
+          await waitForAnyEvent(
+            contents,
+            ["did-start-navigation", "did-navigate-in-page"],
+            timing.quietMs,
+          );
+        }
+        if (contents.isLoading()) {
+          await waitForAnyEvent(
+            contents,
+            ["did-stop-loading"],
+            timing.loadTimeoutMs,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, timing.renderMs));
+        return {
+          navigated: tab.navigationEpoch !== navigationBefore,
+          inPageNavigated: tab.inPageEpoch !== inPageBefore,
+          loading: contents.isLoading(),
+          dialogs: tab.dialogs.splice(0),
+          pageErrors: tab.pageErrors.splice(0),
+        };
+      },
+    };
+  }
+
   async controlWindow(
     owner: BrowserWindow,
     input: DesktopBrowserControl,
@@ -625,10 +820,9 @@ export class EmbeddedBrowserManager {
       return { kind: "ok" };
     }
     if (input.action === "hide" || input.action === "dispose") {
-      for (const tab of this.tabs.values()) {
-        if (tab.owner === owner) tab.view.setVisible(false);
-      }
-      this.markPanelHosted(owner, null);
+      // Same path as the main process's own teardown hook, so the panel's
+      // hide and the renderer-gone fallback cannot drift apart.
+      this.hideViewsForWindow(owner);
       if (input.action === "dispose") this.disposeOwner(owner);
       return { kind: "ok" };
     }
@@ -706,30 +900,56 @@ export class EmbeddedBrowserManager {
     }
 
     if (input.action === "snapshot") {
-      const snapshot = await captureSnapshot(
-        tab.view.webContents,
-        tab.refs,
-        Math.min(Math.max(input.maxNodes ?? DEFAULT_SNAPSHOT_NODES, 1), 1000),
-      );
+      const snapshot = await captureSnapshot(tab.view.webContents, tab.refs, {
+        maxNodes: Math.min(
+          Math.max(input.maxNodes ?? DEFAULT_SNAPSHOT_NODES, 1),
+          1000,
+        ),
+        visibleOnly: input.visibleOnly === true,
+      });
       return { kind: "snapshot", ...snapshot };
+    }
+    if (input.action === "describe-ref") {
+      return {
+        kind: "element",
+        element: await describeRef(tab.view.webContents, tab.refs, input.ref),
+      };
     }
     if (input.action === "click-ref") {
       await clickRef(tab.view.webContents, tab.refs, input.ref);
       return { kind: "ok" };
     }
+    if (input.action === "hover-ref") {
+      await hoverRef(tab.view.webContents, tab.refs, input.ref);
+      return { kind: "ok" };
+    }
     if (input.action === "type-ref") {
-      await typeIntoRef(
+      await typeIntoRef(tab.view.webContents, tab.refs, input.ref, input.text, {
+        submit: input.submit ?? false,
+        append: input.append ?? false,
+      });
+      return { kind: "ok" };
+    }
+    if (input.action === "press-key") {
+      await pressKey(tab.view.webContents, tab.refs, input.key, input.ref);
+      return { kind: "ok" };
+    }
+    if (input.action === "select-ref") {
+      await selectOption(
         tab.view.webContents,
         tab.refs,
         input.ref,
-        input.text,
-        input.submit ?? false,
+        input.option,
       );
       return { kind: "ok" };
     }
     if (input.action === "scroll") {
-      await scrollBy(tab.view.webContents, input.deltaY);
-      return { kind: "ok" };
+      const position = await scrollBy(tab.view.webContents, input.deltaY);
+      return { kind: "scroll", ...position };
+    }
+    if (input.action === "screenshot") {
+      const screenshot = await captureScreenshot(tab.view.webContents);
+      return { kind: "screenshot", ...screenshot };
     }
 
     const image = await tab.view.webContents.capturePage();

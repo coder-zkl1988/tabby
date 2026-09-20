@@ -155,16 +155,30 @@ export type DesktopBrowserControl =
     }
   // Agent-facing actions. `click-ref` and `type-ref` address elements by a ref
   // handed out by `snapshot`, so the agent never has to guess coordinates.
-  | { action: "snapshot"; tabId: string; maxNodes?: number }
-  | { action: "click-ref"; tabId: string; ref: string }
+  | {
+      action: "snapshot";
+      tabId: string;
+      maxNodes?: number;
+      visibleOnly?: boolean;
+    }
+  // One element's current state, read without walking the whole tree — the
+  // evidence returned after an action.
+  | { action: "describe-ref"; tabId: string; ref: string }
+  | { action: "click-ref" | "hover-ref"; tabId: string; ref: string }
   | {
       action: "type-ref";
       tabId: string;
       ref: string;
       text: string;
       submit?: boolean;
+      append?: boolean;
     }
-  | { action: "scroll"; tabId: string; deltaY: number };
+  | { action: "press-key"; tabId: string; key: string; ref?: string }
+  | { action: "select-ref"; tabId: string; ref: string; option: string }
+  | { action: "scroll"; tabId: string; deltaY: number }
+  // A downscaled JPEG for the model, unlike `capture`, which hands the
+  // renderer a full-resolution PNG for annotation.
+  | { action: "screenshot"; tabId: string };
 
 export type DesktopBrowserControlResult =
   | { kind: "ok" }
@@ -211,19 +225,37 @@ export type DesktopBrowserControlResult =
     }
   | { kind: "capture"; dataUrl: string }
   | {
+      kind: "screenshot";
+      mimeType: string;
+      base64: string;
+      width: number;
+      height: number;
+    }
+  | { kind: "element"; element: DesktopBrowserSnapshotNode | null }
+  | {
+      kind: "scroll";
+      y: number;
+      maxY: number;
+    }
+  | {
       kind: "snapshot";
       url: string;
       title: string;
       truncated: boolean;
-      nodes: Array<{
-        ref: string;
-        role: string;
-        name: string;
-        value?: string;
-        disabled?: boolean;
-        depth: number;
-      }>;
+      visibleOnly: boolean;
+      nodes: DesktopBrowserSnapshotNode[];
     };
+
+export type DesktopBrowserSnapshotNode = {
+  ref: string;
+  role: string;
+  name: string;
+  value?: string;
+  href?: string;
+  checked?: boolean;
+  disabled?: boolean;
+  depth: number;
+};
 
 export type StartupProbeStatus = "ok" | "error";
 
