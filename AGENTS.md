@@ -79,7 +79,7 @@ This repo is desktop-first. Prefer the controller-first path and remove or ignor
 ## Desktop local development
 
 - Minimal cold-start setup on a fresh machine is: `pnpm install` -> `pnpm --filter @nexu/shared build` -> copy `tools/dev/.env.example` to `tools/dev/.env` only if you need dev-only overrides.
-- OpenClaw >=2026.7.1 hard-refuses unsupported Node versions (requires >=22.22.3 <23, >=24.15.0 <25, or >=25.9.0; it also verifies the Node SQLite runtime before opening state databases). Local dev Node must satisfy this or `pnpm dev start openclaw` exits immediately with a version error. Packaged desktop is unaffected: Electron 43's embedded Node is 24.17.0.
+- OpenClaw 2026.9.4 hard-refuses unsupported Node versions (requires >=24.16.0 <25 or >=26.1.0; 2026.9.x dropped the Node 22 and Node 25 lines that 2026.8.x still accepted, so a Node 25 dev box that worked before now fails; it also verifies the Node SQLite runtime before opening state databases). Local dev Node must satisfy this or `pnpm dev start openclaw` exits immediately with a version error. Packaged desktop is unaffected: Electron 43's embedded Node is 24.17.0.
 - Default daily flow is: `pnpm dev start` -> `pnpm dev status <service>` / `pnpm dev logs <service>` as needed -> `pnpm dev stop`.
 - Use `pnpm dev restart` for a clean full-stack recycle; use `pnpm dev restart <service>` only when you are intentionally touching one service.
 - Explicit single-service control remains available through `pnpm dev start <desktop|openclaw|controller|web>`, `pnpm dev stop <service>`, `pnpm dev restart <service>`, `pnpm dev status <service>`, and `pnpm dev logs <service>`.
@@ -189,6 +189,7 @@ The desktop test suite includes real launchd integration tests that run on macOS
 - After adding or modifying API routes: run `pnpm generate-types` to regenerate `openapi.json` -> `sdk.gen.ts` -> `types.gen.ts`, then update frontend call sites to use the new SDK functions.
 - Config generator output must match `specs/references/openclaw-config-schema.md`.
 - Do not add dependencies without explicit approval.
+- **`auto-install-peers=false`** (`.npmrc`). pnpm will not silently invent a package to satisfy a peer range, so any required peer must be declared explicitly by the workspace that needs it — that is why `apps/web` declares `@testing-library/dom` and `apps/desktop` declares `electron-builder-squirrel-windows`. If an install starts reporting `missing peer X`, add X to the right workspace rather than turning this setting back on. The one deliberate exception is `openclaw` itself, silenced via `pnpm.peerDependencyRules.ignoreMissing`: the bundled channel plugins peer-depend on it, but the real runtime is installed by slimclaw with npm (`packages/slimclaw/runtime-seed`), which sits outside this pnpm workspace on purpose. With auto-install on, pnpm resolved an unrelated stale `openclaw` from the registry just to fill that peer.
 - Do not modify OpenClaw source code.
 - Never commit code changes until explicitly told to do so.
 - Desktop packaged app: never use `npx`, `npm`, `pnpm`, or any shell command that relies on the user's PATH. The packaged Electron app has no shell profile — resolve bin paths programmatically via `require.resolve()` and execute with `process.execPath`. The app must be fully self-contained.

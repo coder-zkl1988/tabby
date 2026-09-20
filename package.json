@@ -39,23 +39,23 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "@dingtalk-real-ai/dingtalk-connector": "0.8.25",
+    "@dingtalk-real-ai/dingtalk-connector": "0.8.26",
     "@larksuite/openclaw-lark": "2026.7.16",
-    "@openclaw/whatsapp": "2026.7.1",
+    "@openclaw/whatsapp": "2026.9.4",
     "@playwright/test": "^1.58.2",
     "@tencent-connect/openclaw-qqbot": "2.0.3",
-    "@tencent-weixin/openclaw-weixin": "2.4.6",
+    "@tencent-weixin/openclaw-weixin": "2.4.9",
     "@types/node": "^25.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^3.2.4",
-    "@wecom/wecom-openclaw-plugin": "2026.8.17",
+    "@wecom/wecom-openclaw-plugin": "2026.9.15",
     "concurrently": "^9.2.1",
     "silk-wasm": "^3.7.1",
     "tsx": "^4.21.0",
     "vitest": "^3.0.7"
   },
   "engines": {
-    "node": ">=24",
+    "node": ">=24.16.0 <25 || >=26.1.0",
     "pnpm": ">=10.26.0",
     "npm": ">=11"
   },
@@ -71,6 +71,9 @@
     "overrides": {
       "react": "^19.2.4",
       "react-dom": "^19.2.4"
+    },
+    "peerDependencyRules": {
+      "ignoreMissing": ["openclaw"]
     }
   }
 }

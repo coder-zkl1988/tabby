@@ -1,4 +1,23 @@
-// Baseline installed size: 652M.
+// Baseline installed size: 652M (openclaw 2026.6.x era).
+// Re-measured 2026-09-18 against openclaw 2026.9.4: the pruned runtime is 548M and
+// only 4 of the 26 targets below still match anything -- `@mistralai`, the two
+// @lydell/node-pty Mach-O files, and `undici/docs`. The other 22 are dead entries
+// against the 9.4 tree (node-llama-cpp, @octokit, octokit, @cloudflare, bun-types,
+// simple-git, ipull, fast-xml-builder, the clipboard/reflink/sqlite-vec natives,
+// and every docs/ target except undici/docs). They are kept as harmless no-ops;
+// re-measure before trusting any savings number here.
+//
+// Where 9.4's size sits (top of tree, measured after pruning):
+//   openclaw                          275M
+//   @trycua/cua-driver-darwin-arm64    49M
+//   @larksuiteoapi/node-sdk            27M
+//   openai                             23M
+// @anthropic-ai/claude-agent-sdk-darwin-arm64 was 8.1's single largest entry at
+// 325M; 9.4 drops it from the tree entirely, which accounts for most of the fall
+// since that measurement. `@trycua/cua-driver-darwin-arm64` is still here and is a
+// plausible prune candidate, but it is NOT listed below: openclaw.json registers a
+// `cua-driver` MCP server and the `cua-computer` plugin still loads by default.
+// Prune it only after testing that path.
 
 const clipboardNativeTargets = [
   "node_modules/@mariozechner/clipboard-darwin-arm64/clipboard.darwin-arm64.node",
@@ -15,14 +34,18 @@ const daveyNativeTargets = [
 const shouldPruneDavey = process.env.NEXU_OPENCLAW_PRUNE_DAVEY === "1";
 
 export const pruneDependencyTargets = [
-  // Round 1: actual savings 124M; actual pruned size 528M.
-  // - Why these targets:
-  //   biggest early size win
+  // Round 1: originally 124M of savings; on 2026.9.4 neither target exists, so
+  // this round is a pure no-op.
   // - Impact:
-  //   `koffi`: may break native/system-level integrations or FFI-backed helpers.
   //   `node-llama-cpp` + `@node-llama-cpp`: may break local/on-device llama
-  //   execution; hosted provider paths should still work.
-  "node_modules/koffi",
+  //   execution; hosted provider paths should still work. (Both absent in 9.4.)
+  //
+  // `koffi` was REMOVED from this list on 2026-09-01. In 2026.9.4 it is still a
+  // direct dependency of openclaw (3.1.6), not a transitive one. It is loaded lazily -- pruning it
+  // does NOT block gateway startup (verified) -- but src/process/spawn-secret-input.ts
+  // does `require("koffi")` the first time a child process is spawned with a
+  // `secretInput` fd, and extensions/anthropic/agent-sdk.runtime.js is one of the
+  // callers. Deleting it trades a 1.9M saving for a runtime failure on that path.
   "node_modules/node-llama-cpp",
   "node_modules/@node-llama-cpp",
 
