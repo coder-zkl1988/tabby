@@ -15,12 +15,12 @@ import {
   parseProfileText,
   resolveBirthday,
 } from "../src/services/xhs-ops-profile-service.js";
+import { XHS_TASK_POLICY } from "../src/services/xhs-ops-run-service.js";
 import {
   buildProfileApplyTask,
   parseProfileJson,
   parseProfileVerificationJson,
 } from "../src/services/xhs-ops-task-builder.js";
-import { XHS_TASK_POLICY } from "../src/services/xhs-ops-run-service.js";
 import { XhsOpsStore } from "../src/store/xhs-ops-store.js";
 
 const tempDir = mkdtempSync(join(tmpdir(), "xhs-ops-profile-"));
