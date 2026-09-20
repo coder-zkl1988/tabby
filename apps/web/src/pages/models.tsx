@@ -107,6 +107,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Switch } from "../components/ui/switch";
+import { CostUsageSection } from "./cost-usage-section";
 import { HostExecutionSettingsSection } from "./host-execution-settings-section";
 import { LocalAutomationSettingsSection } from "./local-automation-settings-section";
 import { MemorySettingsSection } from "./memory-settings-section";
@@ -1159,6 +1160,8 @@ function _GeneralSettings() {
           </div>
         </div>
       ) : null}
+
+      <CostUsageSection />
 
       <LocalAutomationSettingsSection />
 

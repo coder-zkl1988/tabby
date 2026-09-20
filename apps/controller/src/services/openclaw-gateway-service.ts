@@ -591,6 +591,27 @@ export class OpenClawGatewayService {
     return this.wsClient.request("usage.status", {});
   }
 
+  /**
+   * Token + cost rollup from the Gateway's own usage ledger.
+   *
+   * Defaults to the trailing 30 days; `days` or an explicit `startDate`/
+   * `endDate` pair (YYYY-MM-DD, both or neither) narrow it. Unlike
+   * `usage.status` — which reports provider-side quota windows — this is what
+   * the run actually cost.
+   */
+  async getCostUsage(params?: {
+    days?: number;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("usage.cost", {
+      ...(params?.days !== undefined ? { days: params.days } : {}),
+      ...(params?.startDate !== undefined && params?.endDate !== undefined
+        ? { startDate: params.startDate, endDate: params.endDate }
+        : {}),
+    });
+  }
+
   /** Memory subsystem status for one agent. */
   async getMemoryStatus(agentId?: string): Promise<unknown> {
     return this.wsClient.request(

@@ -193,6 +193,39 @@ const runtimeApprovalsResponseSchema = z.object({
   approvals: z.array(approvalSchema),
 });
 
+// ---- Cost usage (Gateway `usage.cost`) ------------------------------------
+// Shape verified against a live openclaw 2026.9.4 gateway. Distinct from
+// `usage.status`, which reports provider-side quota windows rather than spend.
+const costBucketSchema = z.object({
+  input: z.number(),
+  output: z.number(),
+  cacheRead: z.number(),
+  cacheWrite: z.number(),
+  totalTokens: z.number(),
+  totalCost: z.number(),
+  inputCost: z.number(),
+  outputCost: z.number(),
+  cacheReadCost: z.number(),
+  cacheWriteCost: z.number(),
+  missingCostEntries: z.number(),
+});
+
+const costUsageResponseSchema = z.object({
+  connected: z.boolean(),
+  available: z.boolean(),
+  days: z.number().optional(),
+  updatedAt: z.number().optional(),
+  totals: costBucketSchema.optional(),
+  daily: z.array(costBucketSchema.extend({ date: z.string() })).optional(),
+});
+
+const rawCostUsageSchema = z.object({
+  updatedAt: z.number(),
+  days: z.number(),
+  totals: costBucketSchema,
+  daily: z.array(costBucketSchema.extend({ date: z.string() })),
+});
+
 // ---- Interactive questions (`ask_user`) -----------------------------------
 // Mirrors the Gateway's QuestionRecord. `answers` is intentionally the wire
 // shape (every value an array, even single-select) so the UI does not have to
@@ -941,6 +974,48 @@ export function registerRuntimeOperationsRoutes(
         },
         200,
       );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/runtime/cost",
+      tags: ["Runtime Operations"],
+      request: {
+        query: z.object({
+          days: z.coerce.number().int().min(1).max(365).optional(),
+        }),
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: costUsageResponseSchema },
+          },
+          description: "Token and cost rollup from the OpenClaw usage ledger",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        return c.json({ connected: false, available: false }, 200);
+      }
+      const { days } = c.req.valid("query");
+      try {
+        const raw = await container.gatewayService.getCostUsage(
+          days === undefined ? undefined : { days },
+        );
+        const parsed = rawCostUsageSchema.safeParse(raw);
+        if (!parsed.success) {
+          return c.json({ connected: true, available: false }, 200);
+        }
+        return c.json(
+          { connected: true, available: true, ...parsed.data },
+          200,
+        );
+      } catch {
+        return c.json({ connected: true, available: false }, 200);
+      }
     },
   );
 

@@ -22485,6 +22485,164 @@
         }
       }
     },
+    "/api/v1/runtime/cost": {
+      "get": {
+        "tags": [
+          "Runtime Operations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365
+            },
+            "required": false,
+            "name": "days",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token and cost rollup from the OpenClaw usage ledger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connected": {
+                      "type": "boolean"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "days": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "input": {
+                          "type": "number"
+                        },
+                        "output": {
+                          "type": "number"
+                        },
+                        "cacheRead": {
+                          "type": "number"
+                        },
+                        "cacheWrite": {
+                          "type": "number"
+                        },
+                        "totalTokens": {
+                          "type": "number"
+                        },
+                        "totalCost": {
+                          "type": "number"
+                        },
+                        "inputCost": {
+                          "type": "number"
+                        },
+                        "outputCost": {
+                          "type": "number"
+                        },
+                        "cacheReadCost": {
+                          "type": "number"
+                        },
+                        "cacheWriteCost": {
+                          "type": "number"
+                        },
+                        "missingCostEntries": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "input",
+                        "output",
+                        "cacheRead",
+                        "cacheWrite",
+                        "totalTokens",
+                        "totalCost",
+                        "inputCost",
+                        "outputCost",
+                        "cacheReadCost",
+                        "cacheWriteCost",
+                        "missingCostEntries"
+                      ]
+                    },
+                    "daily": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "input": {
+                            "type": "number"
+                          },
+                          "output": {
+                            "type": "number"
+                          },
+                          "cacheRead": {
+                            "type": "number"
+                          },
+                          "cacheWrite": {
+                            "type": "number"
+                          },
+                          "totalTokens": {
+                            "type": "number"
+                          },
+                          "totalCost": {
+                            "type": "number"
+                          },
+                          "inputCost": {
+                            "type": "number"
+                          },
+                          "outputCost": {
+                            "type": "number"
+                          },
+                          "cacheReadCost": {
+                            "type": "number"
+                          },
+                          "cacheWriteCost": {
+                            "type": "number"
+                          },
+                          "missingCostEntries": {
+                            "type": "number"
+                          },
+                          "date": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "input",
+                          "output",
+                          "cacheRead",
+                          "cacheWrite",
+                          "totalTokens",
+                          "totalCost",
+                          "inputCost",
+                          "outputCost",
+                          "cacheReadCost",
+                          "cacheWriteCost",
+                          "missingCostEntries",
+                          "date"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "connected",
+                    "available"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/runtime/questions": {
       "get": {
         "tags": [

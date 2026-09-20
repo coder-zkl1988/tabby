@@ -7154,6 +7154,56 @@ export type GetApiV1RuntimeOperationsResponses = {
 
 export type GetApiV1RuntimeOperationsResponse = GetApiV1RuntimeOperationsResponses[keyof GetApiV1RuntimeOperationsResponses];
 
+export type GetApiV1RuntimeCostData = {
+    body?: never;
+    path?: never;
+    query?: {
+        days?: number;
+    };
+    url: '/api/v1/runtime/cost';
+};
+
+export type GetApiV1RuntimeCostResponses = {
+    /**
+     * Token and cost rollup from the OpenClaw usage ledger
+     */
+    200: {
+        connected: boolean;
+        available: boolean;
+        days?: number;
+        updatedAt?: number;
+        totals?: {
+            input: number;
+            output: number;
+            cacheRead: number;
+            cacheWrite: number;
+            totalTokens: number;
+            totalCost: number;
+            inputCost: number;
+            outputCost: number;
+            cacheReadCost: number;
+            cacheWriteCost: number;
+            missingCostEntries: number;
+        };
+        daily?: Array<{
+            input: number;
+            output: number;
+            cacheRead: number;
+            cacheWrite: number;
+            totalTokens: number;
+            totalCost: number;
+            inputCost: number;
+            outputCost: number;
+            cacheReadCost: number;
+            cacheWriteCost: number;
+            missingCostEntries: number;
+            date: string;
+        }>;
+    };
+};
+
+export type GetApiV1RuntimeCostResponse = GetApiV1RuntimeCostResponses[keyof GetApiV1RuntimeCostResponses];
+
 export type GetApiV1RuntimeQuestionsData = {
     body?: never;
     path?: never;
