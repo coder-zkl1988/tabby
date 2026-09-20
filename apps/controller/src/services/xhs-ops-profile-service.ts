@@ -42,6 +42,7 @@ import {
   XhsOpsError,
 } from "./xhs-ops-run-service.js";
 import {
+  type XhsOpsProfileJson,
   buildAccountIdentityTask,
   buildProfileApplyTask,
   buildProfileReadbackTask,
@@ -74,7 +75,7 @@ export type XhsOpsProfileDeviceControl = Pick<
   DeviceControlService,
   "getDevice" | "executeTask" | "pushMedia"
 > &
-  Partial<Pick<DeviceControlService, "cancelTask">>;
+  Partial<Pick<DeviceControlService, "cancelTask" | "getTaskResults">>;
 
 export interface XhsOpsProfileServiceDeps {
   store: XhsOpsStore;
@@ -94,6 +95,13 @@ export interface XhsOpsProfileServiceDeps {
  * own ceiling is 100 steps; budget to it and give the deadline room to outlast
  * a real run instead of racing it.
  */
+/**
+ * How far back to look for a receipt the desktop never received. A phone runs
+ * one xhs-ops task at a time, so the run being reconciled is within the last
+ * few — preparation, apply, and whatever the previous account left behind.
+ */
+const XHS_RECOVERABLE_RECEIPT_LOOKBACK = 10;
+
 export const XHS_PROFILE_APPLY_TIMEOUT_MS = 1_500_000;
 export const XHS_PROFILE_APPLY_MAX_STEPS = 100;
 export const XHS_PROFILE_VERIFY_TIMEOUT_MS = 180_000;
@@ -380,6 +388,43 @@ export function parseProfileText(text: string): ParsedProfileText {
     bio: lines.slice(1).join("\n").slice(0, 200),
     ...empty,
   };
+}
+
+/**
+ * One rendering for both the live receipt and a recovered one, so an operator
+ * cannot tell from the card which path produced it.
+ *
+ * note carries the phone's own explanation — 「头像因平台 7 天内 3 次修改限制
+ * 未能修改」, 「兴趣标签入口未找到」 — and dropping it left every failure
+ * looking identical (2026-09-20). The task prompt bars 小红书号 and 生日 from
+ * the receipt, and parseProfileJson caps it at 200 chars.
+ */
+function renderProfileSummary(parsed: XhsOpsProfileJson): string {
+  const fields = `昵称=${parsed.nickname} 简介=${parsed.bio} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region}`;
+  const note = parsed.note.trim();
+  return note ? `${fields}｜手机说明：${note}` : fields;
+}
+
+/**
+ * Status from the receipt alone. The phone writes skipped for fields the task
+ * never asked about, so the receipt already encodes what was requested — which
+ * is what makes it readable without the caller's original field selection.
+ */
+function applyStatusFromReceipt(
+  parsed: XhsOpsProfileJson,
+): XhsOpsProfileApplyStatus {
+  const outcomes = [
+    parsed.nickname,
+    parsed.bio,
+    parsed.avatar,
+    parsed.cover,
+    parsed.gender,
+    parsed.birthday,
+    parsed.region,
+  ].filter((o) => o !== "skipped");
+  const done = outcomes.filter((o) => o === "done").length;
+  if (outcomes.length > 0 && done === outcomes.length) return "applied";
+  return done > 0 ? "partial" : "failed";
 }
 
 export class XhsOpsProfileService {
@@ -937,8 +982,15 @@ export class XhsOpsProfileService {
 
   /**
    * Resolve a profile operation left running after a controller/RPC failure.
-   * An idle device is the only terminal signal we can trust without a task
-   * receipt; it is therefore recorded as failed and kept behind manual review.
+   *
+   * The phone keeps working when the desktop's RPC dies, and tabby-control
+   * retains the result it could not deliver — so ask for it before declaring
+   * anything lost. On 2026-09-20 a controller restart mid-apply cost a 21
+   * minute run that had in fact succeeded on six of eight fields; the receipt
+   * was sitting in the plugin the whole time and had to be fetched by hand.
+   *
+   * Only when no receipt can be recovered does an idle device become the
+   * terminal signal, recorded as failed and kept behind manual review.
    */
   async reconcile(accountId: string): Promise<XhsOpsAccount | null> {
     const account = await this.store.getAccount(accountId);
@@ -957,11 +1009,12 @@ export class XhsOpsProfileService {
     ) {
       return account;
     }
+    const recovered = await this.recoverApplyReceipt(operation);
     try {
       return await this.store.completeProfileApply(
         account.id,
         operation.operationId,
-        {
+        recovered ?? {
           applyStatus: "failed",
           applyResult:
             "桌面端未收到手机任务结果，当前设备已空闲；请人工检查资料是否生效后重试",
@@ -971,6 +1024,53 @@ export class XhsOpsProfileService {
     } finally {
       this.store.releaseDeviceBinding(account.id, operation.deviceId);
     }
+  }
+
+  /**
+   * Ask tabby-control for the receipt this operation never received.
+   *
+   * Guarded on the operation's own start time: one phone runs one account at a
+   * time under the device binding, so a PROFILE_JSON receipt that landed after
+   * this operation began is this operation's. Anything older belongs to an
+   * earlier run and is ignored.
+   *
+   * Best-effort by design — an older plugin without the call, or a plugin that
+   * errors, simply leaves the caller on the original "no result" path.
+   */
+  private async recoverApplyReceipt(operation: {
+    deviceId: string;
+    startedAt: string;
+  }): Promise<XhsOpsProfileApplyCompletion | null> {
+    const fetch = this.deviceControl.getTaskResults;
+    if (!fetch) return null;
+    const startedAt = Date.parse(operation.startedAt);
+    if (!Number.isFinite(startedAt)) return null;
+    let retained: Awaited<ReturnType<DeviceControlService["getTaskResults"]>>;
+    try {
+      retained = await fetch.call(this.deviceControl, {
+        deviceId: operation.deviceId,
+        limit: XHS_RECOVERABLE_RECEIPT_LOOKBACK,
+      });
+    } catch {
+      return null;
+    }
+    const mine = retained
+      .filter((entry) => entry.completedAt >= startedAt)
+      .sort((a, b) => b.completedAt - a.completedAt);
+    for (const entry of mine) {
+      const parsed = parseProfileJson(entry.result.message);
+      if (!parsed) continue;
+      const status = applyStatusFromReceipt(parsed);
+      return {
+        taskId: entry.result.taskId,
+        applyStatus: status,
+        // Only the apply ran; the independent read-only check never got its
+        // turn, so this must not look verified however well the fields went.
+        applyResult: `${renderProfileSummary(parsed)}（桌面端当时已断开，结果为事后补记；独立核验未执行）`,
+        appliedAt: status === "failed" ? null : this.nowIso(),
+      };
+    }
+    return null;
   }
 
   /** Sweep persisted operations after a controller restart and at intervals. */
@@ -1027,8 +1127,12 @@ export class XhsOpsProfileService {
         : done > 0
           ? "partial"
           : "failed";
-    const summary = `昵称=${parsed.nickname} 简介=${parsed.bio} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region}`;
-    return { status, summary };
+    // The phone explains itself in note, and dropping it cost an afternoon:
+    // 「头像因平台 7 天内 3 次修改限制未能修改」 and 「兴趣标签入口未找到」 were
+    // both sitting in there while the card showed nothing but failed=failed
+    // and the reason had to be dug out of a retained task result by hand
+    // (2026-09-20). The prompt already bars 小红书号 and 生日 from the receipt.
+    return { status, summary: renderProfileSummary(parsed) };
   }
 
   private async prepareAccount(

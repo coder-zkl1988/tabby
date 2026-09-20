@@ -340,6 +340,33 @@ export class DeviceControlService {
     return this.rpc<DeviceInfo | null>("device.get_status", { deviceId });
   }
 
+  /**
+   * Results tabby-control kept after its RPC caller went away — a controller
+   * restart, a dropped socket. The phone finishes either way and the plugin
+   * retains what it could not deliver ("RPC caller disconnected before
+   * response; task result remains available for recovery"), so a caller that
+   * lost its answer can still come back for it instead of reporting a task it
+   * never heard about as lost (2026-09-20).
+   *
+   * Newest first. `completedAt` is epoch ms, which is what lets a caller tell
+   * its own run's result from an earlier one on the same phone.
+   */
+  async getTaskResults(query: {
+    deviceId?: string;
+    taskId?: string;
+    limit?: number;
+  }): Promise<
+    Array<{
+      taskId: string;
+      deviceId: string;
+      result: TaskResult;
+      completedAt: number;
+      orphaned?: boolean;
+    }>
+  > {
+    return this.rpc("device.get_task_results", query);
+  }
+
   async executeTask(
     deviceId: string,
     body: DeviceExecuteTaskBody,

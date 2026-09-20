@@ -1458,6 +1458,132 @@ describe("XhsOpsProfileService.apply", () => {
     ).resolves.toMatchObject({ deviceId: null });
   });
 
+  it("carries the phone's note onto the card, not just done/failed", async () => {
+    // Both of 2026-09-20's real failures — a 7-day platform cap on avatar
+    // changes, and a 兴趣标签 entry that does not exist — were stated only in
+    // note. Without it every partial run renders identically and the reason
+    // has to be dug out of a retained task result by hand.
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () => ({ status: "idle" }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          return {
+            result: {
+              taskId: "profile-partial",
+              success: true,
+              message:
+                'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"failed","cover":"done","gender":"done","birthday":"done","region":"done","note":"头像因7天内3次限制修改失败"}',
+            },
+          };
+        },
+      },
+    });
+
+    const updated = await svc.apply(account.id);
+    expect(updated.profileDraft.applyStatus).toBe("partial");
+    expect(updated.profileDraft.applyResult).toContain("头像=failed");
+    expect(updated.profileDraft.applyResult).toContain(
+      "手机说明：头像因7天内3次限制修改失败",
+    );
+  });
+
+  it("recovers the receipt the plugin retained when the desktop dropped mid-apply", async () => {
+    // 2026-09-20: a controller restart mid-apply killed the RPC while the phone
+    // kept going for another four minutes. The run had succeeded on six of
+    // eight fields and said why it missed the rest, and all of it sat in
+    // tabby-control marked "available for recovery" while the card claimed the
+    // result was never received.
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () => ({ status: "idle" }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          throw new Error("socket hang up");
+        },
+      },
+    });
+    await expect(svc.apply(account.id)).rejects.toThrow("socket hang up");
+
+    const restartedStore = new XhsOpsStore(join(tempDir, "xhs-ops.json"));
+    const restartedSvc = new XhsOpsProfileService({
+      store: restartedStore,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({
+            status: "idle",
+            currentTaskId: null,
+            lastSeen: Date.now(),
+          }) as never,
+        executeTask: async (_id, body) => ({ result: resultForTask(body) }),
+        pushMedia: async () => ({ results: [] }),
+        getTaskResults: async () => [
+          {
+            taskId: "stale-earlier-run",
+            deviceId: "dev-x",
+            // Predates this operation: another account's run on the same phone.
+            completedAt: 1,
+            result: {
+              taskId: "stale-earlier-run",
+              success: true,
+              message:
+                'PROFILE_JSON:{"nickname":"failed","bio":"failed","avatar":"failed","cover":"failed","gender":"failed","birthday":"failed","region":"failed","note":"不该被采信"}',
+            },
+          },
+          {
+            taskId: "t_recovered",
+            deviceId: "dev-x",
+            completedAt: Date.now(),
+            result: {
+              taskId: "t_recovered",
+              success: true,
+              message:
+                'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"failed","cover":"done","gender":"done","birthday":"done","region":"done","note":"头像因7天内3次限制修改失败"}',
+            },
+          },
+        ],
+      },
+    });
+
+    const settled = await restartedSvc.reconcile(account.id);
+    expect(settled?.profileDraft.applyStatus).toBe("partial");
+    expect(settled?.profileDraft.applyOperation?.status).toBe("completed");
+    expect(settled?.profileDraft.applyResult).toContain("头像=failed");
+    expect(settled?.profileDraft.applyResult).toContain("头像因7天内3次限制");
+    // The apply ran; the independent read-only check never did.
+    expect(settled?.profileDraft.applyResult).toContain("独立核验未执行");
+    expect(settled?.profileDraft.verifiedAt ?? null).toBeNull();
+    expect(settled?.profileDraft.applyResult).not.toContain("不该被采信");
+    expect(settled?.profileDraft.applyResult).not.toContain("桌面端未收到");
+  });
+
   it("does not reconcile an idle device with a stale lastSeen heartbeat", async () => {
     const { account: created } = await seed();
     const account = await prepareReadyAccount(created);
