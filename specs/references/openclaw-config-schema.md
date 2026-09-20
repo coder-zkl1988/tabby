@@ -127,6 +127,7 @@ Bedrock 使用 OpenClaw 的 AWS SDK 认证链，不在 Nexu 配置中保存 Acce
 
 - `auth: "aws-sdk"` 强制使用运行 Nexu/OpenClaw 进程可见的 AWS 默认凭据链；`apiKey` 应省略。
 - OpenClaw 不接受 `models.bedrockDiscovery`。自动发现属于外置 `@openclaw/amazon-bedrock-provider` 插件，其配置路径是 `plugins.entries.amazon-bedrock.config.discovery`；Nexu 当前不会把旧字段写入运行时配置。
+- 外置的不只是自动发现：`bedrock-converse-stream` 这个 api 本身就由该插件注册。2026.9.4 随包分发 60 个 bundled extension（含 `google`、`minimax`），其中没有 bedrock，所以在未安装该插件的运行时里，Bedrock 的 probe 会直接返回 `No API provider registered for api: bedrock-converse-stream`。2026.8.2 同样如此，不是升级引入的。Nexu 未打包该插件，而打包后的桌面端不允许用 npm/npx 安装（见 AGENTS.md 硬规则）。由于保存 Bedrock 配置要求实时 probe 返回 `ok`，该表单在缺插件时根本无法保存成功，用户只会看到误导性的「检查凭据/区域/网络」错误，因此 registry 已将 `amazon-bedrock` 的 `modelsPageVisible` 置为 `false`，把它从「设置 → 模型」中摘除；`controllerConfigurable` 保持 `true`，API enum 与既有配置不受影响。若将来随包提供该插件，把这个开关改回 `true` 即可恢复入口。
 - 保存前必须填写当前区域已授权的模型或推理配置 ID。验证通过打包的 OpenClaw 执行最小 token 实时 probe；只有目标 `amazon-bedrock/<modelId>` 明确返回 `ok` 才算成功。
 - 临时 probe 只加载正式运行时扩展目录中的 `amazon-bedrock` 插件。插件未安装时返回明确的不可用错误，不会把传输层缺失误报为 AWS 凭据失败。
 - 认证、限流、计费权限、格式、超时和无可用模型错误只映射为安全的产品错误，不透传 CLI 输出，避免日志或界面泄露凭据上下文。
