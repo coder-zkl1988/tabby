@@ -98,8 +98,15 @@ function matchPersistedModelRef(
           ]
         : [
             persistedKey,
-            ...getProviderAliasCandidates(providerId),
-            `byok_${runtimePolicy.canonicalOpenClawId}`,
+            // Every alias, each also in its `byok_` runtime form. Covering only
+            // the current canonical id strands refs persisted before a rename:
+            // `byok_gemini/...` stopped matching once google's canonical id
+            // moved off `gemini`, and then fell through to a bare model id that
+            // belongs to no provider at all.
+            ...getProviderAliasCandidates(providerId).flatMap((alias) => [
+              alias,
+              `byok_${alias}`,
+            ]),
           ];
 
       return Array.from(new Set(candidatePrefixes)).map((prefix) => ({
