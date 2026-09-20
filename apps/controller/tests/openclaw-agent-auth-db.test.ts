@@ -4,6 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  discardUnownedAgentDatabase,
   isAgentDatabasePath,
   readAgentAuthStore,
   writeAgentAuthStore,
@@ -142,6 +143,53 @@ describe("openclaw-agent-auth-db", () => {
       false,
     );
     expect(existsSync(dbPath)).toBe(false);
+  });
+
+  describe("discardUnownedAgentDatabase", () => {
+    function createDatabase(sql: string[]): void {
+      mkdirSync(path.dirname(dbPath), { recursive: true });
+      const db = new DatabaseSync(dbPath);
+      try {
+        for (const statement of sql) {
+          db.exec(statement);
+        }
+      } finally {
+        db.close();
+      }
+    }
+
+    it("reports absent when there is no database", () => {
+      expect(discardUnownedAgentDatabase(dbPath)).toBe("absent");
+    });
+
+    // The exact shape older controllers left behind: the auth row and nothing
+    // else. OpenClaw cannot adopt it and doctor cannot repair it.
+    it("discards a controller-shaped database", () => {
+      createDatabase([
+        "CREATE TABLE auth_profile_store (store_key TEXT PRIMARY KEY, store_json TEXT NOT NULL, updated_at INTEGER NOT NULL);",
+      ]);
+      expect(discardUnownedAgentDatabase(dbPath)).toBe("discarded");
+      expect(existsSync(dbPath)).toBe(false);
+    });
+
+    it("keeps a database OpenClaw owns, whatever its schema version", () => {
+      createDatabase([
+        "CREATE TABLE schema_meta (meta_key TEXT PRIMARY KEY, role TEXT NOT NULL, schema_version INTEGER NOT NULL);",
+        "INSERT INTO schema_meta (meta_key, role, schema_version) VALUES ('primary', 'agent', 3);",
+      ]);
+      expect(discardUnownedAgentDatabase(dbPath)).toBe("owned");
+      expect(existsSync(dbPath)).toBe(true);
+    });
+
+    // Not a shape this controller produces. Deleting it would throw away
+    // conversations on a guess, so it is surfaced instead.
+    it("keeps an unowned database that carries OpenClaw data", () => {
+      createDatabase([
+        "CREATE TABLE session_nodes (session_key TEXT PRIMARY KEY);",
+      ]);
+      expect(discardUnownedAgentDatabase(dbPath)).toBe("unowned-with-data");
+      expect(existsSync(dbPath)).toBe(true);
+    });
   });
 
   it("reports that it wrote once OpenClaw owns the database", () => {

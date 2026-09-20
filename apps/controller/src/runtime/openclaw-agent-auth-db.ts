@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
 /**
@@ -147,6 +147,81 @@ export function writeAgentAuthStore(
     db.close();
   }
   return true;
+}
+
+/**
+ * `schema_meta` is the first table in OpenClaw's agent schema, so a database
+ * that lacks it was never created by OpenClaw. One OpenClaw created but left on
+ * an older schema version keeps its metadata and is repaired by `doctor --fix`;
+ * those must never be touched here.
+ */
+const OWNERSHIP_TABLE = "schema_meta";
+
+/**
+ * Tables that only appear once OpenClaw has actually used the database. Their
+ * presence without ownership metadata is not a shape we produce, so it is left
+ * alone rather than discarded — conversations are not ours to delete on a
+ * guess.
+ */
+const OPENCLAW_DATA_TABLES = [
+  "session_nodes",
+  "session_windows",
+  "transcript_events",
+];
+
+export type AgentDatabaseDisposition =
+  | "absent"
+  | "owned"
+  | "unowned-with-data"
+  | "discarded";
+
+function listTables(databasePath: string): Set<string> {
+  const db = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const rows = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all() as Array<{ name: string }>;
+    return new Set(rows.map((row) => row.name));
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Delete an agent database OpenClaw can neither adopt nor repair.
+ *
+ * Controller-created databases (see the note at the top of this file) have no
+ * schema ownership metadata. Since 2026.9 that makes the gateway refuse to
+ * start and `doctor --fix` refuse to migrate, with no path back — the only
+ * recovery is to remove the file and let OpenClaw create its own.
+ */
+export function discardUnownedAgentDatabase(
+  databasePath: string,
+): AgentDatabaseDisposition {
+  if (!existsSync(databasePath)) {
+    return "absent";
+  }
+
+  let tables: Set<string>;
+  try {
+    tables = listTables(databasePath);
+  } catch {
+    // Unreadable as SQLite at all: nothing can adopt it either.
+    tables = new Set();
+  }
+
+  if (tables.has(OWNERSHIP_TABLE)) {
+    return "owned";
+  }
+
+  if (OPENCLAW_DATA_TABLES.some((table) => tables.has(table))) {
+    return "unowned-with-data";
+  }
+
+  for (const suffix of ["", "-wal", "-shm"]) {
+    rmSync(`${databasePath}${suffix}`, { force: true });
+  }
+  return "discarded";
 }
 
 /** Derive the OpenClaw agent SQLite path that sits beside an `agent/` dir. */

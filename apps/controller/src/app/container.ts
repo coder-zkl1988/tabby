@@ -98,6 +98,7 @@ export interface ControllerContainer {
   gatewayClient: GatewayClient;
   controlPlaneHealth: ControlPlaneHealthService;
   openclawProcess: OpenClawProcessManager;
+  authProfilesStore: OpenClawAuthProfilesStore;
   agentService: AgentService;
   channelService: ChannelService;
   channelFallbackService: ChannelFallbackService;
@@ -831,6 +832,7 @@ export async function createContainer(): Promise<ControllerContainer> {
     gatewayClient,
     controlPlaneHealth,
     openclawProcess,
+    authProfilesStore,
     agentService,
     channelService,
     channelFallbackService,
