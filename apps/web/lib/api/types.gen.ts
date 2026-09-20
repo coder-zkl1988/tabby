@@ -9174,7 +9174,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponses = {
         reason: string;
         screenshotUrl: string | null;
         fields: Array<{
-            field: 'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region' | 'interestTags';
+            field: 'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
             comparable: boolean;
             phone: string;
             draft: string;
@@ -9187,7 +9187,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponse = Pos
 
 export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyData = {
     body?: {
-        fields?: Array<'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region' | 'interestTags'>;
+        fields?: Array<'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region'>;
     };
     path: {
         accountId: string;

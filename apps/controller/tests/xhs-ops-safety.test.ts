@@ -264,7 +264,13 @@ describe("xhs ops review safety regressions", () => {
       status: 409,
     });
     expect(f.calls).toHaveLength(0);
-  }, 15_000);
+    // XHS_OPS_MAX_RUNS is 500 and every create persists the whole run list, so
+    // this is 500 sequential rewrites of a file that grows under it — heavy by
+    // construction, not by accident. Measured 2.2–2.6s locally and 5–6s on a
+    // healthy CI runner, and a slow runner still blew the previous 15s budget
+    // (2026-09-20). The headroom is for runner variance; a genuine hang is
+    // still caught, just later.
+  }, 45_000);
 
   it("reserves unknown interaction usage after cancellation and a controller restart", async () => {
     const f = await fixture();

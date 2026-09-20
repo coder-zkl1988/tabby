@@ -251,6 +251,11 @@ export const xhsOpsProfileDraftSchema = z.object({
    */
   birthday: text(),
   region: text(),
+  /**
+   * Persona content only. 编辑主页 exposes no 兴趣标签 entry on the versions we
+   * have verified, so this never travels to the phone — it is deliberately
+   * absent from xhsOpsProfileFieldSchema, which lists the writable fields.
+   */
   interestTags: textList(),
   /** media 目录下的绝对路径 */
   avatarCandidates: textList(),
@@ -392,7 +397,6 @@ export const xhsOpsProfileFieldSchema = z.enum([
   "gender",
   "birthday",
   "region",
-  "interestTags",
 ]);
 export type XhsOpsProfileField = z.infer<typeof xhsOpsProfileFieldSchema>;
 
@@ -404,7 +408,6 @@ export const XHS_PROFILE_FIELD_LABEL: Record<XhsOpsProfileField, string> = {
   gender: "性别",
   birthday: "生日",
   region: "地区",
-  interestTags: "兴趣标签",
 };
 
 /**
@@ -448,7 +451,7 @@ export type XhsOpsProfileReadback = z.infer<
 
 /** Apply body: omit `fields` to write every field the draft has filled in. */
 export const xhsOpsProfileApplyBodySchema = z.object({
-  fields: z.array(xhsOpsProfileFieldSchema).min(1).max(8).optional(),
+  fields: z.array(xhsOpsProfileFieldSchema).min(1).max(7).optional(),
 });
 
 export const xhsOpsProfileGenerateBodySchema = z.object({

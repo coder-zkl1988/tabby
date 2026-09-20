@@ -6,6 +6,8 @@ import type {
 } from "@nexu/shared";
 import { z } from "zod";
 
+import { XHS_ME_TAB_UNFOLD_HINT } from "./xhs-ops-task-builder.js";
+
 export const XHS_PREPARATION_TIMEOUT_MS = 600_000;
 export const XHS_PREPARATION_MARKER = "PREPARATION_JSON:";
 // PhoneAgentRunner appends this machine receipt after the model's last line.
@@ -108,6 +110,7 @@ export function buildPreparationRequest(
       '先用 LOAD_SKILL value:"login" 加载小红书安装与自动登录子技能；需要安装时使用 app.install.official_store，需要验证码时使用 sms.verification。不要加载 research 或 nurture 子技能。',
       `先 AWAKE 打开 ${packageName}；只有明确报告未安装才通过 AWAKE store:${packageName} 进入官方应用市场下载安装。不得通过浏览器或第三方 APK 下载，商店登录/付款/无法确认安装目标时停止并请求人工处理。安装后必须再次打开目标 App。`,
       "进入小红书底部“我”检查登录状态。已登录并看到个人主页、昵称和作品区就结束准备；禁止退出已有账号或切换账号。检测到其他账号时返回 account_mismatch。",
+      XHS_ME_TAB_UNFOLD_HINT,
       identityInstruction,
       "未登录时按 login 子技能使用手机号验证码登录。手机号只能来自本次任务明确提供或页面已显示且用户已确认的号码；没有可靠号码就停止，返回 phone_required 并请用户在手机上确认或填写，不能猜测本机号码。",
       "验证码只使用本次小红书登录请求的系统自动填充、新通知或默认短信 App 的最新匹配短信，读取后立即回到小红书填写，错误或过期最多重发一次。不得读取无关短信、回显手机号或验证码，也不得将它们写入动作说明、进度、日志或结果。",
@@ -172,6 +175,7 @@ export function buildPreparationVerificationRequest(
     task: [
       "只复核小红书登录状态并返回机器回执，不执行养号。上一任务没有返回约定格式；不要复述个人资料。",
       `AWAKE 打开 ${packageName}，进入底部“我”；看到已登录个人主页、昵称和作品区才算验证成功。`,
+      XHS_ME_TAB_UNFOLD_HINT,
       expectedId
         ? `打开编辑主页，只读取并核对“小红书号”与任务指定值「${expectedId}」完全一致；不一致返回 blocked/account_mismatch。不得在回执或过程记录中复述该号码。`
         : "本次未提供目标小红书号，不执行具体账号身份比对。",
@@ -190,6 +194,9 @@ export function buildPreparationVerificationRequest(
         "WAIT",
         "BACK",
         "HOME",
+        // 「我」 can open collapsed into its title bar, and unfolding it is a
+        // scroll. Read-only still: this buys the page back, nothing else.
+        "SCROLL",
         "COMPLETE",
         "ABORT",
         "INFO",

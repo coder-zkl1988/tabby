@@ -167,6 +167,39 @@ export class DeviceControlRpcError extends Error {
   }
 }
 
+/**
+ * Markers tabby-control raises from execute_task before the task goes on the
+ * wire: an unknown device, one already busy, a whitelist naming an action the
+ * phone never declared, or a WebSocket send that failed outright. All of them
+ * are thrown ahead of the send, and tabby-control leaves the device's own
+ * state alone for them, so the phone provably never saw the task.
+ *
+ * Deliberately an allowlist and not "any RPC error": TIMEOUT and NO_FIRST_STEP
+ * come back through the same channel and both mean the phone *did* take the
+ * task, so reading them as never-dispatched would write off work that may
+ * still be running.
+ */
+const DISPATCH_REJECTION_MARKERS = [
+  "UNKNOWN_PHONE_ACTION",
+  "DEVICE_NOT_FOUND",
+  "TASK_ALREADY_RUNNING",
+  "DEVICE_OFFLINE",
+];
+
+/**
+ * Why a task never reached the phone, or null when the error proves no such
+ * thing. Only a structured RPC error can qualify: a transport failure means
+ * the answer was lost, not that the dispatch was refused.
+ */
+export function dispatchRejectionReason(error: unknown): string | null {
+  if (!(error instanceof DeviceControlRpcError)) return null;
+  return DISPATCH_REJECTION_MARKERS.some((marker) =>
+    error.message.includes(marker),
+  )
+    ? error.message
+    : null;
+}
+
 export class DeviceControlService {
   constructor(
     private readonly configStore: NexuConfigStore,
@@ -305,6 +338,33 @@ export class DeviceControlService {
 
   async getDevice(deviceId: string): Promise<DeviceInfo | null> {
     return this.rpc<DeviceInfo | null>("device.get_status", { deviceId });
+  }
+
+  /**
+   * Results tabby-control kept after its RPC caller went away — a controller
+   * restart, a dropped socket. The phone finishes either way and the plugin
+   * retains what it could not deliver ("RPC caller disconnected before
+   * response; task result remains available for recovery"), so a caller that
+   * lost its answer can still come back for it instead of reporting a task it
+   * never heard about as lost (2026-09-20).
+   *
+   * Newest first. `completedAt` is epoch ms, which is what lets a caller tell
+   * its own run's result from an earlier one on the same phone.
+   */
+  async getTaskResults(query: {
+    deviceId?: string;
+    taskId?: string;
+    limit?: number;
+  }): Promise<
+    Array<{
+      taskId: string;
+      deviceId: string;
+      result: TaskResult;
+      completedAt: number;
+      orphaned?: boolean;
+    }>
+  > {
+    return this.rpc("device.get_task_results", query);
   }
 
   async executeTask(

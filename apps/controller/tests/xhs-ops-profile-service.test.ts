@@ -8,6 +8,11 @@ import type {
   XhsOpsAccount,
 } from "@nexu/shared";
 import { afterAll, describe, expect, it } from "vitest";
+import { DeviceControlRpcError } from "../src/services/device-control-service.js";
+import {
+  buildPreparationRequest,
+  buildPreparationVerificationRequest,
+} from "../src/services/xhs-ops-preparation.js";
 import {
   XhsOpsProfileService,
   buildProfileTextPrompt,
@@ -17,7 +22,11 @@ import {
 } from "../src/services/xhs-ops-profile-service.js";
 import { XHS_TASK_POLICY } from "../src/services/xhs-ops-run-service.js";
 import {
+  XHS_ME_TAB_UNFOLD_HINT,
+  buildAccountIdentityTask,
   buildProfileApplyTask,
+  buildProfileReadbackTask,
+  buildProfileVerificationTask,
   parseProfileJson,
   parseProfileVerificationJson,
 } from "../src/services/xhs-ops-task-builder.js";
@@ -138,7 +147,7 @@ function applyResult(): TaskResult {
     taskId: "profile-apply",
     success: true,
     message:
-      'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"done","cover":"done","gender":"done","birthday":"done","region":"done","interestTags":"done","note":"ok"}',
+      'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"done","cover":"done","gender":"done","birthday":"done","region":"done","note":"ok"}',
   };
 }
 
@@ -147,7 +156,7 @@ function verificationResult(overrides: Partial<TaskResult> = {}): TaskResult {
     taskId: "profile-verification",
     success: true,
     message:
-      'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true,"interestTags":true}}',
+      'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true}}',
     finalScreenshot: "verified-screen.png",
     ...overrides,
   };
@@ -488,7 +497,6 @@ describe("XhsOpsProfileService.generate", () => {
         gender: "男",
         birthday: "1998-03-02",
         region: "上海",
-        interestTags: ["羽毛球", "约球"],
         avatarPath: "/media/outbound/a/tabby-image/pick.png",
         coverPath: null,
       } as never,
@@ -498,8 +506,6 @@ describe("XhsOpsProfileService.generate", () => {
         gender: "男",
         birthday: "",
         region: "上海",
-        // Same set, different order — not a change.
-        interestTags: ["约球", "羽毛球"],
       },
     );
     const byField = Object.fromEntries(rows.map((r) => [r.field, r]));
@@ -510,7 +516,8 @@ describe("XhsOpsProfileService.generate", () => {
     // Identical -> nothing to do.
     expect(byField.gender?.differs).toBe(false);
     expect(byField.region?.differs).toBe(false);
-    expect(byField.interestTags?.differs).toBe(false);
+    // 兴趣标签 is persona-only now: never pushed, so never diffed.
+    expect(byField.interestTags).toBeUndefined();
     // Images cannot be compared; a selected one still counts as a write.
     expect(byField.avatar).toMatchObject({ comparable: false, differs: true });
     expect(byField.cover).toMatchObject({ comparable: false, differs: false });
@@ -532,7 +539,7 @@ describe("XhsOpsProfileService.generate", () => {
               success: true,
               finalScreenshot: "/var/shots/edit.png",
               message:
-                'PROFILE_READBACK_JSON:{"v":1,"status":"read","nickname":"云朵漫游簿","bio":"","gender":"","birthday":"","region":"","interestTags":[]}',
+                'PROFILE_READBACK_JSON:{"v":1,"status":"read","nickname":"云朵漫游簿","bio":"","gender":"","birthday":"","region":""}',
             },
           };
         },
@@ -892,7 +899,7 @@ describe("XhsOpsProfileService.apply", () => {
     expect(updated.profileDraft.applyStatus).toBe("applied");
     expect(updated.profileDraft.appliedAt).toBe("2026-09-04T13:00:00.000Z");
     expect(updated.profileDraft.applyResult).toBe(
-      "八项资料与目标账号已完成只读核验",
+      "七项资料与目标账号已完成只读核验",
     );
     expect(updated.profileDraft.verifiedAccountId).toBe(
       account.platformAccountId,
@@ -1123,7 +1130,7 @@ describe("XhsOpsProfileService.apply", () => {
     await expect(svc.apply(account.id)).rejects.toMatchObject({ status: 409 }); // 设备忙
   });
 
-  it("lets a selection of only gender/birthday/region/interestTags pass the empty-selection guard", async () => {
+  it("lets a selection of only gender/birthday/region pass the empty-selection guard", async () => {
     const { account: created } = await seed();
     const account = await prepareReadyAccount(created);
     const svc = new XhsOpsProfileService({
@@ -1139,10 +1146,10 @@ describe("XhsOpsProfileService.apply", () => {
         executeTask: async (_id, body) => ({ result: resultForTask(body) }),
       },
     });
-    // 只勾后四个字段：守卫必须放行，随后撞到"设备忙"的 409，而不是 400
-    await expect(
-      svc.apply(account.id, ["region", "interestTags"]),
-    ).rejects.toMatchObject({ status: 409 });
+    // 只勾后几个字段：守卫必须放行，随后撞到"设备忙"的 409，而不是 400
+    await expect(svc.apply(account.id, ["region"])).rejects.toMatchObject({
+      status: 409,
+    });
     await expect(svc.apply(account.id, ["gender"])).rejects.toMatchObject({
       status: 409,
     });
@@ -1150,7 +1157,7 @@ describe("XhsOpsProfileService.apply", () => {
       status: 409,
     });
     // 「勾了但草稿为空」这条 400 分支在 ready 账号上不可达：store 本身就不允许
-    // region/interestTags 为空的账号进入 ready（见 xhsOpsProfileDraftMissingFields）。
+    // region 为空的账号进入 ready（见 xhsOpsProfileDraftMissingFields）。
   });
 
   it("rejects images outside the media root", async () => {
@@ -1275,6 +1282,128 @@ describe("XhsOpsProfileService.apply", () => {
     ).resolves.toMatchObject({ deviceId: null });
   });
 
+  it("records a refused dispatch on the account instead of leaving it to reconcile", async () => {
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({ status: "idle", lastSeen: Date.now() }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          throw new DeviceControlRpcError(
+            "INTERNAL_ERROR",
+            "UNKNOWN_PHONE_ACTION: FLING — this device would ignore it, leaving a narrower whitelist than intended.",
+          );
+        },
+      },
+    });
+
+    await expect(svc.apply(account.id)).rejects.toThrow("UNKNOWN_PHONE_ACTION");
+
+    // The operator's card is the only place this reason ever surfaces: before
+    // this, the operation sat running until reconcile() overwrote it with the
+    // generic "no task result" line and the real cause stayed in the log.
+    const settled = await store.getAccount(account.id);
+    expect(settled?.profileDraft.applyOperation?.status).toBe("completed");
+    expect(settled?.profileDraft.applyStatus).toBe("failed");
+    expect(settled?.profileDraft.applyResult).toContain("任务未下发到手机");
+    expect(settled?.profileDraft.applyResult).toContain("UNKNOWN_PHONE_ACTION");
+    expect(settled?.profileDraft.applyResult).not.toContain(
+      "未收到手机任务结果",
+    );
+    // Nothing was ever handed to the phone, so the binding is free right away
+    // rather than waiting for a sweep to prove the device idle.
+    await expect(
+      store.updateAccount(account.id, { deviceId: null }),
+    ).resolves.toMatchObject({ deviceId: null });
+  });
+
+  it("keeps a task the phone already accepted uncertain, however it failed", async () => {
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({ status: "idle", lastSeen: Date.now() }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          // Same transport, same error class as a refused dispatch — but this
+          // one says the phone took the task, so it must not be settled here.
+          throw new DeviceControlRpcError(
+            "INTERNAL_ERROR",
+            "NO_FIRST_STEP: device dev-x accepted task t_1 but did not start step 1 within 60000ms",
+          );
+        },
+      },
+    });
+
+    await expect(svc.apply(account.id)).rejects.toThrow("NO_FIRST_STEP");
+    expect(
+      (await store.getAccount(account.id))?.profileDraft.applyOperation?.status,
+    ).toBe("running");
+    await expect(
+      store.updateAccount(account.id, { deviceId: null }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(svc.reconcile(account.id)).resolves.toMatchObject({
+      profileDraft: {
+        applyStatus: "failed",
+        applyOperation: { status: "completed" },
+      },
+    });
+  });
+
+  it("records a refused preparation dispatch, which never reaches the phone either", async () => {
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({ status: "idle", lastSeen: Date.now() }) as never,
+        pushMedia: async () => ({ results: [] }),
+        // The device went busy between the idle probe and the dispatch.
+        executeTask: async () => {
+          throw new DeviceControlRpcError(
+            "INTERNAL_ERROR",
+            "TASK_ALREADY_RUNNING: device dev-x is busy",
+          );
+        },
+      },
+    });
+
+    await expect(svc.apply(account.id)).rejects.toMatchObject({ status: 409 });
+    const settled = await store.getAccount(account.id);
+    expect(settled?.profileDraft.applyOperation?.status).toBe("completed");
+    expect(settled?.profileDraft.applyResult).toContain("TASK_ALREADY_RUNNING");
+    expect(settled?.profileDraft.applyResult).not.toContain(
+      "安装、登录或目标账号核验执行失败",
+    );
+  });
+
   it("reconciles an uncertain operation after a controller restart", async () => {
     const { account: created } = await seed();
     const account = await prepareReadyAccount(created);
@@ -1327,6 +1456,132 @@ describe("XhsOpsProfileService.apply", () => {
     await expect(
       restartedStore.updateAccount(account.id, { deviceId: null }),
     ).resolves.toMatchObject({ deviceId: null });
+  });
+
+  it("carries the phone's note onto the card, not just done/failed", async () => {
+    // Both of 2026-09-20's real failures — a 7-day platform cap on avatar
+    // changes, and a 兴趣标签 entry that does not exist — were stated only in
+    // note. Without it every partial run renders identically and the reason
+    // has to be dug out of a retained task result by hand.
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () => ({ status: "idle" }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          return {
+            result: {
+              taskId: "profile-partial",
+              success: true,
+              message:
+                'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"failed","cover":"done","gender":"done","birthday":"done","region":"done","note":"头像因7天内3次限制修改失败"}',
+            },
+          };
+        },
+      },
+    });
+
+    const updated = await svc.apply(account.id);
+    expect(updated.profileDraft.applyStatus).toBe("partial");
+    expect(updated.profileDraft.applyResult).toContain("头像=failed");
+    expect(updated.profileDraft.applyResult).toContain(
+      "手机说明：头像因7天内3次限制修改失败",
+    );
+  });
+
+  it("recovers the receipt the plugin retained when the desktop dropped mid-apply", async () => {
+    // 2026-09-20: a controller restart mid-apply killed the RPC while the phone
+    // kept going for another four minutes. The run had succeeded on six of
+    // eight fields and said why it missed the rest, and all of it sat in
+    // tabby-control marked "available for recovery" while the card claimed the
+    // result was never received.
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () => ({ status: "idle" }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          throw new Error("socket hang up");
+        },
+      },
+    });
+    await expect(svc.apply(account.id)).rejects.toThrow("socket hang up");
+
+    const restartedStore = new XhsOpsStore(join(tempDir, "xhs-ops.json"));
+    const restartedSvc = new XhsOpsProfileService({
+      store: restartedStore,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({
+            status: "idle",
+            currentTaskId: null,
+            lastSeen: Date.now(),
+          }) as never,
+        executeTask: async (_id, body) => ({ result: resultForTask(body) }),
+        pushMedia: async () => ({ results: [] }),
+        getTaskResults: async () => [
+          {
+            taskId: "stale-earlier-run",
+            deviceId: "dev-x",
+            // Predates this operation: another account's run on the same phone.
+            completedAt: 1,
+            result: {
+              taskId: "stale-earlier-run",
+              success: true,
+              message:
+                'PROFILE_JSON:{"nickname":"failed","bio":"failed","avatar":"failed","cover":"failed","gender":"failed","birthday":"failed","region":"failed","note":"不该被采信"}',
+            },
+          },
+          {
+            taskId: "t_recovered",
+            deviceId: "dev-x",
+            completedAt: Date.now(),
+            result: {
+              taskId: "t_recovered",
+              success: true,
+              message:
+                'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"failed","cover":"done","gender":"done","birthday":"done","region":"done","note":"头像因7天内3次限制修改失败"}',
+            },
+          },
+        ],
+      },
+    });
+
+    const settled = await restartedSvc.reconcile(account.id);
+    expect(settled?.profileDraft.applyStatus).toBe("partial");
+    expect(settled?.profileDraft.applyOperation?.status).toBe("completed");
+    expect(settled?.profileDraft.applyResult).toContain("头像=failed");
+    expect(settled?.profileDraft.applyResult).toContain("头像因7天内3次限制");
+    // The apply ran; the independent read-only check never did.
+    expect(settled?.profileDraft.applyResult).toContain("独立核验未执行");
+    expect(settled?.profileDraft.verifiedAt ?? null).toBeNull();
+    expect(settled?.profileDraft.applyResult).not.toContain("不该被采信");
+    expect(settled?.profileDraft.applyResult).not.toContain("桌面端未收到");
   });
 
   it("does not reconcile an idle device with a stale lastSeen heartbeat", async () => {
@@ -1429,20 +1684,51 @@ describe("profile task builder", () => {
     // Flinging overshoots a wheel; stepping without checking compounds it.
     expect(t).toContain("一次最多拖 3 格");
     expect(t).toContain("禁止快速甩动");
-    expect(t).toContain("禁止使用「FLING」");
+    expect(t).toContain("禁止甩动式快滑");
   });
 
-  it("sends the region list a fling, which is the only gesture that can reach its end", () => {
+  it("tells every task that reaches 编辑主页 how to unfold a collapsed 我 page", () => {
+    // 「我」 keeps its scroll position, so a phone left in the note list opens
+    // with the profile folded into the title bar as a bare avatar — no 昵称,
+    // no 编辑主页. Without this the agent reads the note list as the wrong
+    // page and goes looking elsewhere instead of scrolling back up.
+    const input = { label: "A", platformAccountId: "target-xhs-id" };
+    const tasks = [
+      buildProfileApplyTask({ ...input, nickname: "n" }),
+      buildProfileReadbackTask(),
+      buildAccountIdentityTask(),
+      buildProfileVerificationTask(input),
+      buildPreparationRequest("com.xingin.xhs", "target-xhs-id").task,
+      buildPreparationVerificationRequest("com.xingin.xhs", "target-xhs-id")
+        .task,
+    ];
+    for (const task of tasks) expect(task).toContain(XHS_ME_TAB_UNFOLD_HINT);
+
+    // The hint asks for a scroll, so every one of those policies has to allow
+    // one — the read-only verification policy did not.
+    for (const policy of [
+      XHS_TASK_POLICY,
+      buildPreparationRequest("com.xingin.xhs").taskPolicy,
+      buildPreparationVerificationRequest("com.xingin.xhs").taskPolicy,
+    ]) {
+      expect(policy?.allowedActions).toContain("SCROLL");
+    }
+  });
+
+  it("walks the region list with full-screen slides, budgeted to actually arrive", () => {
     const t = buildProfileApplyTask({
       label: "A",
       platformAccountId: "target-xhs-id",
       region: "上海",
     });
-    expect(t).toContain("FLING point1:");
-    // A full-screen SLIDE moves exactly one screen, so the 200+ entry list
-    // needs twenty-odd of them and the run dies mid-list.
-    expect(t).toContain("必须用「FLING」而不是「SLIDE」");
-    expect(t).toContain("12 个动作");
+    // FLING is the gesture this list wants, but the fleet's phones do not
+    // report it, and naming an action they lack gets the whole dispatch
+    // rejected. Until a build declaring it ships, the step is a SLIDE walk —
+    // and its cap has to exceed the twenty-odd screens the list really is,
+    // or the step is arithmetically unable to arrive.
+    expect(t).toContain("SLIDE point1:");
+    expect(t).not.toContain("FLING");
+    expect(t).toContain("28 个动作");
   });
 
   it("never names an action the task policy would reject", () => {
@@ -1507,7 +1793,6 @@ describe("profile task builder", () => {
       gender: "skipped",
       birthday: "skipped",
       region: "skipped",
-      interestTags: "skipped",
       note: "x",
     });
     expect(parseProfileJson("no marker")).toBeNull();
@@ -1530,12 +1815,12 @@ describe("profile task builder", () => {
     });
     expect(
       parseProfileVerificationJson(
-        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":false,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true,"interestTags":true}}',
+        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":false,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true}}',
       ),
     ).toBeNull();
     expect(
       parseProfileVerificationJson(
-        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true,"interestTags":true},"extra":"rejected"}',
+        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true},"extra":"rejected"}',
       ),
     ).toBeNull();
     expect(

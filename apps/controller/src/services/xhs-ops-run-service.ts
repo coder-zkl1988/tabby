@@ -74,13 +74,16 @@ export const XHS_TASK_POLICY: DeviceTaskPolicy = {
     "HOME",
     "SLIDE",
     "SCROLL",
-    // Agent swipes are deliberately inertia-free so scroll distance equals
-    // finger displacement. That makes the 200+ entry region list unreachable:
-    // one full-screen SLIDE moves one screen, so reaching 「中国」 at the far
-    // end takes twenty-odd of them and the run dies mid-list (observed
-    // 2026-09-20, 59 of 60 steps spent scrolling). FLING is the one action
-    // that keeps the fling, and it is opt-in per task for exactly that reason.
-    "FLING",
+    // FLING belongs here on paper — it is the one gesture that keeps its
+    // inertia, and the 200+ entry region list cannot be crossed without it.
+    // It is out because the phones cannot honour it yet: TabbyApp 1.0.22 has
+    // no FLING at all, and the commit that added the gesture left it out of
+    // TaskPolicy.supportedActions, so the phone reports a vocabulary without
+    // it and tabby-control rejects the whole dispatch with
+    // UNKNOWN_PHONE_ACTION — which killed every xhs task, not just the ones
+    // touching 地区 (observed 2026-09-20). Put it back once a build carrying
+    // FLING in supportedActions is installed on the fleet, together with the
+    // region step in buildProfileApplyTask.
     // The birthday sheet is a custom-drawn wheel with nothing clickable, so
     // the only way in is a press-and-drag. Leaving these out does not prevent
     // the gesture — it just kills the run with POLICY_ACTION_NOT_ALLOWED at

@@ -27,6 +27,7 @@ import type {
 import {
   type DeviceControlService,
   DeviceControlTimeoutError,
+  dispatchRejectionReason,
 } from "./device-control-service.js";
 import {
   buildPreparationRequest,
@@ -41,6 +42,7 @@ import {
   XhsOpsError,
 } from "./xhs-ops-run-service.js";
 import {
+  type XhsOpsProfileJson,
   buildAccountIdentityTask,
   buildProfileApplyTask,
   buildProfileReadbackTask,
@@ -73,7 +75,7 @@ export type XhsOpsProfileDeviceControl = Pick<
   DeviceControlService,
   "getDevice" | "executeTask" | "pushMedia"
 > &
-  Partial<Pick<DeviceControlService, "cancelTask">>;
+  Partial<Pick<DeviceControlService, "cancelTask" | "getTaskResults">>;
 
 export interface XhsOpsProfileServiceDeps {
   store: XhsOpsStore;
@@ -93,6 +95,13 @@ export interface XhsOpsProfileServiceDeps {
  * own ceiling is 100 steps; budget to it and give the deadline room to outlast
  * a real run instead of racing it.
  */
+/**
+ * How far back to look for a receipt the desktop never received. A phone runs
+ * one xhs-ops task at a time, so the run being reconciled is within the last
+ * few — preparation, apply, and whatever the previous account left behind.
+ */
+const XHS_RECOVERABLE_RECEIPT_LOOKBACK = 10;
+
 export const XHS_PROFILE_APPLY_TIMEOUT_MS = 1_500_000;
 export const XHS_PROFILE_APPLY_MAX_STEPS = 100;
 export const XHS_PROFILE_VERIFY_TIMEOUT_MS = 180_000;
@@ -106,6 +115,22 @@ type ProfilePreparationOutcome = {
   reason: string;
   cancellationUnconfirmed: boolean;
 };
+
+/** The card's receipt box is small; the controller log keeps the full text. */
+const MAX_APPLY_RESULT_ERROR_CHARS = 200;
+
+/**
+ * A dispatch tabby-control refused outright never reached the phone, so it is
+ * neither uncertain nor a lost result: say so, and hand the operator the
+ * reason instead of letting reconcile() bury it under the generic "no task
+ * result" fallback (which cost hours on 2026-09-20).
+ */
+function dispatchRejectedResult(reason: string): string {
+  return `任务未下发到手机，手机控制端拒绝了本次下发：${reason.slice(
+    0,
+    MAX_APPLY_RESULT_ERROR_CHARS,
+  )}`;
+}
 
 const MIME_BY_EXT: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -194,13 +219,6 @@ export function resolveBirthday(
 }
 
 /** Tag lists compare as sets — the phone's ordering is not meaningful. */
-function tagsEqual(a: readonly string[], b: readonly string[]): boolean {
-  const norm = (list: readonly string[]) =>
-    [...new Set(list.map((t) => t.trim()).filter(Boolean))].sort();
-  const left = norm(a);
-  const right = norm(b);
-  return left.length === right.length && left.every((t, i) => t === right[i]);
-}
 
 /**
  * Compare the phone's current profile against the draft, one field at a time.
@@ -217,7 +235,6 @@ export function diffProfileFields(
     gender: string;
     birthday: string;
     region: string;
-    interestTags: string[];
   },
 ): XhsOpsProfileFieldDiff[] {
   const text = (
@@ -250,19 +267,6 @@ export function diffProfileFields(
     text("gender", phone.gender, draft.gender),
     text("birthday", phone.birthday, draft.birthday),
     text("region", phone.region, draft.region),
-    {
-      field: "interestTags",
-      comparable: true,
-      phone: phone.interestTags
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .join("、"),
-      draft: draft.interestTags
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .join("、"),
-      differs: !tagsEqual(phone.interestTags, draft.interestTags),
-    },
   ];
 }
 
@@ -384,6 +388,43 @@ export function parseProfileText(text: string): ParsedProfileText {
     bio: lines.slice(1).join("\n").slice(0, 200),
     ...empty,
   };
+}
+
+/**
+ * One rendering for both the live receipt and a recovered one, so an operator
+ * cannot tell from the card which path produced it.
+ *
+ * note carries the phone's own explanation — 「头像因平台 7 天内 3 次修改限制
+ * 未能修改」, 「兴趣标签入口未找到」 — and dropping it left every failure
+ * looking identical (2026-09-20). The task prompt bars 小红书号 and 生日 from
+ * the receipt, and parseProfileJson caps it at 200 chars.
+ */
+function renderProfileSummary(parsed: XhsOpsProfileJson): string {
+  const fields = `昵称=${parsed.nickname} 简介=${parsed.bio} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region}`;
+  const note = parsed.note.trim();
+  return note ? `${fields}｜手机说明：${note}` : fields;
+}
+
+/**
+ * Status from the receipt alone. The phone writes skipped for fields the task
+ * never asked about, so the receipt already encodes what was requested — which
+ * is what makes it readable without the caller's original field selection.
+ */
+function applyStatusFromReceipt(
+  parsed: XhsOpsProfileJson,
+): XhsOpsProfileApplyStatus {
+  const outcomes = [
+    parsed.nickname,
+    parsed.bio,
+    parsed.avatar,
+    parsed.cover,
+    parsed.gender,
+    parsed.birthday,
+    parsed.region,
+  ].filter((o) => o !== "skipped");
+  const done = outcomes.filter((o) => o === "done").length;
+  if (outcomes.length > 0 && done === outcomes.length) return "applied";
+  return done > 0 ? "partial" : "failed";
 }
 
 export class XhsOpsProfileService {
@@ -609,8 +650,6 @@ export class XhsOpsProfileService {
       const wantBirthday =
         picked("birthday") && draft.birthday.trim().length > 0;
       const wantRegion = picked("region") && draft.region.trim().length > 0;
-      const wantInterestTags =
-        picked("interestTags") && draft.interestTags.length > 0;
       if (
         !wantNickname &&
         !wantBio &&
@@ -618,8 +657,7 @@ export class XhsOpsProfileService {
         !wantCover &&
         !wantGender &&
         !wantBirthday &&
-        !wantRegion &&
-        !wantInterestTags
+        !wantRegion
       ) {
         throw new XhsOpsError(
           400,
@@ -696,7 +734,6 @@ export class XhsOpsProfileService {
         gender: (picked("gender") && draft.gender) || null,
         birthday: (picked("birthday") && draft.birthday) || null,
         region: (picked("region") && draft.region) || null,
-        interestTags: picked("interestTags") ? draft.interestTags : [],
       });
       const body: DeviceExecuteTaskBody = {
         task,
@@ -716,7 +753,6 @@ export class XhsOpsProfileService {
         wantGender,
         wantBirthday,
         wantRegion,
-        wantInterestTags,
       });
       if (outcome.status !== "applied") {
         return await complete({
@@ -745,7 +781,6 @@ export class XhsOpsProfileService {
             gender: draft.gender || null,
             birthday: draft.birthday || null,
             region: draft.region || null,
-            interestTags: draft.interestTags,
           }),
           maxSteps: XHS_PROFILE_VERIFY_MAX_STEPS,
           timeout: XHS_PROFILE_VERIFY_TIMEOUT_MS,
@@ -765,13 +800,19 @@ export class XhsOpsProfileService {
         appliedAt: this.nowIso(),
         applyStatus: verified ? "applied" : "partial",
         applyResult: verified
-          ? "八项资料与目标账号已完成只读核验"
+          ? "七项资料与目标账号已完成只读核验"
           : "资料应用任务已结束，但独立只读核验未通过，请人工检查后重试",
         verifiedAt: verified ? this.nowIso() : null,
         verifiedAccountId: verified ? account.platformAccountId : null,
         verificationTaskId: verified ? verificationTaskId : null,
       });
     } catch (error) {
+      // operationUncertain is armed before a dispatch because a task the phone
+      // has taken must not be written off. A dispatch the control plane itself
+      // refused never got that far, so it is safe to settle here — and the
+      // reason is the only place the operator will ever see it.
+      const rejected = dispatchRejectionReason(error);
+      if (rejected) operationUncertain = false;
       if (
         !completed &&
         !operationUncertain &&
@@ -780,7 +821,9 @@ export class XhsOpsProfileService {
         try {
           await complete({
             applyStatus: "failed",
-            applyResult: "资料应用任务异常结束，请检查手机状态后重试",
+            applyResult: rejected
+              ? dispatchRejectedResult(rejected)
+              : "资料应用任务异常结束，请检查手机状态后重试",
             appliedAt: null,
           });
         } catch {
@@ -939,8 +982,15 @@ export class XhsOpsProfileService {
 
   /**
    * Resolve a profile operation left running after a controller/RPC failure.
-   * An idle device is the only terminal signal we can trust without a task
-   * receipt; it is therefore recorded as failed and kept behind manual review.
+   *
+   * The phone keeps working when the desktop's RPC dies, and tabby-control
+   * retains the result it could not deliver — so ask for it before declaring
+   * anything lost. On 2026-09-20 a controller restart mid-apply cost a 21
+   * minute run that had in fact succeeded on six of eight fields; the receipt
+   * was sitting in the plugin the whole time and had to be fetched by hand.
+   *
+   * Only when no receipt can be recovered does an idle device become the
+   * terminal signal, recorded as failed and kept behind manual review.
    */
   async reconcile(accountId: string): Promise<XhsOpsAccount | null> {
     const account = await this.store.getAccount(accountId);
@@ -959,11 +1009,12 @@ export class XhsOpsProfileService {
     ) {
       return account;
     }
+    const recovered = await this.recoverApplyReceipt(operation);
     try {
       return await this.store.completeProfileApply(
         account.id,
         operation.operationId,
-        {
+        recovered ?? {
           applyStatus: "failed",
           applyResult:
             "桌面端未收到手机任务结果，当前设备已空闲；请人工检查资料是否生效后重试",
@@ -973,6 +1024,53 @@ export class XhsOpsProfileService {
     } finally {
       this.store.releaseDeviceBinding(account.id, operation.deviceId);
     }
+  }
+
+  /**
+   * Ask tabby-control for the receipt this operation never received.
+   *
+   * Guarded on the operation's own start time: one phone runs one account at a
+   * time under the device binding, so a PROFILE_JSON receipt that landed after
+   * this operation began is this operation's. Anything older belongs to an
+   * earlier run and is ignored.
+   *
+   * Best-effort by design — an older plugin without the call, or a plugin that
+   * errors, simply leaves the caller on the original "no result" path.
+   */
+  private async recoverApplyReceipt(operation: {
+    deviceId: string;
+    startedAt: string;
+  }): Promise<XhsOpsProfileApplyCompletion | null> {
+    const fetch = this.deviceControl.getTaskResults;
+    if (!fetch) return null;
+    const startedAt = Date.parse(operation.startedAt);
+    if (!Number.isFinite(startedAt)) return null;
+    let retained: Awaited<ReturnType<DeviceControlService["getTaskResults"]>>;
+    try {
+      retained = await fetch.call(this.deviceControl, {
+        deviceId: operation.deviceId,
+        limit: XHS_RECOVERABLE_RECEIPT_LOOKBACK,
+      });
+    } catch {
+      return null;
+    }
+    const mine = retained
+      .filter((entry) => entry.completedAt >= startedAt)
+      .sort((a, b) => b.completedAt - a.completedAt);
+    for (const entry of mine) {
+      const parsed = parseProfileJson(entry.result.message);
+      if (!parsed) continue;
+      const status = applyStatusFromReceipt(parsed);
+      return {
+        taskId: entry.result.taskId,
+        applyStatus: status,
+        // Only the apply ran; the independent read-only check never got its
+        // turn, so this must not look verified however well the fields went.
+        applyResult: `${renderProfileSummary(parsed)}（桌面端当时已断开，结果为事后补记；独立核验未执行）`,
+        appliedAt: status === "failed" ? null : this.nowIso(),
+      };
+    }
+    return null;
   }
 
   /** Sweep persisted operations after a controller restart and at intervals. */
@@ -1001,7 +1099,6 @@ export class XhsOpsProfileService {
       wantGender: boolean;
       wantBirthday: boolean;
       wantRegion: boolean;
-      wantInterestTags: boolean;
     },
   ): { status: XhsOpsProfileApplyStatus; summary: string } {
     const parsed = parseProfileJson(result.message);
@@ -1019,7 +1116,6 @@ export class XhsOpsProfileService {
       ["wantGender", "gender"],
       ["wantBirthday", "birthday"],
       ["wantRegion", "region"],
-      ["wantInterestTags", "interestTags"],
     ];
     const outcomes = requested
       .filter(([w]) => want[w])
@@ -1031,8 +1127,12 @@ export class XhsOpsProfileService {
         : done > 0
           ? "partial"
           : "failed";
-    const summary = `昵称=${parsed.nickname} 简介=${parsed.bio} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region} 兴趣标签=${parsed.interestTags}`;
-    return { status, summary };
+    // The phone explains itself in note, and dropping it cost an afternoon:
+    // 「头像因平台 7 天内 3 次修改限制未能修改」 and 「兴趣标签入口未找到」 were
+    // both sitting in there while the card showed nothing but failed=failed
+    // and the reason had to be dug out of a retained task result by hand
+    // (2026-09-20). The prompt already bars 小红书号 and 生日 from the receipt.
+    return { status, summary: renderProfileSummary(parsed) };
   }
 
   private async prepareAccount(
@@ -1055,11 +1155,17 @@ export class XhsOpsProfileService {
           buildPreparationVerificationRequest(XHS_PACKAGE, platformAccountId),
         ));
       }
-    } catch {
-      return {
-        reason: "安装、登录或目标账号核验执行失败，请检查手机后重试",
-        cancellationUnconfirmed: true,
-      };
+    } catch (error) {
+      const rejected = dispatchRejectionReason(error);
+      return rejected
+        ? {
+            reason: dispatchRejectedResult(rejected),
+            cancellationUnconfirmed: false,
+          }
+        : {
+            reason: "安装、登录或目标账号核验执行失败，请检查手机后重试",
+            cancellationUnconfirmed: true,
+          };
     }
     const preparation = interpretPreparationResult(result);
     if (result.needsInteraction) {
