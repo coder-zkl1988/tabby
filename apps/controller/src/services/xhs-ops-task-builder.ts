@@ -381,7 +381,7 @@ export function buildProfileApplyTask(
       // The date sheet is a custom-drawn wheel: uiautomator sees three empty
       // Views with no text, nothing scrollable and nothing clickable, so the
       // only way in is a coordinate drag read off the screenshot.
-      `${n++}) 生日：点「生日」→ 底部弹出「选择你的生日」滚轮抽屉。**滚轮上的年/月/日不是可点击控件，点它们没有任何作用，只能拖动**：滚轮区域横向等分为年、月、日三列，当前选中的值在滚轮区域的垂直中心（上下有两条分隔线）。在某一列的中心点按住并**慢速拖动（600 毫秒以上）**：向下拖数值变小、向上拖数值变大，拖动距离每约等于一行高度就前进一格。默认停在今天，所以年份通常要向下拖很多格。`,
+      `${n++}) 生日：点「生日」→ 底部弹出「选择你的生日」滚轮抽屉。**滚轮上的年/月/日不是可点击控件，点它们没有任何作用，只能拖动**：滚轮区域横向等分为年、月、日三列，当前选中的值在滚轮区域的垂直中心（上下有两条分隔线）。拖动**只能用「SLIDE」动作**：point1 放在该列中心，point2 同列、上下相距约一行高度，做**慢速拖动（600 毫秒以上）**；向下拖数值变小、向上拖数值变大，每约一行高度前进一格。**禁止使用「LONGPRESSANDDRAG」**——本任务的动作白名单不含它，一用整轮立刻以 POLICY_ACTION_NOT_ALLOWED 作废。默认停在今天，所以年份通常要向下拖很多格。`,
     );
     steps.push(
       `${n++}) 生日操作纪律：**一次最多拖 3 格就停下截图核对中心行的值**，据此计算还差几格；禁止快速甩动（会惯性滑过），禁止一次拖很长距离。按年→月→日的顺序逐列调到「${input.birthday.trim()}」，三列全部核对无误后再点抽屉右上角的「保存」；差一格也不得将就，调不到就记 failed。`,
@@ -389,7 +389,7 @@ export function buildProfileApplyTask(
   }
   if (input.region?.trim()) {
     steps.push(
-      `${n++}) 地区：按页面层级选择与「${input.region.trim()}」完全一致的地区；存在同名或无法精确匹配就记 failed。`,
+      `${n++}) 地区：点「地区」后第一级是 200+ 项的**全球国家/地区平铺长列表**，没有搜索框也没有 A-Z 索引，「中国」在列表**末端**（邻近项：泽西岛、智利、中国、中非共和国、赞比亚）。**每次 SLIDE 都要跨满一屏**：point1 取列表区域底部、point2 取顶部（如「SLIDE point1:540,1900 point2:540,400」），连续滑动直到画面不再变化即为列表尽头，再在可见项里点「中国」。**这一步最多花 12 个动作**：到第 12 个还没看到「中国」就停下，记 failed 并在结果里写明滑到了哪个地区名，不要继续滑、也不要退出重进列表——反复重进会把整轮步数耗光（已发生过，60 步全花在这一步上）。进入「中国」后再按页面层级选择与「${input.region.trim()}」完全一致的地区；存在同名或无法精确匹配就记 failed。`,
     );
   }
   const interestTags = (input.interestTags ?? [])

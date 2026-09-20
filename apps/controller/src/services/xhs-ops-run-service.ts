@@ -74,6 +74,12 @@ export const XHS_TASK_POLICY: DeviceTaskPolicy = {
     "HOME",
     "SLIDE",
     "SCROLL",
+    // The birthday sheet is a custom-drawn wheel with nothing clickable, so
+    // the only way in is a press-and-drag. Leaving these out does not prevent
+    // the gesture — it just kills the run with POLICY_ACTION_NOT_ALLOWED at
+    // the exact step the wheel appears (observed 2026-09-20).
+    "LONGPRESS",
+    "LONGPRESSANDDRAG",
     "LOAD_SKILL",
     "COMPLETE",
     "ABORT",

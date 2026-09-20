@@ -1122,6 +1122,36 @@ describe("XhsOpsProfileService.apply", () => {
     await expect(svc.apply(account.id)).rejects.toMatchObject({ status: 409 }); // 设备忙
   });
 
+  it("lets a selection of only gender/birthday/region/interestTags pass the empty-selection guard", async () => {
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () => ({ status: "busy" }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => ({ result: resultForTask(body) }),
+      },
+    });
+    // 只勾后四个字段：守卫必须放行，随后撞到"设备忙"的 409，而不是 400
+    await expect(
+      svc.apply(account.id, ["region", "interestTags"]),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(svc.apply(account.id, ["gender"])).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(svc.apply(account.id, ["birthday"])).rejects.toMatchObject({
+      status: 409,
+    });
+    // 「勾了但草稿为空」这条 400 分支在 ready 账号上不可达：store 本身就不允许
+    // region/interestTags 为空的账号进入 ready（见 xhsOpsProfileDraftMissingFields）。
+  });
+
   it("rejects images outside the media root", async () => {
     const { account: created } = await seed();
     const outside = join(tempDir, "outside.png");
