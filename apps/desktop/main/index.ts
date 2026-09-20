@@ -2436,10 +2436,60 @@ app.on("web-contents-created", (_event, contents) => {
 
 logLaunchTimeline("electron main module evaluated");
 
+/**
+ * Permissions the bundled renderer actually asks for.
+ *
+ * Installing a permission handler at all flips Electron from "grant most" to
+ * "you decide", so anything omitted here silently stops working. These four are
+ * in use today: microphone for Talk, notifications for approval alerts, and
+ * clipboard read/write for the device mirror's clipboard sync. Camera,
+ * geolocation, MIDI, serial and the rest are not used and stay denied.
+ */
+const RENDERER_ALLOWED_PERMISSIONS = new Set([
+  "notifications",
+  "clipboard-read",
+  "clipboard-sanitized-write",
+]);
+
+function isRendererPermissionAllowed(
+  permission: string,
+  details: unknown,
+): boolean {
+  if (permission === "media") {
+    // Request details carry `mediaTypes` (plural array); check details carry
+    // `mediaType` (singular, sometimes "unknown"). The two shapes have no
+    // common property, hence the narrowing here. Talk is audio-only, so the
+    // rule is "no camera" rather than "must say audio" — an unspecified media
+    // check would otherwise be denied and read as a broken microphone.
+    const media = (details ?? {}) as {
+      mediaTypes?: string[];
+      mediaType?: string;
+    };
+    const requested =
+      media.mediaTypes ?? (media.mediaType ? [media.mediaType] : []);
+    return !requested.includes("video");
+  }
+  return RENDERER_ALLOWED_PERMISSIONS.has(permission);
+}
+
 app.whenReady().then(async () => {
   logLaunchTimeline("app.whenReady resolved");
   // Short-circuit before any heavy startup if running under Rosetta.
   await warnIfRunningUnderRosetta();
+  // Talk needs microphone access, which Electron will not grant once a handler
+  // is installed unless we say so. Both handlers share one allow-list: Chromium
+  // checks a permission before requesting it, so handlers that disagree deny in
+  // ways that are very hard to read from the renderer side.
+  session.defaultSession.setPermissionRequestHandler(
+    (_contents, permission, callback, details) => {
+      callback(isRendererPermissionAllowed(permission, details));
+    },
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission, _origin, details) =>
+      isRendererPermissionAllowed(permission, details),
+  );
+
   proxyManager = new ProxyManager(session.defaultSession);
   await proxyManager.applyPolicy(runtimeConfig.proxy);
   installApplicationMenu();

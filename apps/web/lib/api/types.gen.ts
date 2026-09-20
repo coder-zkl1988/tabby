@@ -7154,6 +7154,199 @@ export type GetApiV1RuntimeOperationsResponses = {
 
 export type GetApiV1RuntimeOperationsResponse = GetApiV1RuntimeOperationsResponses[keyof GetApiV1RuntimeOperationsResponses];
 
+export type GetApiV1TalkCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/talk/catalog';
+};
+
+export type GetApiV1TalkCatalogResponses = {
+    /**
+     * Realtime voice providers and their configured state
+     */
+    200: {
+        connected: boolean;
+        available: boolean;
+        ready?: boolean;
+        providers?: Array<{
+            id: string;
+            label?: string;
+            configured?: boolean;
+            voices?: Array<string>;
+            models?: Array<string>;
+            defaultModel?: string;
+        }>;
+    };
+};
+
+export type GetApiV1TalkCatalogResponse = GetApiV1TalkCatalogResponses[keyof GetApiV1TalkCatalogResponses];
+
+export type PostApiV1TalkSessionsData = {
+    body?: {
+        provider?: string;
+        voice?: string;
+        model?: string;
+        sessionKey?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/talk/sessions';
+};
+
+export type PostApiV1TalkSessionsErrors = {
+    /**
+     * Runtime unavailable or no configured voice provider
+     */
+    409: {
+        message: string;
+    };
+};
+
+export type PostApiV1TalkSessionsError = PostApiV1TalkSessionsErrors[keyof PostApiV1TalkSessionsErrors];
+
+export type PostApiV1TalkSessionsResponses = {
+    /**
+     * Realtime voice session created
+     */
+    200: {
+        sessionId: string;
+        provider?: string;
+        transport?: string;
+        mode?: string;
+        brain?: string;
+        inputSampleRateHz?: number;
+        outputSampleRateHz?: number;
+    };
+};
+
+export type PostApiV1TalkSessionsResponse = PostApiV1TalkSessionsResponses[keyof PostApiV1TalkSessionsResponses];
+
+export type GetApiV1RuntimeCostData = {
+    body?: never;
+    path?: never;
+    query?: {
+        days?: number;
+    };
+    url: '/api/v1/runtime/cost';
+};
+
+export type GetApiV1RuntimeCostResponses = {
+    /**
+     * Token and cost rollup from the OpenClaw usage ledger
+     */
+    200: {
+        connected: boolean;
+        available: boolean;
+        days?: number;
+        updatedAt?: number;
+        totals?: {
+            input: number;
+            output: number;
+            cacheRead: number;
+            cacheWrite: number;
+            totalTokens: number;
+            totalCost: number;
+            inputCost: number;
+            outputCost: number;
+            cacheReadCost: number;
+            cacheWriteCost: number;
+            missingCostEntries: number;
+        };
+        daily?: Array<{
+            input: number;
+            output: number;
+            cacheRead: number;
+            cacheWrite: number;
+            totalTokens: number;
+            totalCost: number;
+            inputCost: number;
+            outputCost: number;
+            cacheReadCost: number;
+            cacheWriteCost: number;
+            missingCostEntries: number;
+            date: string;
+        }>;
+    };
+};
+
+export type GetApiV1RuntimeCostResponse = GetApiV1RuntimeCostResponses[keyof GetApiV1RuntimeCostResponses];
+
+export type GetApiV1RuntimeQuestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/runtime/questions';
+};
+
+export type GetApiV1RuntimeQuestionsResponses = {
+    /**
+     * Pending interactive agent questions
+     */
+    200: {
+        connected: boolean;
+        available: boolean;
+        questions: Array<{
+            id: string;
+            questions: Array<{
+                questionId: string;
+                header: string;
+                question: string;
+                options: Array<{
+                    label: string;
+                    description?: string;
+                }>;
+                multiSelect?: boolean;
+                isSecret?: boolean;
+            }>;
+            sessionKey?: string;
+            agentId?: string;
+            runId?: string;
+            createdAtMs: number;
+            expiresAtMs: number;
+            status: 'pending' | 'answered' | 'cancelled' | 'expired';
+        }>;
+    };
+};
+
+export type GetApiV1RuntimeQuestionsResponse = GetApiV1RuntimeQuestionsResponses[keyof GetApiV1RuntimeQuestionsResponses];
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveData = {
+    body?: {
+        answers?: {
+            [key: string]: Array<string>;
+        };
+        skip?: boolean;
+    };
+    path: {
+        questionId: string;
+    };
+    query?: never;
+    url: '/api/v1/runtime/questions/{questionId}/resolve';
+};
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveErrors = {
+    /**
+     * Runtime unavailable, or the question already resolved
+     */
+    409: {
+        message: string;
+    };
+};
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveError = PostApiV1RuntimeQuestionsByQuestionIdResolveErrors[keyof PostApiV1RuntimeQuestionsByQuestionIdResolveErrors];
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveResponses = {
+    /**
+     * Question answered or declined
+     */
+    200: {
+        ok: true;
+    };
+};
+
+export type PostApiV1RuntimeQuestionsByQuestionIdResolveResponse = PostApiV1RuntimeQuestionsByQuestionIdResolveResponses[keyof PostApiV1RuntimeQuestionsByQuestionIdResolveResponses];
+
 export type GetApiV1RuntimeApprovalsData = {
     body?: never;
     path?: never;

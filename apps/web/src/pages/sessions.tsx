@@ -1,3 +1,4 @@
+import { AgentQuestionPanel } from "@/components/agent-question-panel";
 import {
   type BotItem,
   ChatInputArea,
@@ -7,6 +8,7 @@ import {
 import { InlineA2UIHost } from "@/components/inline-a2ui-host";
 import { PlatformIcon } from "@/components/platform-icons";
 import { SessionOperationsPanel } from "@/components/session-operations-panel";
+import { TalkVoiceButton } from "@/components/talk-voice-button";
 import { ChatMarkdown } from "@/components/ui/chat-markdown";
 import type { A2UIMessage } from "@/lib/a2ui";
 import { surfacePinKey } from "@/lib/a2ui/a2ui-pin-store";
@@ -3502,6 +3504,10 @@ export function SessionsPage() {
               onDismiss={() => setSideQuestion(null)}
             />
           )}
+          <AgentQuestionPanel sessionKey={session?.sessionKey ?? undefined} />
+          <div className="mb-2 flex justify-end">
+            <TalkVoiceButton sessionKey={session?.sessionKey ?? undefined} />
+          </div>
           {pendingRunMessageChoice && replyInProgress && (
             <RunMessageChoicePanel
               message={pendingRunMessageChoice}

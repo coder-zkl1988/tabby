@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ControllerEnv } from "#controller/app/env";
 import { OpenClawAuthProfilesStore } from "#controller/runtime/openclaw-auth-profiles-store";
@@ -10,6 +11,15 @@ function makeTempDir(): string {
   const dir = resolve(tmpdir(), `auth-profiles-writer-test-${Date.now()}`);
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+// OpenClaw owns the per-agent database file; since 2026.9 the controller
+// refuses to create one, because a database with no schema ownership metadata
+// blocks gateway startup and cannot be repaired. Stand in for OpenClaw.
+function seedAgentDatabase(workspace: string): void {
+  const agentDir = resolve(workspace, "agent");
+  mkdirSync(agentDir, { recursive: true });
+  new DatabaseSync(resolve(agentDir, "openclaw-agent.sqlite")).close();
 }
 
 function createEnv(homeDir: string): ControllerEnv {
@@ -77,6 +87,7 @@ describe("OpenClawAuthProfilesWriter", () => {
     const writer = new OpenClawAuthProfilesWriter(store);
 
     const workspace = resolve(env.openclawStateDir, "agents", "bot_1");
+    seedAgentDatabase(workspace);
     await writer.writeForAgents({
       agents: {
         list: [
@@ -129,6 +140,7 @@ describe("OpenClawAuthProfilesWriter", () => {
     const writer = new OpenClawAuthProfilesWriter(store);
 
     const workspace = resolve(env.openclawStateDir, "agents", "bot_1");
+    seedAgentDatabase(workspace);
     await writer.writeForAgents(
       {
         agents: {
@@ -187,6 +199,8 @@ describe("OpenClawAuthProfilesWriter", () => {
     const writer = new OpenClawAuthProfilesWriter(store);
     const existingWorkspace = resolve(env.openclawStateDir, "agents", "bot_1");
     const newWorkspace = resolve(env.openclawStateDir, "agents", "bot_2");
+    seedAgentDatabase(existingWorkspace);
+    seedAgentDatabase(newWorkspace);
 
     await store.updateAuthProfiles(
       store.authProfilesPathForWorkspace(existingWorkspace),
@@ -267,6 +281,7 @@ describe("OpenClawAuthProfilesWriter", () => {
     const writer = new OpenClawAuthProfilesWriter(store);
 
     const workspace = resolve(env.openclawStateDir, "agents", "bot_1");
+    seedAgentDatabase(workspace);
     await writer.writeForAgents(
       {
         agents: {

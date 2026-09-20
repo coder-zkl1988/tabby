@@ -238,10 +238,17 @@ export function listModelProviderRuntimeDescriptorsFromProviders(
                   ...getProviderAliasCandidates(providerId),
                 ]),
               ),
+          // Cover every alias, not just the current canonical id: a provider whose
+          // canonicalOpenClawId is renamed (google was `gemini`) must still resolve
+          // model refs persisted under the old `byok_<alias>` prefix.
           legacyRuntimePrefixes: customProvider
             ? []
             : Array.from(
-                new Set([`byok_${runtimePolicy.canonicalOpenClawId}`]),
+                new Set(
+                  getProviderAliasCandidates(providerId).map(
+                    (alias) => `byok_${alias}`,
+                  ),
+                ),
               ),
           authProfileProviderId: persistedKey,
           authProfileRef: provider.oauthProfileRef ?? null,

@@ -158,6 +158,12 @@ export async function bootstrapController(
   });
 
   if (container.openclawProcess.managesProcess()) {
+    // Clear out agent databases a previous controller created for itself.
+    // OpenClaw 2026.9 refuses to start against one and doctor refuses to repair
+    // it, so this has to happen before the seed below — which then correctly
+    // skips the absent files and lets OpenClaw create its own.
+    await container.authProfilesStore.reclaimUnownedAgentDatabases();
+
     // Managed bootstrap: seed config before runtime start so the first attach
     // happens against the desired config instead of triggering a restart.
     const syncStartedAt = Date.now();

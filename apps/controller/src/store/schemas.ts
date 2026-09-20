@@ -47,27 +47,35 @@ function encodeCustomProviderRuntimeKey(
   return `${templateId}__${encodeURIComponent(instanceId)}`;
 }
 
-function getProviderRuntimeNamespace(providerKey: string): string | null {
-  const customProvider = parseCustomProviderKey(providerKey);
-  if (customProvider) {
-    return null;
+/**
+ * Namespaces a persisted ref may carry in the segment after its provider key.
+ *
+ * Every alias, not just the current canonical id: `byok_gemini/gemini/...` was
+ * written when `gemini` was google's canonical id, so stripping only today's
+ * `google` would leave the stale namespace glued to the model id.
+ */
+function getProviderRuntimeNamespaces(providerKey: string): string[] {
+  if (parseCustomProviderKey(providerKey)) {
+    return [];
   }
 
-  const runtimePolicy = getProviderRuntimePolicy(providerKey);
-  if (!runtimePolicy) {
-    return null;
+  if (!getProviderRuntimePolicy(providerKey)) {
+    return [];
   }
 
-  return runtimePolicy.canonicalOpenClawId;
+  return getProviderAliasCandidates(providerKey);
 }
 
 function stripRuntimeModelNamespace(
   modelId: string,
-  namespace: string,
+  namespaces: readonly string[],
 ): string {
-  return modelId.startsWith(`${namespace}/`)
-    ? modelId.slice(namespace.length + 1)
-    : modelId;
+  for (const namespace of namespaces) {
+    if (modelId.startsWith(`${namespace}/`)) {
+      return modelId.slice(namespace.length + 1);
+    }
+  }
+  return modelId;
 }
 
 function matchPersistedModelRef(
@@ -78,12 +86,12 @@ function matchPersistedModelRef(
     ([persistedKey]): Array<{
       persistedKey: string;
       prefix: string;
-      runtimeNamespace: string | null;
+      runtimeNamespaces: string[];
     }> => {
       const customProvider = parseCustomProviderKey(persistedKey);
       const providerId = customProvider?.templateId ?? persistedKey;
       const runtimePolicy = getProviderRuntimePolicy(providerId);
-      const runtimeNamespace = getProviderRuntimeNamespace(persistedKey);
+      const runtimeNamespaces = getProviderRuntimeNamespaces(persistedKey);
       if (!runtimePolicy) {
         return [];
       }
@@ -98,21 +106,28 @@ function matchPersistedModelRef(
           ]
         : [
             persistedKey,
-            ...getProviderAliasCandidates(providerId),
-            `byok_${runtimePolicy.canonicalOpenClawId}`,
+            // Every alias, each also in its `byok_` runtime form. Covering only
+            // the current canonical id strands refs persisted before a rename:
+            // `byok_gemini/...` stopped matching once google's canonical id
+            // moved off `gemini`, and then fell through to a bare model id that
+            // belongs to no provider at all.
+            ...getProviderAliasCandidates(providerId).flatMap((alias) => [
+              alias,
+              `byok_${alias}`,
+            ]),
           ];
 
       return Array.from(new Set(candidatePrefixes)).map((prefix) => ({
         persistedKey,
         prefix,
-        runtimeNamespace,
+        runtimeNamespaces,
       }));
     },
   );
 
   prefixes.sort((left, right) => right.prefix.length - left.prefix.length);
 
-  for (const { persistedKey, prefix, runtimeNamespace } of prefixes) {
+  for (const { persistedKey, prefix, runtimeNamespaces } of prefixes) {
     if (!rawModelId.startsWith(`${prefix}/`)) {
       continue;
     }
@@ -120,9 +135,7 @@ function matchPersistedModelRef(
     const remainder = rawModelId.slice(prefix.length + 1);
     return {
       persistedKey,
-      modelId: runtimeNamespace
-        ? stripRuntimeModelNamespace(remainder, runtimeNamespace)
-        : remainder,
+      modelId: stripRuntimeModelNamespace(remainder, runtimeNamespaces),
     };
   }
 
@@ -186,12 +199,10 @@ function normalizeProviderModelId(
     return normalizedRef.slice(providerKey.length + 1);
   }
 
-  const runtimeNamespace = getProviderRuntimeNamespace(providerKey);
-  if (runtimeNamespace) {
-    return stripRuntimeModelNamespace(normalizedRef, runtimeNamespace);
-  }
-
-  return normalizedRef;
+  return stripRuntimeModelNamespace(
+    normalizedRef,
+    getProviderRuntimeNamespaces(providerKey),
+  );
 }
 
 function normalizeCanonicalModelsConfig(

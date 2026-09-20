@@ -524,8 +524,9 @@ export function createRuntimeUnitManifests(
         : {}),
       ...(computerUse.binPath ? { COMPUTER_USE_BIN: computerUse.binPath } : {}),
       // Always run OpenClaw through the Electron node runner (ELECTRON_RUN_AS_NODE).
-      // OpenClaw >=2026.7.1 hard-requires Node >=24.15; the dev-desktop GUI PATH may
-      // resolve an older system `node`, while the Electron runner is version-pinned.
+      // OpenClaw 2026.9.4 hard-requires Node >=24.16 <25 or >=26.1; the dev-desktop
+      // GUI PATH may resolve an out-of-range system `node`, while the Electron
+      // runner is version-pinned.
       OPENCLAW_ELECTRON_EXECUTABLE: resolveElectronNodeRunner(),
       OPENCLAW_EXTENSIONS_DIR: path.resolve(
         effectiveOpenclawSidecarRoot,

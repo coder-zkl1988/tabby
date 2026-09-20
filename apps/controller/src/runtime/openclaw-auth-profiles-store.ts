@@ -1,7 +1,9 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ControllerEnv } from "../app/env.js";
+import { logger } from "../lib/logger.js";
 import {
+  discardUnownedAgentDatabase,
   isAgentDatabasePath,
   readAgentAuthStore,
   writeAgentAuthStore,
@@ -81,6 +83,38 @@ export class OpenClawAuthProfilesStore {
   private readonly updateQueues = new Map<string, Promise<void>>();
 
   constructor(private readonly env: ControllerEnv) {}
+
+  /**
+   * Remove agent databases OpenClaw can neither adopt nor repair.
+   *
+   * Controllers before this change created `openclaw-agent.sqlite` themselves
+   * to pre-seed credentials. Since 2026.9 such a database has no schema
+   * ownership metadata, which makes the gateway refuse to start and
+   * `doctor --fix` refuse to migrate — the agent is permanently unusable until
+   * the file is gone. Deleting it costs the seeded credentials, which the next
+   * sync rewrites once OpenClaw has created its own database.
+   *
+   * Runs before the runtime starts, and only touches databases that carry no
+   * OpenClaw tables at all.
+   */
+  async reclaimUnownedAgentDatabases(): Promise<void> {
+    for (const filePath of await this.listAgentAuthProfilesPaths()) {
+      const disposition = discardUnownedAgentDatabase(filePath);
+      if (disposition === "discarded") {
+        logger.warn(
+          { filePath, event: "openclaw_agent_db_discarded" },
+          "removed an agent database openclaw cannot adopt or repair; it will be recreated on next start",
+        );
+        continue;
+      }
+      if (disposition === "unowned-with-data") {
+        logger.error(
+          { filePath, event: "openclaw_agent_db_unowned_with_data" },
+          "agent database has openclaw tables but no ownership metadata; left in place — openclaw will refuse to start until it is resolved by hand",
+        );
+      }
+    }
+  }
 
   async listAgentAuthProfilesPaths(): Promise<string[]> {
     const agentsDir = path.join(this.env.openclawStateDir, "agents");
@@ -168,16 +202,23 @@ export class OpenClawAuthProfilesStore {
         const next = await updater(current);
 
         if (isAgentDatabasePath(filePath)) {
-          // Seed the per-agent SQLite store (created if absent so credentials
-          // are present before OpenClaw boots). Only the secrets-store row is
-          // touched; OpenClaw owns the rest of the agent schema and adopts this
-          // database on boot. The runtime caches the store in memory, so a
-          // restart is required after a write to a live database — that is
-          // already wired through provider/OAuth mutations (syncAll + restart).
-          writeAgentAuthStore(filePath, {
+          // Seed the per-agent SQLite store, but only once OpenClaw has created
+          // it: since 2026.9 a database the controller created itself has no
+          // schema ownership metadata, which blocks gateway startup and cannot
+          // be repaired. Only the secrets-store row is touched; OpenClaw owns
+          // the rest of the schema. The runtime caches the store in memory, so
+          // a restart is required after a write to a live database — already
+          // wired through provider/OAuth mutations (syncAll + restart).
+          const written = writeAgentAuthStore(filePath, {
             version: next.version,
             profiles: next.profiles,
           });
+          if (!written) {
+            logger.info(
+              { filePath },
+              "agent auth store not seeded: openclaw has not created this agent database yet",
+            );
+          }
           return;
         }
 

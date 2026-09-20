@@ -63,6 +63,7 @@
     "clsx": "^2.1.1",
     "electron": "^43.0.0",
     "electron-builder": "^26.15.6",
+    "electron-builder-squirrel-windows": "26.15.6",
     "lucide-react": "^0.474.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -161,7 +162,8 @@
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "extendInfo": {
         "LSUIElement": true,
-        "NSAppleEventsUsageDescription": "Tabby reads text you selected in another app when you invoke Quick Chat."
+        "NSAppleEventsUsageDescription": "Tabby reads text you selected in another app when you invoke Quick Chat.",
+        "NSMicrophoneUsageDescription": "Tabby uses your microphone for voice conversations with your assistant."
       }
     },
     "win": {

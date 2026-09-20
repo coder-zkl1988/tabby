@@ -193,6 +193,129 @@ const runtimeApprovalsResponseSchema = z.object({
   approvals: z.array(approvalSchema),
 });
 
+// ---- Talk: realtime voice ---------------------------------------------------
+const talkProviderSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  configured: z.boolean().optional(),
+  voices: z.array(z.string()).optional(),
+  models: z.array(z.string()).optional(),
+  defaultModel: z.string().optional(),
+});
+
+const talkCatalogResponseSchema = z.object({
+  connected: z.boolean(),
+  available: z.boolean(),
+  ready: z.boolean().optional(),
+  providers: z.array(talkProviderSchema).optional(),
+});
+
+const talkSessionResponseSchema = z.object({
+  sessionId: z.string(),
+  provider: z.string().optional(),
+  transport: z.string().optional(),
+  mode: z.string().optional(),
+  brain: z.string().optional(),
+  // Nexu's capture pipeline resamples to whatever the Gateway reports here, so
+  // it is echoed to the client rather than hardcoded in the web app.
+  inputSampleRateHz: z.number().optional(),
+  outputSampleRateHz: z.number().optional(),
+});
+
+const rawTalkSessionSchema = z
+  .object({
+    sessionId: z.string(),
+    provider: z.string().optional(),
+    transport: z.string().optional(),
+    mode: z.string().optional(),
+    brain: z.string().optional(),
+    audio: z
+      .object({
+        inputSampleRateHz: z.number().optional(),
+        outputSampleRateHz: z.number().optional(),
+      })
+      .optional(),
+  })
+  .passthrough();
+
+// ---- Cost usage (Gateway `usage.cost`) ------------------------------------
+// Shape verified against a live openclaw 2026.9.4 gateway. Distinct from
+// `usage.status`, which reports provider-side quota windows rather than spend.
+const costBucketSchema = z.object({
+  input: z.number(),
+  output: z.number(),
+  cacheRead: z.number(),
+  cacheWrite: z.number(),
+  totalTokens: z.number(),
+  totalCost: z.number(),
+  inputCost: z.number(),
+  outputCost: z.number(),
+  cacheReadCost: z.number(),
+  cacheWriteCost: z.number(),
+  missingCostEntries: z.number(),
+});
+
+const costUsageResponseSchema = z.object({
+  connected: z.boolean(),
+  available: z.boolean(),
+  days: z.number().optional(),
+  updatedAt: z.number().optional(),
+  totals: costBucketSchema.optional(),
+  daily: z.array(costBucketSchema.extend({ date: z.string() })).optional(),
+});
+
+const rawCostUsageSchema = z.object({
+  updatedAt: z.number(),
+  days: z.number(),
+  totals: costBucketSchema,
+  daily: z.array(costBucketSchema.extend({ date: z.string() })),
+});
+
+// ---- Interactive questions (`ask_user`) -----------------------------------
+// Mirrors the Gateway's QuestionRecord. `answers` is intentionally the wire
+// shape (every value an array, even single-select) so the UI does not have to
+// reason about two different envelopes.
+const questionOptionSchema = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+});
+
+const questionItemSchema = z.object({
+  questionId: z.string(),
+  header: z.string(),
+  question: z.string(),
+  options: z.array(questionOptionSchema),
+  multiSelect: z.boolean().optional(),
+  isSecret: z.boolean().optional(),
+});
+
+const runtimeQuestionSchema = z.object({
+  id: z.string(),
+  questions: z.array(questionItemSchema),
+  sessionKey: z.string().optional(),
+  agentId: z.string().optional(),
+  runId: z.string().optional(),
+  createdAtMs: z.number(),
+  expiresAtMs: z.number(),
+  status: z.enum(["pending", "answered", "cancelled", "expired"]),
+});
+
+const runtimeQuestionsResponseSchema = z.object({
+  connected: z.boolean(),
+  available: z.boolean(),
+  questions: z.array(runtimeQuestionSchema),
+});
+
+const rawQuestionSchema = runtimeQuestionSchema.passthrough();
+// The envelope is validated, the records are not: each is parsed on its own
+// below so one record this schema does not model — a status a later OpenClaw
+// adds, say — cannot hide an actionable prompt sitting next to it. A hidden
+// prompt stalls the agent run for its full 900s timeout, which is the hang this
+// whole surface exists to prevent.
+const rawQuestionListSchema = z.object({
+  questions: z.array(z.unknown()),
+});
+
 const recordSchema = z.record(z.unknown());
 const rawApprovalSchema = z.object({
   id: z.string(),
@@ -902,6 +1025,280 @@ export function registerRuntimeOperationsRoutes(
         },
         200,
       );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/talk/catalog",
+      tags: ["Runtime Operations"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: talkCatalogResponseSchema },
+          },
+          description: "Realtime voice providers and their configured state",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        return c.json({ connected: false, available: false }, 200);
+      }
+      try {
+        const raw = (await container.gatewayService.getTalkCatalog()) as {
+          realtime?: { ready?: boolean; providers?: unknown[] };
+        };
+        const parsed = z
+          .array(talkProviderSchema.passthrough())
+          .safeParse(raw?.realtime?.providers ?? []);
+        return c.json(
+          {
+            connected: true,
+            available: true,
+            ready: raw?.realtime?.ready === true,
+            providers: parsed.success ? parsed.data : [],
+          },
+          200,
+        );
+      } catch {
+        return c.json({ connected: true, available: false }, 200);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/talk/sessions",
+      tags: ["Runtime Operations"],
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                provider: z.string().optional(),
+                voice: z.string().optional(),
+                model: z.string().optional(),
+                sessionKey: z.string().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: talkSessionResponseSchema },
+          },
+          description: "Realtime voice session created",
+        },
+        409: {
+          content: {
+            "application/json": { schema: z.object({ message: z.string() }) },
+          },
+          description: "Runtime unavailable or no configured voice provider",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        throw new HTTPException(409, {
+          message: "OpenClaw gateway is not connected",
+        });
+      }
+      const body = c.req.valid("json");
+      try {
+        const raw = await container.gatewayService.createTalkSession({
+          ...body,
+          mode: "realtime",
+          transport: "gateway-relay",
+          brain: "agent-consult",
+        });
+        const parsed = rawTalkSessionSchema.safeParse(raw);
+        if (!parsed.success) {
+          throw new HTTPException(409, {
+            message: "Gateway returned an unusable talk session",
+          });
+        }
+        const { audio, ...rest } = parsed.data;
+        return c.json(
+          {
+            sessionId: rest.sessionId,
+            provider: rest.provider,
+            transport: rest.transport,
+            mode: rest.mode,
+            brain: rest.brain,
+            inputSampleRateHz: audio?.inputSampleRateHz,
+            outputSampleRateHz: audio?.outputSampleRateHz,
+          },
+          200,
+        );
+      } catch (error) {
+        if (error instanceof HTTPException) throw error;
+        throw new HTTPException(409, {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to create a talk session",
+        });
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/runtime/cost",
+      tags: ["Runtime Operations"],
+      request: {
+        query: z.object({
+          days: z.coerce.number().int().min(1).max(365).optional(),
+        }),
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: costUsageResponseSchema },
+          },
+          description: "Token and cost rollup from the OpenClaw usage ledger",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        return c.json({ connected: false, available: false }, 200);
+      }
+      const { days } = c.req.valid("query");
+      try {
+        const raw = await container.gatewayService.getCostUsage(
+          days === undefined ? undefined : { days },
+        );
+        const parsed = rawCostUsageSchema.safeParse(raw);
+        if (!parsed.success) {
+          return c.json({ connected: true, available: false }, 200);
+        }
+        return c.json(
+          { connected: true, available: true, ...parsed.data },
+          200,
+        );
+      } catch {
+        return c.json({ connected: true, available: false }, 200);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/runtime/questions",
+      tags: ["Runtime Operations"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: runtimeQuestionsResponseSchema },
+          },
+          description: "Pending interactive agent questions",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        return c.json(
+          { connected: false, available: false, questions: [] },
+          200,
+        );
+      }
+
+      try {
+        const raw = await container.gatewayService.listQuestions();
+        const parsed = rawQuestionListSchema.safeParse(raw);
+        if (!parsed.success) {
+          return c.json(
+            { connected: true, available: false, questions: [] },
+            200,
+          );
+        }
+        // Only pending records are actionable; resolved ones are kept by the
+        // Gateway briefly so other surfaces can show the answer summary.
+        const questions = parsed.data.questions.flatMap((record) => {
+          const question = rawQuestionSchema.safeParse(record);
+          return question.success && question.data.status === "pending"
+            ? [question.data]
+            : [];
+        });
+        questions.sort((left, right) => left.expiresAtMs - right.expiresAtMs);
+        return c.json({ connected: true, available: true, questions }, 200);
+      } catch {
+        return c.json(
+          { connected: true, available: false, questions: [] },
+          200,
+        );
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/runtime/questions/{questionId}/resolve",
+      tags: ["Runtime Operations"],
+      request: {
+        params: z.object({ questionId: z.string() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                // Omit `answers` (or send `skip: true`) to decline the prompt.
+                answers: z.record(z.string(), z.array(z.string())).optional(),
+                skip: z.boolean().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: z.object({ ok: z.literal(true) }) },
+          },
+          description: "Question answered or declined",
+        },
+        409: {
+          content: {
+            "application/json": { schema: z.object({ message: z.string() }) },
+          },
+          description: "Runtime unavailable, or the question already resolved",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        throw new HTTPException(409, {
+          message: "OpenClaw gateway is not connected",
+        });
+      }
+      const { questionId } = c.req.valid("param");
+      const body = c.req.valid("json");
+      try {
+        if (body.skip === true || body.answers === undefined) {
+          await container.gatewayService.cancelQuestion({ id: questionId });
+        } else {
+          await container.gatewayService.answerQuestion({
+            id: questionId,
+            answers: body.answers,
+          });
+        }
+        return c.json({ ok: true as const }, 200);
+      } catch (error) {
+        throw new HTTPException(409, {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to resolve the question",
+        });
+      }
     },
   );
 

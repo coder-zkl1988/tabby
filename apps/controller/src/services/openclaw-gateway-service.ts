@@ -474,6 +474,117 @@ export class OpenClawGatewayService {
     });
   }
 
+  // ---- Talk: realtime voice sessions --------------------------------------
+  // Gateway-relay transport only: the web app never speaks to the voice
+  // provider directly, so every audio frame is proxied controller -> gateway.
+  // Downstream audio and transcripts arrive as `talk.event` broadcasts.
+
+  async createTalkSession(params: {
+    provider?: string;
+    mode?: string;
+    transport?: string;
+    brain?: string;
+    voice?: string;
+    model?: string;
+    sessionKey?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("talk.session.create", {
+      mode: params.mode ?? "realtime",
+      transport: params.transport ?? "gateway-relay",
+      ...(params.provider ? { provider: params.provider } : {}),
+      ...(params.brain ? { brain: params.brain } : {}),
+      ...(params.voice ? { voice: params.voice } : {}),
+      ...(params.model ? { model: params.model } : {}),
+      ...(params.sessionKey ? { sessionKey: params.sessionKey } : {}),
+    });
+  }
+
+  /** Push one captured PCM16 chunk upstream. `audio` is base64. */
+  async appendTalkAudio(params: {
+    sessionId: string;
+    audio: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("talk.session.appendAudio", {
+      sessionId: params.sessionId,
+      audio: params.audio,
+    });
+  }
+
+  /**
+   * Stop the assistant mid-utterance. Cancellation is turn-scoped: pass the
+   * `turnId` the client last saw on a `talk.event` audio envelope, otherwise
+   * the Gateway cancels whatever turn is current.
+   */
+  async cancelTalkOutput(params: {
+    sessionId: string;
+    turnId?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("talk.session.cancelOutput", {
+      sessionId: params.sessionId,
+      ...(params.turnId ? { turnId: params.turnId } : {}),
+    });
+  }
+
+  async closeTalkSession(sessionId: string): Promise<unknown> {
+    return this.wsClient.request("talk.session.close", { sessionId });
+  }
+
+  /** Voice/model catalog, including which realtime providers are configured. */
+  async getTalkCatalog(): Promise<unknown> {
+    return this.wsClient.request("talk.catalog", {});
+  }
+
+  /** Subscribe to `talk.event` broadcasts; returns an unsubscribe function. */
+  onTalkEvent(handler: (payload: unknown) => void): () => void {
+    this.wsClient.on("talk.event", handler);
+    return () => this.wsClient.off("talk.event", handler);
+  }
+
+  // ---- Interactive questions (OpenClaw >=2026.9.1 `ask_user`) -------------
+  // The agent's `ask_user` tool parks a structured question on the Gateway and
+  // blocks its turn until someone answers or it expires (default 900s). Our
+  // operator connection already carries `operator.admin`, which satisfies
+  // `operator.questions`, so no extra scope negotiation is needed.
+
+  /** Pending + recently resolved questions visible to this operator client. */
+  async listQuestions(): Promise<unknown> {
+    return this.wsClient.request("question.list", {});
+  }
+
+  /** One question by id. Throws NOT_FOUND once the record is evicted. */
+  async getQuestion(id: string): Promise<unknown> {
+    return this.wsClient.request("question.get", { id });
+  }
+
+  /**
+   * Answer a question. `answers` is keyed by `questionId`; every value is an
+   * array even for single-select, matching the protocol's QuestionAnswers
+   * envelope.
+   */
+  async answerQuestion(params: {
+    id: string;
+    answers: Record<string, string[]>;
+    resolvedBy?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("question.resolve", {
+      id: params.id,
+      answers: { answers: params.answers },
+      ...(params.resolvedBy ? { resolvedBy: params.resolvedBy } : {}),
+    });
+  }
+
+  /** Decline the whole prompt; the agent continues with its best judgment. */
+  async cancelQuestion(params: {
+    id: string;
+    resolvedBy?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("question.resolve", {
+      id: params.id,
+      cancel: true,
+      ...(params.resolvedBy ? { resolvedBy: params.resolvedBy } : {}),
+    });
+  }
+
   /** Detached OpenClaw task ledger, optionally scoped to one session. */
   async listTasks(params: {
     sessionKey?: string;
@@ -544,6 +655,27 @@ export class OpenClawGatewayService {
   /** Provider-reported quota windows, reset times, balances, and plans. */
   async getProviderUsage(): Promise<unknown> {
     return this.wsClient.request("usage.status", {});
+  }
+
+  /**
+   * Token + cost rollup from the Gateway's own usage ledger.
+   *
+   * Defaults to the trailing 30 days; `days` or an explicit `startDate`/
+   * `endDate` pair (YYYY-MM-DD, both or neither) narrow it. Unlike
+   * `usage.status` — which reports provider-side quota windows — this is what
+   * the run actually cost.
+   */
+  async getCostUsage(params?: {
+    days?: number;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("usage.cost", {
+      ...(params?.days !== undefined ? { days: params.days } : {}),
+      ...(params?.startDate !== undefined && params?.endDate !== undefined
+        ? { startDate: params.startDate, endDate: params.endDate }
+        : {}),
+    });
   }
 
   /** Memory subsystem status for one agent. */

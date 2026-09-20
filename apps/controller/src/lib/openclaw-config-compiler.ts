@@ -495,11 +495,60 @@ function compileAgentList(
 /** Key for the MemOS Cloud token inside the encrypted `secrets` table. */
 export const MEMOS_API_KEY_SECRET = "memos:apiKey";
 
+/**
+ * Does this cloud model id denote a realtime voice model?
+ *
+ * Tabby cloud fronts every capability under its own name — `tabby-video`,
+ * `tabby-image-pro`, `tabby-phone` — and realtime voice is `tabby-audio`,
+ * regardless of which vendor is behind it. A direct-to-provider deployment
+ * instead carries the vendor's own id, and StepFun names those `*realtime*`.
+ * Accept both, and keep the cloud side an exact set so a future sibling such
+ * as `tabby-audio-tts` is not mistaken for a realtime session.
+ */
+const CLOUD_REALTIME_VOICE_MODEL_IDS = new Set(["tabby-audio"]);
+
+function isRealtimeVoiceModelId(id: string): boolean {
+  const normalized = id.trim().toLowerCase();
+  return (
+    CLOUD_REALTIME_VOICE_MODEL_IDS.has(normalized) ||
+    normalized.includes("realtime")
+  );
+}
+
+/**
+ * Realtime voice config for the StepFun plugin, derived from the Tabby cloud
+ * connection so the user never handles a provider key.
+ *
+ * The cloud gateway fronts the model, so we reuse its credential and swap the
+ * `/v1` REST base for the `/v1/realtime` WebSocket endpoint. Enabled only when
+ * the connected account actually exposes a realtime model: without one the
+ * plugin reports `isConfigured: false`, `talk.catalog` stays `ready: false`,
+ * and the voice button hides itself.
+ */
+function compileStepfunRealtimeConfig(
+  config: NexuConfig,
+): { apiKey: string; url: string; model: string } | null {
+  const cloud = isDesktopCloudConfig(config.desktop.cloud)
+    ? config.desktop.cloud
+    : null;
+  if (!cloud || !cloud.apiKey) return null;
+
+  const realtimeModel = cloud.models.find((model) =>
+    isRealtimeVoiceModelId(model.id),
+  );
+  if (!realtimeModel) return null;
+
+  const base = normalizeProviderBaseUrl(cloud.linkUrl) ?? cloud.linkUrl;
+  const url = `${base.replace(/^http/, "ws")}/v1/realtime`;
+  return { apiKey: cloud.apiKey, url, model: realtimeModel.id };
+}
+
 function compilePlugins(
   config: NexuConfig,
   env: ControllerEnv,
   hasTeams: boolean,
 ): OpenClawConfig["plugins"] {
+  const stepfunRealtime = compileStepfunRealtimeConfig(config);
   // Exact session keys whose runs may use the embedded browser even though
   // they are channel-shaped: the paired owner's Feishu DMs. Handed to BOTH
   // browser-facing plugins — the toolcall guard and nexu-browser keep
@@ -584,6 +633,14 @@ function compilePlugins(
                 preferenceLimitNumber: memosConfig.preferenceLimitNumber,
                 relativity: memosConfig.relativity,
               },
+            },
+          }
+        : {}),
+      ...(stepfunRealtime
+        ? {
+            "nexu-stepfun-realtime": {
+              enabled: true,
+              config: stepfunRealtime,
             },
           }
         : {}),

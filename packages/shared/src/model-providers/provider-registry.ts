@@ -60,7 +60,12 @@ const providerRegistryEntries = [
   },
   {
     id: "google",
-    canonicalOpenClawId: "gemini",
+    // OpenClaw's built-in provider id is `google`, not `gemini`. Using it verbatim
+    // is what lets this provider inherit the bundled catalog: model-alias
+    // normalization (`google/gemini-3.1-pro` -> `google/gemini-3.1-pro-preview`),
+    // catalog-owned `compat` flags, and Gemini thinking defaults. A non-catalog key
+    // such as `gemini` is routed as a plain custom provider and gets none of them.
+    canonicalOpenClawId: "google",
     aliases: ["gemini"],
     controllerConfigurable: true,
     modelsPageVisible: true,
@@ -174,7 +179,17 @@ const providerRegistryEntries = [
     canonicalOpenClawId: "amazon-bedrock",
     aliases: ["bedrock", "aws-bedrock"],
     controllerConfigurable: true,
-    modelsPageVisible: true,
+    // Hidden from Settings -> Models: the `bedrock-converse-stream` api is
+    // registered by the external `@openclaw/amazon-bedrock-provider` plugin, which
+    // is NOT among the ~60 extensions bundled with openclaw and which Nexu does not
+    // ship. Probing it returns "No API provider registered for api:
+    // bedrock-converse-stream", and because saving a Bedrock provider requires a
+    // live probe returning `ok`, the form could never be saved -- users only saw a
+    // misleading "check credentials/region/network" error. A packaged desktop build
+    // also must not npm-install the plugin at runtime (see AGENTS.md hard rules).
+    // `controllerConfigurable` stays true so the API enum and any stored config keep
+    // working; flip this back to true once the plugin is actually shipped.
+    modelsPageVisible: false,
     displayName: "AWS Bedrock",
     descriptionKey: "models.provider.amazonBedrock.description",
     apiDocsUrl: "https://docs.openclaw.ai/providers/bedrock",

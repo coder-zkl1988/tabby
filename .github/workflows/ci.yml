@@ -53,6 +53,22 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # `pnpm typecheck` resolves @nexu/shared through its "types" export, which
+      # points at TypeScript source, while the generators import it at runtime
+      # and get the built dist. A schema change therefore typechecks green while
+      # the committed spec and SDK silently lose the routes or fields it added —
+      # a merge that brings in someone else's schema plus a local regenerate is
+      # enough to delete their API surface with no error anywhere. This is the
+      # only place that mismatch is visible.
+      - name: Generated API surface is up to date
+        run: |
+          pnpm generate-types
+          if ! git diff --quiet -- apps/controller/openapi.json apps/web/lib/api; then
+            echo "::error::Generated API surface is stale. Run 'pnpm generate-types' and commit the result."
+            git diff -- apps/controller/openapi.json apps/web/lib/api
+            exit 1
+          fi
+
   # ── Lint ───────────────────────────────────────────────────────────────────
   lint:
     runs-on: ubuntu-latest

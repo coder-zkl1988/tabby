@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ControllerEnv } from "#controller/app/env.js";
 import {
@@ -67,9 +68,12 @@ async function writeAuthProfiles(
   agentDir: string,
   data: Record<string, unknown>,
 ): Promise<void> {
-  // Per-agent auth profiles live in openclaw-agent.sqlite (OpenClaw ≥2026.6.5);
-  // the legacy auth-profiles.json is no longer read at runtime.
-  writeAgentAuthStore(path.join(agentDir, "openclaw-agent.sqlite"), {
+  // Per-agent auth profiles live in openclaw-agent.sqlite; the legacy
+  // auth-profiles.json is no longer read at runtime. OpenClaw owns the file —
+  // since 2026.9 the controller will not create one — so stand in for it here.
+  const dbPath = path.join(agentDir, "openclaw-agent.sqlite");
+  new DatabaseSync(dbPath).close();
+  writeAgentAuthStore(dbPath, {
     version: typeof data.version === "number" ? data.version : 1,
     profiles: (data.profiles as Record<string, unknown> | undefined) ?? {},
   });

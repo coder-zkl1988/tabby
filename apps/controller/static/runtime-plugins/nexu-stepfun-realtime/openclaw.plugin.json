@@ -1,0 +1,41 @@
+{
+  "id": "nexu-stepfun-realtime",
+  "name": "Nexu StepFun Realtime Voice",
+  "description": "Registers StepFun (阶跃星辰) StepAudio 3 Realtime as an OpenClaw realtime voice provider so Talk sessions can run full-duplex Chinese speech conversations.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": {
+        "type": "string",
+        "description": "StepFun API key. Sent as `Authorization: Bearer <key>`."
+      },
+      "model": {
+        "type": "string",
+        "description": "Realtime model id. Defaults to stepaudio-3-realtime-preview."
+      },
+      "voice": {
+        "type": "string",
+        "description": "Voice id. Official voices or a cloned voice id."
+      },
+      "instructions": {
+        "type": "string",
+        "description": "System instructions applied via session.update."
+      },
+      "url": {
+        "type": "string",
+        "description": "Override the realtime WebSocket endpoint."
+      },
+      "serverVad": {
+        "type": "boolean",
+        "description": "Enable StepFun server-side VAD (default true). Server VAD is what makes barge-in work."
+      },
+      "prefixPaddingMs": { "type": "integer" },
+      "silenceDurationMs": { "type": "integer" },
+      "energyAwakenessThreshold": { "type": "integer" }
+    }
+  },
+  "activation": {
+    "onStartup": true
+  }
+}
