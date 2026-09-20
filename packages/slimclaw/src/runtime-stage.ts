@@ -218,7 +218,13 @@ const KNOWN_LINK_ERROR_MAPPING_LINES = [
   'if (lowered.includes("[code=streaming_unsupported]") || lowered.includes("streaming unsupported")) return _nexuLocale === "en" ? "⚠️ Streaming is not supported for this request. Please try a different approach or try again later. If the issue persists, see https://docs.nexu.io/guide/contact" : "⚠️ 当前暂不支持这种返回方式，请换一种方式再试，或稍后重试。如仍无法解决，请查看 https://docs.nexu.io/zh/guide/contact";',
   'if (lowered.includes("[code=upstream_error]") || lowered.includes("upstream provider is unavailable") || lowered.includes("upstream_error")) return _nexuLocale === "en" ? "⚠️ The upstream model service is temporarily unavailable. Please try again later or switch to a different model. If the issue persists, see https://docs.nexu.io/guide/contact" : "⚠️ 当前连接的模型服务暂时不可用，请稍后重试，或更换其他模型后再试。如仍无法解决，请查看 https://docs.nexu.io/zh/guide/contact";',
 ] as const;
-const HELPER_BUNDLE_PATTERNS = [/^assistant-error-format-.*\.js$/u] as const;
+// The error formatter is found by the function it defines, not by filename.
+// Its bundle is content-hashed and OpenClaw has already moved it twice — it was
+// `assistant-error-format-*.js` through 2026.8.x and is `redact-*.mjs` in
+// 2026.9.4 — so a name pattern silently stops matching on upgrade, and the
+// build only notices because nothing is left to patch.
+const HELPER_BUNDLE_MARKER = "function formatRawAssistantErrorForUi";
+const HELPER_BUNDLE_FILE_PATTERN = /\.m?js$/u;
 const PLUGIN_SDK_BUNDLE_PATTERNS = [
   /^reply-.*\.js$/u,
   /^dispatch-.*\.js$/u,
@@ -870,20 +876,23 @@ async function patchReplyOutcomeBridge(
   );
 
   const patchHelperBundleGroup = async (bundleDir: string, label: string) => {
-    const entries = await readdir(bundleDir);
+    const entries = await readdir(bundleDir, { withFileTypes: true });
     const bundleNames = entries
-      .filter((entry) =>
-        HELPER_BUNDLE_PATTERNS.some((pattern) => pattern.test(entry)),
+      .filter(
+        (entry) =>
+          entry.isFile() && HELPER_BUNDLE_FILE_PATTERN.test(entry.name),
       )
+      .map((entry) => entry.name)
       .sort((left, right) => left.localeCompare(right));
 
-    if (bundleNames.length === 0) {
-      throw new Error(`Unable to locate OpenClaw ${label} helper bundles.`);
-    }
-
+    let matchedBundles = 0;
     for (const bundleName of bundleNames) {
       const bundlePath = resolve(bundleDir, bundleName);
       const source = await readFile(bundlePath, "utf8");
+      if (!source.includes(HELPER_BUNDLE_MARKER)) {
+        continue;
+      }
+      matchedBundles += 1;
       const patchedSource = injectKnownLinkErrorMappings(source, bundleName);
 
       if (patchedSource !== source) {
@@ -897,6 +906,13 @@ async function patchReplyOutcomeBridge(
         relative(openclawPackageRoot, bundlePath),
         patchedSource,
       );
+    }
+
+    // Still fail loudly, but on the thing we actually depend on: OpenClaw
+    // dropping or renaming the formatter itself, rather than rehashing its
+    // bundle name.
+    if (matchedBundles === 0) {
+      throw new Error(`Unable to locate OpenClaw ${label} helper bundles.`);
     }
   };
 
