@@ -126,7 +126,7 @@ Bedrock 使用 OpenClaw 的 AWS SDK 认证链，不在 Nexu 配置中保存 Acce
 ```
 
 - `auth: "aws-sdk"` 强制使用运行 Nexu/OpenClaw 进程可见的 AWS 默认凭据链；`apiKey` 应省略。
-- OpenClaw 2026.7.1 不接受 `models.bedrockDiscovery`。自动发现属于外置 `@openclaw/amazon-bedrock-provider` 插件，其配置路径是 `plugins.entries.amazon-bedrock.config.discovery`；Nexu 当前不会把旧字段写入运行时配置。
+- OpenClaw 不接受 `models.bedrockDiscovery`。自动发现属于外置 `@openclaw/amazon-bedrock-provider` 插件，其配置路径是 `plugins.entries.amazon-bedrock.config.discovery`；Nexu 当前不会把旧字段写入运行时配置。
 - 保存前必须填写当前区域已授权的模型或推理配置 ID。验证通过打包的 OpenClaw 执行最小 token 实时 probe；只有目标 `amazon-bedrock/<modelId>` 明确返回 `ok` 才算成功。
 - 临时 probe 只加载正式运行时扩展目录中的 `amazon-bedrock` 插件。插件未安装时返回明确的不可用错误，不会把传输层缺失误报为 AWS 凭据失败。
 - 认证、限流、计费权限、格式、超时和无可用模型错误只映射为安全的产品错误，不透传 CLI 输出，避免日志或界面泄露凭据上下文。

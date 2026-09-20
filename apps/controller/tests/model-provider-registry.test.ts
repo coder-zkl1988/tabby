@@ -38,6 +38,12 @@ describe("model provider registry", () => {
     expect(normalizeProviderId("grok")).toBe("xai");
     expect(normalizeProviderId("z.ai")).toBe("zai");
     expect(getProviderAliasCandidates("google")).toContain("gemini");
+    // OpenClaw's bundled catalog keys Gemini under `google`. Keeping our canonical
+    // id byte-identical is what earns the catalog's model-alias normalization and
+    // compat flags; `gemini` would be routed as an unrelated custom provider.
+    expect(getProviderRuntimePolicy("google")?.canonicalOpenClawId).toBe(
+      "google",
+    );
     expect(getProviderAliasCandidates("volcengine")).toEqual(
       expect.arrayContaining(["volcengine", "bytedance", "doubao"]),
     );
