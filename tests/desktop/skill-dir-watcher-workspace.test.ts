@@ -64,14 +64,35 @@ describe("SkillDirWatcher workspace reconciliation", () => {
     writeFileSync(fullPath, content);
   }
 
+  /**
+   * Starts a watcher and waits for its recursive watches to arm.
+   *
+   * macOS backs recursive fs.watch with FSEvents, whose stream starts on a run
+   * loop rather than synchronously. A write issued in the same tick as start()
+   * lands before the stream is listening and is never delivered — measured at
+   * roughly one failure in five, locally and on the macOS runner.
+   */
+  async function startWatcher(watcher: { start: () => void }): Promise<void> {
+    watcher.start();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  /**
+   * `retrigger` re-issues the filesystem change on every poll. A single event
+   * can still be lost to stream setup or coalesced away; what these tests mean
+   * is "a write under agents/<bot>/skills reconciles", not "this one event is
+   * delivered".
+   */
   async function waitUntil(
     predicate: () => boolean,
     timeoutMs = 5_000,
     intervalMs = 50,
+    retrigger?: () => void,
   ): Promise<void> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       if (predicate()) return;
+      retrigger?.();
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
@@ -234,9 +255,8 @@ describe("SkillDirWatcher workspace reconciliation", () => {
       });
 
       watcher.syncNow();
-      watcher.start();
       expect(db.getInstalledByAgent("bot-1")).toHaveLength(1);
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await startWatcher(watcher);
 
       removeWorkspaceSkill("bot-1", "live-tool");
       writeWorkspaceFile("agents/bot-1/skills/watch-trigger.txt", "trigger");
@@ -244,6 +264,12 @@ describe("SkillDirWatcher workspace reconciliation", () => {
       await waitUntil(
         () => db.getInstalledByAgent("bot-1").length === 0,
         8_000,
+        50,
+        () =>
+          writeWorkspaceFile(
+            "agents/bot-1/skills/watch-trigger.txt",
+            `trigger-${Date.now()}`,
+          ),
       );
       watcher.stop();
     },
@@ -262,7 +288,12 @@ describe("SkillDirWatcher workspace reconciliation", () => {
       });
 
       const syncSpy = vi.spyOn(watcher as never, "syncNow");
-      watcher.start();
+      await startWatcher(watcher);
+      // The shared-directory watcher has no path filter, so FSEvents replaying
+      // the beforeEach creation of skillsDir into the fresh stream counts as a
+      // sync (seen on CI: "called 1 times"). Drop those before measuring, or
+      // this asserts "nothing ever syncs" rather than "noise does not sync".
+      syncSpy.mockClear();
 
       writeWorkspaceFile("agents/bot-1/runtime/logs.txt", "noise");
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -286,17 +317,25 @@ describe("SkillDirWatcher workspace reconciliation", () => {
         debounceMs: 50,
       });
 
-      watcher.start();
+      await startWatcher(watcher);
 
       writeWorkspaceFile(
         "agents/bot-1/skills/agent-tool/README.md",
         "touch to trigger watcher",
       );
 
-      await waitUntil(() =>
-        db
-          .getInstalledByAgent("bot-1")
-          .some((skill) => skill.slug === "agent-tool"),
+      await waitUntil(
+        () =>
+          db
+            .getInstalledByAgent("bot-1")
+            .some((skill) => skill.slug === "agent-tool"),
+        5_000,
+        50,
+        () =>
+          writeWorkspaceFile(
+            "agents/bot-1/skills/agent-tool/README.md",
+            `touch ${Date.now()}`,
+          ),
       );
       watcher.stop();
     },
