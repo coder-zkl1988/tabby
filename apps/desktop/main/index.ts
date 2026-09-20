@@ -97,6 +97,7 @@ import {
   startDesktopDevInspectServer,
   stopDesktopDevInspectServer,
 } from "./services/dev-inspect-server";
+import { embeddedBrowserManager } from "./services/embedded-browser-manager";
 import { isLaunchdBootstrapEnabled } from "./services/launchd-bootstrap";
 import { ProxyManager } from "./services/proxy-manager";
 import {
@@ -2040,6 +2041,23 @@ function createMainWindow(): BrowserWindow {
       });
     },
   );
+
+  // The browser panel hides its native view from a React cleanup, which a
+  // renderer that reloads or crashes never runs. Without this the last shown
+  // page stays composited over the app with no address bar, no tabs and no
+  // close button — a page the user can neither navigate nor dismiss. Hiding
+  // keeps the pages alive; the panel shows them again when it remounts.
+  window.webContents.on(
+    "did-start-navigation",
+    (_event, _url, isInPlace, isMainFrame) => {
+      if (isInPlace || !isMainFrame || window.isDestroyed()) return;
+      embeddedBrowserManager.hideViewsForWindow(window);
+    },
+  );
+  window.webContents.on("render-process-gone", () => {
+    if (window.isDestroyed()) return;
+    embeddedBrowserManager.hideViewsForWindow(window);
+  });
 
   window.webContents.on("did-finish-load", () => {
     if (window.isDestroyed()) return;

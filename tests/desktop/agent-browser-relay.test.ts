@@ -20,6 +20,14 @@ const isAgentSharingAllowed = vi.fn(() => true);
 const ensureAgentTab = vi.fn();
 const isAgentTabPanelHosted = vi.fn(() => true);
 const waitForAgentTabPanel = vi.fn(async () => true);
+const settle = vi.fn(async () => ({
+  navigated: false,
+  inPageNavigated: false,
+  loading: false,
+  dialogs: [],
+  pageErrors: [],
+}));
+const watchAction = vi.fn(() => ({ settle }));
 
 vi.mock("../../apps/desktop/main/services/embedded-browser-manager", () => ({
   // The relay derives the tab id from the driving session, so the stub must
@@ -35,6 +43,7 @@ vi.mock("../../apps/desktop/main/services/embedded-browser-manager", () => ({
     isAgentTabPanelHosted: (...args: unknown[]) =>
       isAgentTabPanelHosted(...args),
     waitForAgentTabPanel: (...args: unknown[]) => waitForAgentTabPanel(...args),
+    watchAction: (...args: unknown[]) => watchAction(...args),
   },
 }));
 
@@ -44,7 +53,9 @@ const TIMING = {
   reconnectDelayMs: 40,
   streamIdleTimeoutMs: 250,
   connectTimeoutMs: 1_000,
-  settleMs: 10,
+  quietMs: 10,
+  loadTimeoutMs: 50,
+  renderMs: 5,
   panelWaitMs: 100,
 };
 
@@ -166,6 +177,14 @@ afterEach(async () => {
   ensureAgentTab.mockReset();
   isAgentTabPanelHosted.mockReset().mockReturnValue(true);
   waitForAgentTabPanel.mockReset().mockResolvedValue(true);
+  settle.mockReset().mockResolvedValue({
+    navigated: false,
+    inPageNavigated: false,
+    loading: false,
+    dialogs: [],
+    pageErrors: [],
+  });
+  watchAction.mockReset().mockReturnValue({ settle });
 });
 
 describe("AgentBrowserRelay", () => {
@@ -196,6 +215,86 @@ describe("AgentBrowserRelay", () => {
     expect(controller.results[0]).toMatchObject({
       requestId: "r1",
       outcome: { ok: true, snapshot: { url: "https://example.com/" } },
+    });
+  });
+
+  it("reads a click back through the watcher instead of a fixed delay", async () => {
+    const controller = await startFakeController();
+    const relay = createRelay(controller.port);
+    cleanups.push(
+      () => controller.close(),
+      () => relay.stop(),
+    );
+    // The page before, the click, the page after (a pushState route), the
+    // element read-back — in that order.
+    const calls: string[] = [];
+    controlWindow.mockImplementation(async (_owner, input) => {
+      const request = input as { action: string };
+      calls.push(request.action);
+      if (request.action === "state") {
+        const title =
+          calls.filter((c) => c === "state").length === 1
+            ? "Inbox"
+            : "Inbox — thread";
+        return {
+          kind: "state",
+          url: "https://mail.example/",
+          title,
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+        };
+      }
+      if (request.action === "describe-ref") {
+        return {
+          kind: "element",
+          element: { ref: "e7", role: "link", name: "Thread", depth: 1 },
+        };
+      }
+      return { kind: "ok" };
+    });
+    settle.mockResolvedValue({
+      navigated: false,
+      inPageNavigated: true,
+      loading: false,
+      dialogs: [{ type: "confirm", message: "Leave?" }],
+      pageErrors: [{ message: "TypeError: x is not a function" }],
+    });
+
+    relay.start();
+    await waitUntil(() => controller.subscribers() === 1, "subscription");
+    controller.send({
+      requestId: "click-1",
+      sessionKey: "agent:bot:main",
+      command: { action: "click", ref: "e7" },
+    });
+
+    await waitUntil(() => controller.results.length === 1, "result POST");
+    expect(calls).toEqual(["state", "click-ref", "state", "describe-ref"]);
+    // Watching must begin before the click lands, or a navigation it starts
+    // is missed.
+    expect(watchAction.mock.invocationCallOrder[0]).toBeLessThan(
+      controlWindow.mock.invocationCallOrder[1] ?? 0,
+    );
+    expect(settle).toHaveBeenCalledWith({
+      quietMs: TIMING.quietMs,
+      loadTimeoutMs: TIMING.loadTimeoutMs,
+      renderMs: TIMING.renderMs,
+    });
+    expect(controller.results[0]).toMatchObject({
+      requestId: "click-1",
+      outcome: {
+        ok: true,
+        observation: {
+          url: "https://mail.example/",
+          title: "Inbox — thread",
+          navigated: false,
+          changedInPlace: true,
+          dialogs: [{ type: "confirm", message: "Leave?" }],
+          pageErrors: [{ message: "TypeError: x is not a function" }],
+          element: { ref: "e7", role: "link", name: "Thread" },
+        },
+      },
     });
   });
 

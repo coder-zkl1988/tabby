@@ -491,6 +491,8 @@ const zhCN = {
   "automation.updateFailed": "无法更新本机自动化设置",
   "automation.updated": "本机自动化设置已更新",
   "automation.browser.title": "浏览器控制",
+  "automation.browser.description":
+    "开启后，智能体可以在对话右侧的内置浏览器面板里打开网页、点击、输入和截图，你能实时看到每一步；不会触碰你自己的浏览器，也可随时在面板里撤销共享。",
   "automation.computer.title": "电脑控制",
   "automation.computer.ready": "电脑控制已就绪",
   "automation.computer.installed": "电脑控制可用",

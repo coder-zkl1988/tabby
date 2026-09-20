@@ -46404,6 +46404,14 @@
                             "enum": [
                               "snapshot"
                             ]
+                          },
+                          "maxNodes": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000
+                          },
+                          "visibleOnly": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -46445,12 +46453,76 @@
                           },
                           "submit": {
                             "type": "boolean"
+                          },
+                          "append": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
                           "action",
                           "ref",
                           "text"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "press"
+                            ]
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "ref": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "key"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "select"
+                            ]
+                          },
+                          "ref": {
+                            "type": "string"
+                          },
+                          "option": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "ref",
+                          "option"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "hover"
+                            ]
+                          },
+                          "ref": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "ref"
                         ]
                       },
                       {
@@ -46469,6 +46541,43 @@
                         "required": [
                           "action",
                           "deltaY"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "navigate"
+                            ]
+                          },
+                          "to": {
+                            "type": "string",
+                            "enum": [
+                              "back",
+                              "forward",
+                              "reload"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "to"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "screenshot"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "action"
                         ]
                       }
                     ]
@@ -46510,6 +46619,9 @@
                             "truncated": {
                               "type": "boolean"
                             },
+                            "visibleOnly": {
+                              "type": "boolean"
+                            },
                             "nodes": {
                               "type": "array",
                               "items": {
@@ -46526,6 +46638,12 @@
                                   },
                                   "value": {
                                     "type": "string"
+                                  },
+                                  "href": {
+                                    "type": "string"
+                                  },
+                                  "checked": {
+                                    "type": "boolean"
                                   },
                                   "disabled": {
                                     "type": "boolean"
@@ -46589,6 +46707,12 @@
                                 "value": {
                                   "type": "string"
                                 },
+                                "href": {
+                                  "type": "string"
+                                },
+                                "checked": {
+                                  "type": "boolean"
+                                },
                                 "disabled": {
                                   "type": "boolean"
                                 },
@@ -46605,6 +46729,68 @@
                             },
                             "navigated": {
                               "type": "boolean"
+                            },
+                            "changedInPlace": {
+                              "type": "boolean"
+                            },
+                            "loading": {
+                              "type": "boolean"
+                            },
+                            "dialogs": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "alert",
+                                      "confirm",
+                                      "prompt",
+                                      "beforeunload"
+                                    ]
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "message"
+                                ]
+                              }
+                            },
+                            "pageErrors": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "message"
+                                ]
+                              }
+                            },
+                            "scroll": {
+                              "type": "object",
+                              "properties": {
+                                "y": {
+                                  "type": "number"
+                                },
+                                "maxY": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "y",
+                                "maxY"
+                              ]
                             }
                           },
                           "required": [
@@ -46617,6 +46803,52 @@
                       "required": [
                         "ok",
                         "observation"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "screenshot": {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "mimeType": {
+                              "type": "string"
+                            },
+                            "base64": {
+                              "type": "string"
+                            },
+                            "width": {
+                              "type": "number"
+                            },
+                            "height": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "url",
+                            "title",
+                            "mimeType",
+                            "base64",
+                            "width",
+                            "height"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "screenshot"
                       ]
                     },
                     {
@@ -46780,6 +47012,9 @@
                               "truncated": {
                                 "type": "boolean"
                               },
+                              "visibleOnly": {
+                                "type": "boolean"
+                              },
                               "nodes": {
                                 "type": "array",
                                 "items": {
@@ -46796,6 +47031,12 @@
                                     },
                                     "value": {
                                       "type": "string"
+                                    },
+                                    "href": {
+                                      "type": "string"
+                                    },
+                                    "checked": {
+                                      "type": "boolean"
                                     },
                                     "disabled": {
                                       "type": "boolean"
@@ -46859,6 +47100,12 @@
                                   "value": {
                                     "type": "string"
                                   },
+                                  "href": {
+                                    "type": "string"
+                                  },
+                                  "checked": {
+                                    "type": "boolean"
+                                  },
                                   "disabled": {
                                     "type": "boolean"
                                   },
@@ -46875,6 +47122,68 @@
                               },
                               "navigated": {
                                 "type": "boolean"
+                              },
+                              "changedInPlace": {
+                                "type": "boolean"
+                              },
+                              "loading": {
+                                "type": "boolean"
+                              },
+                              "dialogs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "alert",
+                                        "confirm",
+                                        "prompt",
+                                        "beforeunload"
+                                      ]
+                                    },
+                                    "message": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "message"
+                                  ]
+                                }
+                              },
+                              "pageErrors": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "message": {
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "message"
+                                  ]
+                                }
+                              },
+                              "scroll": {
+                                "type": "object",
+                                "properties": {
+                                  "y": {
+                                    "type": "number"
+                                  },
+                                  "maxY": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "y",
+                                  "maxY"
+                                ]
                               }
                             },
                             "required": [
@@ -46887,6 +47196,52 @@
                         "required": [
                           "ok",
                           "observation"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ok": {
+                            "type": "boolean",
+                            "enum": [
+                              true
+                            ]
+                          },
+                          "screenshot": {
+                            "type": "object",
+                            "properties": {
+                              "url": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "mimeType": {
+                                "type": "string"
+                              },
+                              "base64": {
+                                "type": "string"
+                              },
+                              "width": {
+                                "type": "number"
+                              },
+                              "height": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "url",
+                              "title",
+                              "mimeType",
+                              "base64",
+                              "width",
+                              "height"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ok",
+                          "screenshot"
                         ]
                       },
                       {

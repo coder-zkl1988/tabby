@@ -35,6 +35,34 @@ describe("embedded browser visibility", () => {
     expect(truthy).toEqual(["candidate === tab"]);
   });
 
+  it("hides the views itself when the renderer that owns the panel goes away", () => {
+    // Visibility is otherwise driven only from React effects, which a reload
+    // or a crashed render process never runs — leaving a bare page over the
+    // app. The main process may not *show* a view, but it must be able to
+    // take one off screen without the renderer's help.
+    const mainSource = readFileSync(
+      path.join(__dirname, "../../apps/desktop/main/index.ts"),
+      "utf8",
+    );
+
+    for (const event of ["did-start-navigation", "render-process-gone"]) {
+      const start = mainSource.indexOf(`"${event}"`);
+      expect(
+        start,
+        `${event} is not handled on the main window`,
+      ).toBeGreaterThan(-1);
+      expect(
+        mainSource.slice(start, start + 400),
+        `the main window's first ${event} handler does not hide the browser views`,
+      ).toContain("embeddedBrowserManager.hideViewsForWindow(window)");
+    }
+
+    // A same-document navigation is the app's own router moving between
+    // routes; blanking the agent's page on every route change would undo the
+    // pin that keeps it on screen mid-task.
+    expect(mainSource).toContain("if (isInPlace || !isMainFrame");
+  });
+
   it("keeps the offscreen viewport helper from placing a view on screen", () => {
     // Bounds are still assigned before a view is shown so a snapshot measures
     // the page at a plausible size. That must stay paired with visible=false.

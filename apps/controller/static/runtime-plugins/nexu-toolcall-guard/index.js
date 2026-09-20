@@ -47,8 +47,13 @@ const LOCAL_AUTOMATION_TOOL_PREFIXES = ["peekaboo__", "cua-driver__"];
 // EMBEDDED_BROWSER_TOOLS in apps/controller/src/lib/openclaw-config-compiler.ts.
 const EMBEDDED_BROWSER_TOOLS = new Set([
   "browser_click",
+  "browser_hover",
+  "browser_navigate",
   "browser_open",
+  "browser_press",
+  "browser_screenshot",
   "browser_scroll",
+  "browser_select",
   "browser_snapshot",
   "browser_type",
 ]);

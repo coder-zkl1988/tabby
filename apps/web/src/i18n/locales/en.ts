@@ -541,6 +541,8 @@ const en = {
   "automation.updateFailed": "Unable to update local automation settings",
   "automation.updated": "Local automation settings updated",
   "automation.browser.title": "Browser control",
+  "automation.browser.description":
+    "Lets the assistant open pages, click, type and take screenshots in the browser panel beside the conversation, where you watch every step. It never touches your own browser, and sharing can be revoked from the panel at any time.",
   "automation.computer.title": "Computer Use",
   "automation.computer.ready": "Computer control is ready",
   "automation.computer.installed": "Computer control is available",

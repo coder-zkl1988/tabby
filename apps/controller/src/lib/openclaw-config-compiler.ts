@@ -392,8 +392,13 @@ const WORKBOARD_WORKER_TOOLS = [
 // which is what stops an external channel from reaching them.
 export const EMBEDDED_BROWSER_TOOLS = [
   "browser_click",
+  "browser_hover",
+  "browser_navigate",
   "browser_open",
+  "browser_press",
+  "browser_screenshot",
   "browser_scroll",
+  "browser_select",
   "browser_snapshot",
   "browser_type",
 ];
