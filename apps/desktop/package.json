@@ -162,7 +162,8 @@
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "extendInfo": {
         "LSUIElement": true,
-        "NSAppleEventsUsageDescription": "Tabby reads text you selected in another app when you invoke Quick Chat."
+        "NSAppleEventsUsageDescription": "Tabby reads text you selected in another app when you invoke Quick Chat.",
+        "NSMicrophoneUsageDescription": "Tabby uses your microphone for voice conversations with your assistant."
       }
     },
     "win": {

@@ -9,6 +9,9 @@ const SPECIAL_PURPOSE_MODEL_LABEL_KEYS: Record<string, string> = {
   "tabby-image": "models.special.image",
   "tabby-image-free": "models.special.image",
   "tabby-video": "models.special.video",
+  // Realtime voice: it speaks over a WebSocket session, so it cannot serve a
+  // chat completion at all — selecting it as a bot model would just fail.
+  "tabby-audio": "models.special.voice",
   "tabby-video-free": "models.special.video",
 };
 

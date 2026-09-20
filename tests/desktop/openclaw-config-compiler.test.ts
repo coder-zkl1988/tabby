@@ -444,4 +444,104 @@ describe("compileOpenClawConfig", () => {
       ],
     });
   });
+
+  /**
+   * The StepFun realtime plugin is configured entirely from the Tabby cloud
+   * connection — the user never handles a provider key. Pin the derivation:
+   * the failure mode is silent, since a wrong URL or a missing entry only makes
+   * the voice button disappear with no error surfaced anywhere.
+   */
+  describe("stepfun realtime plugin", () => {
+    function cloudWith(models: Array<{ id: string; name: string }>) {
+      return {
+        connected: true,
+        polling: false,
+        userName: null,
+        userEmail: null,
+        connectedAt: null,
+        linkUrl: "https://nexu-link.powerformer.net",
+        apiKey: "test-key",
+        models,
+      };
+    }
+
+    it("derives the ws endpoint and reuses the cloud credential", () => {
+      const config = createBaseConfig();
+      config.desktop = {
+        cloud: cloudWith([
+          { id: "gemini-3.1-pro-preview", name: "Gemini" },
+          { id: "tabby-audio", name: "tabby-audio" },
+        ]),
+      };
+
+      const entry = compileOpenClawConfig(config, createEnv()).plugins
+        ?.entries?.["nexu-stepfun-realtime"];
+
+      expect(entry?.enabled).toBe(true);
+      expect(entry?.config).toEqual({
+        apiKey: "test-key",
+        // https -> wss, and the REST `/v1` base becomes the realtime socket.
+        url: "wss://nexu-link.powerformer.net/v1/realtime",
+        model: "tabby-audio",
+      });
+    });
+
+    it("also accepts a vendor-named realtime id for direct deployments", () => {
+      const config = createBaseConfig();
+      config.desktop = {
+        cloud: cloudWith([
+          { id: "stepaudio-3-realtime-preview", name: "StepAudio 3 Realtime" },
+        ]),
+      };
+      const entry = compileOpenClawConfig(config, createEnv()).plugins
+        ?.entries?.["nexu-stepfun-realtime"];
+      expect(entry?.config?.model).toBe("stepaudio-3-realtime-preview");
+    });
+
+    it("does not mistake a sibling tabby-audio-* model for realtime", () => {
+      const config = createBaseConfig();
+      config.desktop = {
+        cloud: cloudWith([{ id: "tabby-audio-tts", name: "tabby-audio-tts" }]),
+      };
+      expect(
+        compileOpenClawConfig(config, createEnv()).plugins?.entries?.[
+          "nexu-stepfun-realtime"
+        ],
+      ).toBeUndefined();
+    });
+
+    it("stays absent when the account exposes no realtime model", () => {
+      const config = createBaseConfig();
+      config.desktop = {
+        cloud: cloudWith([
+          { id: "tabby-ultra", name: "tabby-ultra" },
+          { id: "tabby-video", name: "tabby-video" },
+        ]),
+      };
+      expect(
+        compileOpenClawConfig(config, createEnv()).plugins?.entries?.[
+          "nexu-stepfun-realtime"
+        ],
+      ).toBeUndefined();
+    });
+
+    it("stays absent when cloud is not connected", () => {
+      const config = createBaseConfig();
+      expect(
+        compileOpenClawConfig(config, createEnv()).plugins?.entries?.[
+          "nexu-stepfun-realtime"
+        ],
+      ).toBeUndefined();
+    });
+
+    it("follows a renamed realtime model instead of a pinned preview id", () => {
+      const config = createBaseConfig();
+      config.desktop = {
+        cloud: cloudWith([{ id: "stepaudio-4-realtime", name: "StepAudio 4" }]),
+      };
+      const entry = compileOpenClawConfig(config, createEnv()).plugins
+        ?.entries?.["nexu-stepfun-realtime"];
+      expect(entry?.config?.model).toBe("stepaudio-4-realtime");
+    });
+  });
 });

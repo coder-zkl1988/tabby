@@ -7154,6 +7154,74 @@ export type GetApiV1RuntimeOperationsResponses = {
 
 export type GetApiV1RuntimeOperationsResponse = GetApiV1RuntimeOperationsResponses[keyof GetApiV1RuntimeOperationsResponses];
 
+export type GetApiV1TalkCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/talk/catalog';
+};
+
+export type GetApiV1TalkCatalogResponses = {
+    /**
+     * Realtime voice providers and their configured state
+     */
+    200: {
+        connected: boolean;
+        available: boolean;
+        ready?: boolean;
+        providers?: Array<{
+            id: string;
+            label?: string;
+            configured?: boolean;
+            voices?: Array<string>;
+            models?: Array<string>;
+            defaultModel?: string;
+        }>;
+    };
+};
+
+export type GetApiV1TalkCatalogResponse = GetApiV1TalkCatalogResponses[keyof GetApiV1TalkCatalogResponses];
+
+export type PostApiV1TalkSessionsData = {
+    body?: {
+        provider?: string;
+        voice?: string;
+        model?: string;
+        sessionKey?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/talk/sessions';
+};
+
+export type PostApiV1TalkSessionsErrors = {
+    /**
+     * Runtime unavailable or no configured voice provider
+     */
+    409: {
+        message: string;
+    };
+};
+
+export type PostApiV1TalkSessionsError = PostApiV1TalkSessionsErrors[keyof PostApiV1TalkSessionsErrors];
+
+export type PostApiV1TalkSessionsResponses = {
+    /**
+     * Realtime voice session created
+     */
+    200: {
+        sessionId: string;
+        provider?: string;
+        transport?: string;
+        mode?: string;
+        brain?: string;
+        inputSampleRateHz?: number;
+        outputSampleRateHz?: number;
+    };
+};
+
+export type PostApiV1TalkSessionsResponse = PostApiV1TalkSessionsResponses[keyof PostApiV1TalkSessionsResponses];
+
 export type GetApiV1RuntimeCostData = {
     body?: never;
     path?: never;

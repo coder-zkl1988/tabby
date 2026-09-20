@@ -23,9 +23,10 @@ async function main(): Promise<void> {
     },
   );
 
-  // Wire WebSocket upgrade handler for device mirror proxy
+  // Wire WebSocket upgrade handlers (device mirror + realtime voice)
   server.on("upgrade", (req, socket, head) => {
     if (!acceptTrustedLocalUpgrade(req, socket)) return;
+    if (container.talkVoiceProxy.handleUpgrade(req, socket, head)) return;
     container.deviceMirrorProxy.handleUpgrade(req, socket, head);
   });
 

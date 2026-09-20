@@ -474,6 +474,72 @@ export class OpenClawGatewayService {
     });
   }
 
+  // ---- Talk: realtime voice sessions --------------------------------------
+  // Gateway-relay transport only: the web app never speaks to the voice
+  // provider directly, so every audio frame is proxied controller -> gateway.
+  // Downstream audio and transcripts arrive as `talk.event` broadcasts.
+
+  async createTalkSession(params: {
+    provider?: string;
+    mode?: string;
+    transport?: string;
+    brain?: string;
+    voice?: string;
+    model?: string;
+    sessionKey?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("talk.session.create", {
+      mode: params.mode ?? "realtime",
+      transport: params.transport ?? "gateway-relay",
+      ...(params.provider ? { provider: params.provider } : {}),
+      ...(params.brain ? { brain: params.brain } : {}),
+      ...(params.voice ? { voice: params.voice } : {}),
+      ...(params.model ? { model: params.model } : {}),
+      ...(params.sessionKey ? { sessionKey: params.sessionKey } : {}),
+    });
+  }
+
+  /** Push one captured PCM16 chunk upstream. `audio` is base64. */
+  async appendTalkAudio(params: {
+    sessionId: string;
+    audio: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("talk.session.appendAudio", {
+      sessionId: params.sessionId,
+      audio: params.audio,
+    });
+  }
+
+  /**
+   * Stop the assistant mid-utterance. Cancellation is turn-scoped: pass the
+   * `turnId` the client last saw on a `talk.event` audio envelope, otherwise
+   * the Gateway cancels whatever turn is current.
+   */
+  async cancelTalkOutput(params: {
+    sessionId: string;
+    turnId?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("talk.session.cancelOutput", {
+      sessionId: params.sessionId,
+      ...(params.turnId ? { turnId: params.turnId } : {}),
+    });
+  }
+
+  async closeTalkSession(sessionId: string): Promise<unknown> {
+    return this.wsClient.request("talk.session.close", { sessionId });
+  }
+
+  /** Voice/model catalog, including which realtime providers are configured. */
+  async getTalkCatalog(): Promise<unknown> {
+    return this.wsClient.request("talk.catalog", {});
+  }
+
+  /** Subscribe to `talk.event` broadcasts; returns an unsubscribe function. */
+  onTalkEvent(handler: (payload: unknown) => void): () => void {
+    this.wsClient.on("talk.event", handler);
+    return () => this.wsClient.off("talk.event", handler);
+  }
+
   // ---- Interactive questions (OpenClaw >=2026.9.1 `ask_user`) -------------
   // The agent's `ask_user` tool parks a structured question on the Gateway and
   // blocks its turn until someone answers or it expires (default 900s). Our

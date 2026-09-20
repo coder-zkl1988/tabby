@@ -7,6 +7,7 @@ import {
 } from "@/components/chat-input-area";
 import { PlatformIcon } from "@/components/platform-icons";
 import { SessionOperationsPanel } from "@/components/session-operations-panel";
+import { TalkVoiceButton } from "@/components/talk-voice-button";
 import { ChatMarkdown } from "@/components/ui/chat-markdown";
 import { A2UIRenderer } from "@/lib/a2ui";
 import type { A2UIMessage } from "@/lib/a2ui";
@@ -3462,6 +3463,9 @@ export function SessionsPage() {
             />
           )}
           <AgentQuestionPanel sessionKey={session?.sessionKey ?? undefined} />
+          <div className="mb-2 flex justify-end">
+            <TalkVoiceButton sessionKey={session?.sessionKey ?? undefined} />
+          </div>
           {pendingRunMessageChoice && replyInProgress && (
             <RunMessageChoicePanel
               message={pendingRunMessageChoice}

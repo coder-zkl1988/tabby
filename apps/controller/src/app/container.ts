@@ -66,6 +66,7 @@ import { ScheduleWorkspaceWriter } from "../services/schedule-workspace-writer.j
 import { SessionRunRegistry } from "../services/session-run-registry.js";
 import { SessionService } from "../services/session-service.js";
 import { SkillhubService } from "../services/skillhub-service.js";
+import { TalkVoiceProxy } from "../services/talk-voice-proxy.js";
 import {
   readLastAssistantReply,
   readSubagentSessionEntry,
@@ -154,6 +155,7 @@ export interface ControllerContainer {
   xhsOpsScheduler: XhsOpsScheduler;
   xhsOpsCommentService: XhsOpsCommentService;
   deviceMirrorProxy: DeviceMirrorProxy;
+  talkVoiceProxy: TalkVoiceProxy;
   devicePollingService: DevicePollingService;
   deviceTaskHistoryStore: DeviceTaskHistoryStore;
   deviceNameStore: DeviceNameStore;
@@ -346,6 +348,7 @@ export async function createContainer(): Promise<ControllerContainer> {
     deviceControlService.pushDesktopStateWhenReady(),
   );
   const deviceMirrorProxy = new DeviceMirrorProxy(configStore);
+  const talkVoiceProxy = new TalkVoiceProxy(gatewayService);
   const devicePollingService = new DevicePollingService(deviceControlService);
   const attachmentStore = new AttachmentStore({
     openclawStateDir: env.openclawStateDir,
@@ -879,6 +882,7 @@ export async function createContainer(): Promise<ControllerContainer> {
       media: mediaGenerationService,
     }),
     deviceMirrorProxy,
+    talkVoiceProxy,
     devicePollingService,
     deviceTaskHistoryStore,
     deviceNameStore: new DeviceNameStore(env.deviceNamesPath),
@@ -978,6 +982,7 @@ export async function createContainer(): Promise<ControllerContainer> {
         devicePollingService.dispose();
         xhsOpsScheduler.stop();
         deviceMirrorProxy.close();
+        talkVoiceProxy.close();
         openclawAuthService.dispose();
         channelFallbackService.stop();
         wsClient.stop();

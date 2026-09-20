@@ -2422,6 +2422,24 @@ app.whenReady().then(async () => {
   logLaunchTimeline("app.whenReady resolved");
   // Short-circuit before any heavy startup if running under Rosetta.
   await warnIfRunningUnderRosetta();
+  // Electron denies every renderer permission request by default, so Talk's
+  // getUserMedia call would fail silently. Grant only audio capture — the
+  // renderer is our own local UI, but a blanket allow would also hand it
+  // camera, geolocation and notifications.
+  session.defaultSession.setPermissionRequestHandler(
+    (_contents, permission, callback, details) => {
+      if (permission === "media") {
+        const requested =
+          (details as { mediaTypes?: string[] }).mediaTypes ?? [];
+        // `mediaTypes` is absent on some platforms; audio-only Talk is the only
+        // caller, so an unspecified request is treated as audio.
+        callback(requested.every((type) => type === "audio"));
+        return;
+      }
+      callback(false);
+    },
+  );
+
   proxyManager = new ProxyManager(session.defaultSession);
   await proxyManager.applyPolicy(runtimeConfig.proxy);
   installApplicationMenu();

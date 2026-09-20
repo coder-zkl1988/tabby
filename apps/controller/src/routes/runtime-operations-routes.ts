@@ -193,6 +193,51 @@ const runtimeApprovalsResponseSchema = z.object({
   approvals: z.array(approvalSchema),
 });
 
+// ---- Talk: realtime voice ---------------------------------------------------
+const talkProviderSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  configured: z.boolean().optional(),
+  voices: z.array(z.string()).optional(),
+  models: z.array(z.string()).optional(),
+  defaultModel: z.string().optional(),
+});
+
+const talkCatalogResponseSchema = z.object({
+  connected: z.boolean(),
+  available: z.boolean(),
+  ready: z.boolean().optional(),
+  providers: z.array(talkProviderSchema).optional(),
+});
+
+const talkSessionResponseSchema = z.object({
+  sessionId: z.string(),
+  provider: z.string().optional(),
+  transport: z.string().optional(),
+  mode: z.string().optional(),
+  brain: z.string().optional(),
+  // Nexu's capture pipeline resamples to whatever the Gateway reports here, so
+  // it is echoed to the client rather than hardcoded in the web app.
+  inputSampleRateHz: z.number().optional(),
+  outputSampleRateHz: z.number().optional(),
+});
+
+const rawTalkSessionSchema = z
+  .object({
+    sessionId: z.string(),
+    provider: z.string().optional(),
+    transport: z.string().optional(),
+    mode: z.string().optional(),
+    brain: z.string().optional(),
+    audio: z
+      .object({
+        inputSampleRateHz: z.number().optional(),
+        outputSampleRateHz: z.number().optional(),
+      })
+      .optional(),
+  })
+  .passthrough();
+
 // ---- Cost usage (Gateway `usage.cost`) ------------------------------------
 // Shape verified against a live openclaw 2026.9.4 gateway. Distinct from
 // `usage.status`, which reports provider-side quota windows rather than spend.
@@ -974,6 +1019,125 @@ export function registerRuntimeOperationsRoutes(
         },
         200,
       );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/talk/catalog",
+      tags: ["Runtime Operations"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: talkCatalogResponseSchema },
+          },
+          description: "Realtime voice providers and their configured state",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        return c.json({ connected: false, available: false }, 200);
+      }
+      try {
+        const raw = (await container.gatewayService.getTalkCatalog()) as {
+          realtime?: { ready?: boolean; providers?: unknown[] };
+        };
+        const parsed = z
+          .array(talkProviderSchema.passthrough())
+          .safeParse(raw?.realtime?.providers ?? []);
+        return c.json(
+          {
+            connected: true,
+            available: true,
+            ready: raw?.realtime?.ready === true,
+            providers: parsed.success ? parsed.data : [],
+          },
+          200,
+        );
+      } catch {
+        return c.json({ connected: true, available: false }, 200);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/talk/sessions",
+      tags: ["Runtime Operations"],
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                provider: z.string().optional(),
+                voice: z.string().optional(),
+                model: z.string().optional(),
+                sessionKey: z.string().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: talkSessionResponseSchema },
+          },
+          description: "Realtime voice session created",
+        },
+        409: {
+          content: {
+            "application/json": { schema: z.object({ message: z.string() }) },
+          },
+          description: "Runtime unavailable or no configured voice provider",
+        },
+      },
+    }),
+    async (c) => {
+      if (!container.gatewayService.isConnected()) {
+        throw new HTTPException(409, {
+          message: "OpenClaw gateway is not connected",
+        });
+      }
+      const body = c.req.valid("json");
+      try {
+        const raw = await container.gatewayService.createTalkSession({
+          ...body,
+          mode: "realtime",
+          transport: "gateway-relay",
+          brain: "agent-consult",
+        });
+        const parsed = rawTalkSessionSchema.safeParse(raw);
+        if (!parsed.success) {
+          throw new HTTPException(409, {
+            message: "Gateway returned an unusable talk session",
+          });
+        }
+        const { audio, ...rest } = parsed.data;
+        return c.json(
+          {
+            sessionId: rest.sessionId,
+            provider: rest.provider,
+            transport: rest.transport,
+            mode: rest.mode,
+            brain: rest.brain,
+            inputSampleRateHz: audio?.inputSampleRateHz,
+            outputSampleRateHz: audio?.outputSampleRateHz,
+          },
+          200,
+        );
+      } catch (error) {
+        if (error instanceof HTTPException) throw error;
+        throw new HTTPException(409, {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to create a talk session",
+        });
+      }
     },
   );
 

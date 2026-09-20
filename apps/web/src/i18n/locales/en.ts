@@ -643,6 +643,7 @@ const en = {
   "models.searchModels": "Search models...",
   "models.special.phone": "Phone control only",
   "models.special.image": "Image generation only",
+  "models.special.voice": "Voice conversation only",
   "models.special.video": "Video generation only",
   "models.modelSwitched": "Model switched",
   "models.autoSwitched": "Auto-switched to {{model}}",
@@ -1129,6 +1130,9 @@ const en = {
   "settings.cost.lastDays": "Last {{count}} days",
   "settings.cost.missingEntries":
     "{{count}} entries had no price data and are excluded.",
+  "sessions.chat.talkStart": "Start voice conversation",
+  "sessions.chat.talkStop": "End voice conversation",
+  "sessions.chat.talkFailed": "Could not start the voice conversation.",
   "sessions.chat.agentQuestionOther": "Type your own answer…",
   "sessions.chat.agentQuestionConfirm": "Confirm",
   "sessions.chat.agentQuestionSkip": "Skip",
