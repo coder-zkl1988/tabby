@@ -13,6 +13,14 @@ export type {
   DeleteSurfaceMessage,
 } from "./a2ui-types";
 export { createSurfaceManager } from "./a2ui-surface";
+export {
+  isPinnedType,
+  isSurfaceTypePinned,
+  setTypePinned,
+  subscribePinnedTypes,
+  surfaceComponentTypes,
+  surfacePinKey,
+} from "./a2ui-pin-store";
 export type { SurfaceManager } from "./a2ui-surface";
 export {
   registerCustomComponent,

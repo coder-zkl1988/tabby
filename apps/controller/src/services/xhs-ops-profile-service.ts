@@ -85,8 +85,16 @@ export interface XhsOpsProfileServiceDeps {
   now?: () => number;
 }
 
-export const XHS_PROFILE_APPLY_TIMEOUT_MS = 300_000;
-export const XHS_PROFILE_APPLY_MAX_STEPS = 60;
+/**
+ * Applying a full profile is a long run: eight fields, two wheel pickers and a
+ * 200+ entry region list. Measured 2026-09-20 — 60 steps ran out mid-region and
+ * the 5-minute deadline expired while the phone kept working for 18 minutes,
+ * so the desktop reported failure for a task that was still going. The phone's
+ * own ceiling is 100 steps; budget to it and give the deadline room to outlast
+ * a real run instead of racing it.
+ */
+export const XHS_PROFILE_APPLY_TIMEOUT_MS = 1_500_000;
+export const XHS_PROFILE_APPLY_MAX_STEPS = 100;
 export const XHS_PROFILE_VERIFY_TIMEOUT_MS = 180_000;
 export const XHS_PROFILE_VERIFY_MAX_STEPS = 40;
 export const XHS_IDENTITY_TIMEOUT_MS = 120_000;
@@ -597,7 +605,22 @@ export class XhsOpsProfileService {
       const wantBio = picked("bio") && draft.bio.trim().length > 0;
       const wantAvatar = picked("avatar") && Boolean(draft.avatarPath);
       const wantCover = picked("cover") && Boolean(draft.coverPath);
-      if (!wantNickname && !wantBio && !wantAvatar && !wantCover) {
+      const wantGender = picked("gender") && Boolean(draft.gender);
+      const wantBirthday =
+        picked("birthday") && draft.birthday.trim().length > 0;
+      const wantRegion = picked("region") && draft.region.trim().length > 0;
+      const wantInterestTags =
+        picked("interestTags") && draft.interestTags.length > 0;
+      if (
+        !wantNickname &&
+        !wantBio &&
+        !wantAvatar &&
+        !wantCover &&
+        !wantGender &&
+        !wantBirthday &&
+        !wantRegion &&
+        !wantInterestTags
+      ) {
         throw new XhsOpsError(
           400,
           fields
@@ -690,10 +713,10 @@ export class XhsOpsProfileService {
         wantBio,
         wantAvatar: !!avatarFilename,
         wantCover: !!coverFilename,
-        wantGender: Boolean(draft.gender),
-        wantBirthday: Boolean(draft.birthday.trim()),
-        wantRegion: Boolean(draft.region.trim()),
-        wantInterestTags: draft.interestTags.length > 0,
+        wantGender,
+        wantBirthday,
+        wantRegion,
+        wantInterestTags,
       });
       if (outcome.status !== "applied") {
         return await complete({

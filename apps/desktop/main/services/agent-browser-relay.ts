@@ -6,6 +6,7 @@ import type {
 import type { BrowserWindow } from "electron";
 import {
   type CommandEnvelope,
+  type PageState,
   buildObservation,
   drainFrames,
   parseCommandFrame,
@@ -29,10 +30,20 @@ import { agentTabId, embeddedBrowserManager } from "./embedded-browser-manager";
  */
 
 export type AgentBrowserRelayTiming = {
-  /** Post-action settle before the evidence snapshot: long enough for a click
-   * to start a navigation or a framework to re-render, short enough that a
-   * no-op click still answers quickly. */
-  settleMs: number;
+  /**
+   * How long a navigation gets to *start* after an action before the page is
+   * treated as having stayed put. Clicks that navigate begin the load well
+   * inside this; clicks that only re-render answer after it.
+   */
+  quietMs: number;
+  /**
+   * How long a load that did start gets to finish before evidence is read
+   * regardless. Must stay well inside the controller's 30s ceiling together
+   * with the panel wait.
+   */
+  loadTimeoutMs: number;
+  /** Paint time after the page settles, for frameworks that render async. */
+  renderMs: number;
   /** Long enough for the panel to mount and place the view, short enough to
    * fail well inside the controller's own 30s ceiling. */
   panelWaitMs: number;
@@ -52,7 +63,9 @@ export type AgentBrowserRelayTiming = {
 };
 
 const DEFAULT_TIMING: AgentBrowserRelayTiming = {
-  settleMs: 700,
+  quietMs: 300,
+  loadTimeoutMs: 8_000,
+  renderMs: 250,
   panelWaitMs: 4_000,
   reconnectDelayMs: 2_000,
   streamIdleTimeoutMs: 45_000,
@@ -286,10 +299,30 @@ export class AgentBrowserRelay {
       );
     };
 
-    const snapshot = async (): Promise<AgentBrowserSnapshot> => {
+    // Where the page stands, without walking its tree: the URL and title are
+    // all the evidence builder needs on each side of an action.
+    const state = async (): Promise<PageState> => {
+      const result = await embeddedBrowserManager.controlWindow(owner, {
+        action: "state",
+        tabId,
+      });
+      if (result?.kind !== "state") throw new Error("could not read the page");
+      return { url: result.url, title: result.title };
+    };
+
+    const snapshot = async (options?: {
+      maxNodes?: number;
+      visibleOnly?: boolean;
+    }): Promise<AgentBrowserSnapshot> => {
       const result = await embeddedBrowserManager.controlWindow(owner, {
         action: "snapshot",
         tabId,
+        ...(options?.maxNodes !== undefined
+          ? { maxNodes: options.maxNodes }
+          : {}),
+        ...(options?.visibleOnly !== undefined
+          ? { visibleOnly: options.visibleOnly }
+          : {}),
       });
       if (result?.kind !== "snapshot")
         throw new Error("could not read the page");
@@ -312,53 +345,138 @@ export class AgentBrowserRelay {
       return { ok: true, snapshot: await snapshot() };
     }
     if (command.action === "snapshot") {
-      return { ok: true, snapshot: await snapshot() };
+      return {
+        ok: true,
+        snapshot: await snapshot({
+          maxNodes: command.maxNodes,
+          visibleOnly: command.visibleOnly,
+        }),
+      };
     }
-    if (command.action === "scroll") {
-      if (!(await ensureHosted((await snapshot()).url))) {
+    if (command.action === "screenshot") {
+      // A hidden view captures nothing useful; the user has to be looking at
+      // the same pixels the model gets.
+      if (!(await ensureHosted((await state()).url))) {
         return { ok: false, error: NO_PANEL };
       }
-      await embeddedBrowserManager.controlWindow(owner, {
+      const result = await embeddedBrowserManager.controlWindow(owner, {
+        action: "screenshot",
+        tabId,
+      });
+      if (result?.kind !== "screenshot")
+        throw new Error("could not capture the page");
+      const { kind: _kind, ...image } = result;
+      return { ok: true, screenshot: { ...(await state()), ...image } };
+    }
+    if (command.action === "scroll") {
+      const before = await state();
+      if (!(await ensureHosted(before.url))) {
+        return { ok: false, error: NO_PANEL };
+      }
+      const result = await embeddedBrowserManager.controlWindow(owner, {
         action: "scroll",
         tabId,
         deltaY: command.deltaY,
       });
-      const after = await snapshot();
+      if (result?.kind !== "scroll") throw new Error("could not scroll");
       return {
         ok: true,
-        observation: { url: after.url, title: after.title, navigated: false },
+        observation: buildObservation({
+          before,
+          after: await state(),
+          settle: {
+            navigated: false,
+            inPageNavigated: false,
+            loading: false,
+            dialogs: [],
+            pageErrors: [],
+          },
+          element: null,
+          scroll: { y: result.y, maxY: result.maxY },
+        }),
       };
     }
 
-    const urlBefore = (await snapshot()).url;
-    if (!(await ensureHosted(urlBefore))) {
+    const before = await state();
+    if (!(await ensureHosted(before.url))) {
       return { ok: false, error: NO_PANEL };
     }
-    if (command.action === "click") {
-      await embeddedBrowserManager.controlWindow(owner, {
-        action: "click-ref",
-        tabId,
-        ref: command.ref,
-      });
-    } else {
-      await embeddedBrowserManager.controlWindow(owner, {
-        action: "type-ref",
-        tabId,
-        ref: command.ref,
-        text: command.text,
-        submit: command.submit,
-      });
+    // Watch from before the action: a navigation it starts must be caught
+    // from its first event, or the read-back describes the page as it was.
+    const watch = embeddedBrowserManager.watchAction(owner, tabId);
+    switch (command.action) {
+      case "click":
+        await embeddedBrowserManager.controlWindow(owner, {
+          action: "click-ref",
+          tabId,
+          ref: command.ref,
+        });
+        break;
+      case "hover":
+        await embeddedBrowserManager.controlWindow(owner, {
+          action: "hover-ref",
+          tabId,
+          ref: command.ref,
+        });
+        break;
+      case "type":
+        await embeddedBrowserManager.controlWindow(owner, {
+          action: "type-ref",
+          tabId,
+          ref: command.ref,
+          text: command.text,
+          submit: command.submit,
+          append: command.append,
+        });
+        break;
+      case "press":
+        await embeddedBrowserManager.controlWindow(owner, {
+          action: "press-key",
+          tabId,
+          key: command.key,
+          ...(command.ref ? { ref: command.ref } : {}),
+        });
+        break;
+      case "select":
+        await embeddedBrowserManager.controlWindow(owner, {
+          action: "select-ref",
+          tabId,
+          ref: command.ref,
+          option: command.option,
+        });
+        break;
+      case "navigate":
+        await embeddedBrowserManager.controlWindow(owner, {
+          action: "command",
+          tabId,
+          command: command.to,
+        });
+        break;
     }
-    // Clicks and submits kick off navigation and re-render asynchronously;
-    // snapshotting immediately would read the page as it was.
-    await new Promise((resolve) => setTimeout(resolve, this.timing.settleMs));
+    const settle = await watch.settle({
+      quietMs: this.timing.quietMs,
+      loadTimeoutMs: this.timing.loadTimeoutMs,
+      renderMs: this.timing.renderMs,
+    });
+    const after = await state();
 
-    // Read the page back and report the element that was acted on. This is the
-    // completion evidence: a click that did nothing shows an unchanged element,
-    // and a click that navigated shows a new URL.
+    // Read the acted-on element back and report it. This is the completion
+    // evidence: a click that did nothing shows an unchanged element, and a
+    // click that navigated shows a new URL and no element.
+    const ref =
+      "ref" in command && typeof command.ref === "string" ? command.ref : null;
+    let element = null;
+    if (ref && !settle.navigated) {
+      const result = await embeddedBrowserManager.controlWindow(owner, {
+        action: "describe-ref",
+        tabId,
+        ref,
+      });
+      element = result?.kind === "element" ? result.element : null;
+    }
     return {
       ok: true,
-      observation: buildObservation(await snapshot(), command.ref, urlBefore),
+      observation: buildObservation({ before, after, settle, element }),
     };
   }
 }

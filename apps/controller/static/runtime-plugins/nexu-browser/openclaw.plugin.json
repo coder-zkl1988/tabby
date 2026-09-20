@@ -1,7 +1,7 @@
 {
   "id": "nexu-browser",
   "name": "Nexu Embedded Browser",
-  "description": "Registers browser_open / browser_snapshot / browser_click / browser_type / browser_scroll so the chat agent can drive the browser panel embedded in the Nexu desktop app.",
+  "description": "Registers the browser_* tools (open, snapshot, screenshot, click, type, press, select, hover, scroll, navigate) so the chat agent can drive the browser panel embedded in the Nexu desktop app.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -22,9 +22,14 @@
     "tools": [
       "browser_open",
       "browser_snapshot",
+      "browser_screenshot",
       "browser_click",
       "browser_type",
-      "browser_scroll"
+      "browser_press",
+      "browser_select",
+      "browser_hover",
+      "browser_scroll",
+      "browser_navigate"
     ]
   },
   "activation": {

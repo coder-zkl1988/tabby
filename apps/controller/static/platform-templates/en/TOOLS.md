@@ -57,6 +57,10 @@ If the channel the user chose fails to start — the embedded browser tool is re
 - After a device connects or disconnects, previous `device_list` results are stale. Always re-call before answering.
 - When the user asks "how many devices" or "are any phones connected", call `device_list` first, then answer from the fresh result.
 - **CRITICAL: Do NOT use `nodes`, `memory`, search tools, or any other tool to check device status.** The `nodes` tool queries your knowledge graph (notes/memories), not live hardware. Only `device_list` returns real-time connected device information. Even if `device_list` returned empty before, call it again — devices may have connected since.
+- **Do not pass `allowedActions`, and do not pass `allowedActions` inside `taskPolicy`.** Omit it and the phone applies its own safety policy, under which every action it supports stays available. Pass one and the phone intersects your list with its full action set, so any action you left out fails at the exact step the agent finally needs it: `POLICY_ACTION_NOT_ALLOWED` ends the whole run and discards every step already spent. On 2026-09-18 a 小红书 profile task died this way at step 13 (136s) because the list omitted `LONGPRESSANDDRAG`.
+- Pass a whitelist only when the user, or an explicit policy, told you to restrict what this run may do — and then cover every action the task actually needs. **The canonical name for drag is `LONGPRESSANDDRAG`, no underscores**; `LONGPRESS_AND_DRAG` is not recognised.
+- **Never describe a restriction you passed yourself as one the device or the platform imposed.** You chose it, so you can also drop it when the user asks you to.
+- **Do not pass `maxSteps`.** Omitted, the phone applies its own budget of 100, which is right for nearly every task. A value that runs out mid-task ends the run with `Task reached maximum steps` and discards every step already spent — on 2026-09-18 a 小红书 profile task died at 59/60 steps with only 3 of 7 fields done. Set it only when you genuinely want this run to stop earlier than the phone's own budget.
 
 ## 企业微信任务编排（多实例 × 多企业）
 

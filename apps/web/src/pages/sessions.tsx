@@ -5,13 +5,21 @@ import {
   type PendingAttachment,
   type RunMessageMode,
 } from "@/components/chat-input-area";
+import { InlineA2UIHost } from "@/components/inline-a2ui-host";
 import { PlatformIcon } from "@/components/platform-icons";
 import { SessionOperationsPanel } from "@/components/session-operations-panel";
 import { TalkVoiceButton } from "@/components/talk-voice-button";
 import { ChatMarkdown } from "@/components/ui/chat-markdown";
-import { A2UIRenderer } from "@/lib/a2ui";
 import type { A2UIMessage } from "@/lib/a2ui";
+import { surfacePinKey } from "@/lib/a2ui/a2ui-pin-store";
 import {
+  closePinnedPanel,
+  pinSurface,
+  setActivePinnedSession,
+  usePinnedPanel,
+} from "@/lib/a2ui/a2ui-pinned-panel-store";
+import {
+  humanizeSurfaceId,
   sidebarSurfaceDefaultSize,
   useA2UISidebar,
 } from "@/lib/a2ui/a2ui-sidebar-context";
@@ -43,6 +51,7 @@ import {
   useCanvas,
 } from "@/lib/canvas/canvas-store";
 import { getChannelChatUrl } from "@/lib/channel-links";
+import { surfaceIds } from "@/lib/chat/chat-a2ui-surfaces";
 import { coalesceInlineA2UISurfaces } from "@/lib/chat/chat-a2ui-surfaces";
 import {
   A2UI_TOOL_NAMES,
@@ -1108,6 +1117,7 @@ function ChatBubble({
   onA2UIAction,
   onCanvasOpApplied,
   onOpenSidebar,
+  onPinA2UI,
   showAvatar = true,
   presentation = "full",
   onOpenLink,
@@ -1121,6 +1131,8 @@ function ChatBubble({
   onA2UIAction?: (actionName: string, context: Record<string, unknown>) => void;
   onCanvasOpApplied?: (result: { applied: number; errors: string[] }) => void;
   onOpenSidebar?: (payload: SidebarA2UIPayload) => void;
+  /** Pin an inline A2UI surface onto the canvas workbench. */
+  onPinA2UI?: (messages: A2UIMessage[]) => void;
   /** False for consecutive same-sender messages — renders an alignment spacer instead. */
   showAvatar?: boolean;
   presentation?: "full" | "artifacts-only";
@@ -1221,13 +1233,11 @@ function ChatBubble({
           </div>
         )}
         {isBot && hasA2UI && a2uiMessages && (
-          // a2ui-inline-host: when the surface is a single self-framed card
-          // (CardShell, TeamRunCard, …) a2ui.css drops this padding so the
-          // card hugs the bubble instead of drawing a second border inside
-          // it — worth ~32px of usable width. Mixed surfaces keep it.
-          <div className="a2ui-inline-host mt-1 w-full min-w-[20rem] max-w-full rounded-[20px] border border-border bg-surface-1 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-            <A2UIRenderer messages={a2uiMessages} onAction={onA2UIAction} />
-          </div>
+          <InlineA2UIHost
+            messages={a2uiMessages}
+            onA2UIAction={onA2UIAction}
+            onPin={onPinA2UI}
+          />
         )}
         {isBot && sidebarA2UI && onOpenSidebar && (
           <SidebarA2UIButton payload={sidebarA2UI} onOpen={onOpenSidebar} />
@@ -1420,6 +1430,7 @@ export function SessionsPage() {
   const queryClient = useQueryClient();
   const { openWith } = useA2UISidebar();
   const browserPanel = useBrowserPanel();
+  const { isOpen: pinnedPanelOpen } = usePinnedPanel();
   const [operationsOpen, setOperationsOpen] = useState(false);
 
   useEffect(() => {
@@ -2947,9 +2958,16 @@ export function SessionsPage() {
     setOperationsOpen(false);
   }, [id]);
 
+  // The pinned panel belongs to one conversation: point it at the session on
+  // screen so switching away hides it and switching back restores its pins.
+  useEffect(() => {
+    setActivePinnedSession(id ?? null);
+  }, [id]);
+
   const browserSelected =
     browserPanel.isOpen && browserPanel.sessionKey === session?.sessionKey;
-  const canvasSelected = !browserPanel.isOpen && canvasPanelOpen;
+  const canvasSelected =
+    !browserPanel.isOpen && !pinnedPanelOpen && canvasPanelOpen;
   const browserHiddenWithContent =
     !browserSelected && latestPreviewArtifact !== null;
   const canvasHiddenWithContent = !canvasSelected && canvasNodes.length > 0;
@@ -3229,9 +3247,13 @@ export function SessionsPage() {
               aria-label={t("sessions.chat.canvas")}
               title={t("sessions.chat.canvas")}
               onClick={() => {
-                const shouldOpen = browserPanel.isOpen || !canvasPanelOpen;
+                // The right sidebar shows exactly one of browser / pinned /
+                // canvas, so opening the canvas has to step past both others.
+                const shouldOpen =
+                  browserPanel.isOpen || pinnedPanelOpen || !canvasPanelOpen;
                 setOperationsOpen(false);
                 closeBrowserPanel();
+                closePinnedPanel();
                 setPanelOpen(shouldOpen);
               }}
               className={cn(
@@ -3376,6 +3398,24 @@ export function SessionsPage() {
                     size: sidebarSurfaceDefaultSize(payload.messages),
                   });
                 };
+                // Pin an inline surface into the dedicated sidebar panel —
+                // NOT the canvas, where reaching the card means panning and
+                // zooming to find its node. pinSurface is idempotent per
+                // surfaceId so the remembered-pin effect can re-enter safely.
+                const pinInlineA2UI = (messages: A2UIMessage[]): void => {
+                  const [surfaceId] = surfaceIds(messages);
+                  if (!surfaceId) return;
+                  closeBrowserPanel();
+                  setPanelOpen(false);
+                  if (!id) return;
+                  pinSurface(id, {
+                    surfaceId,
+                    title: humanizeSurfaceId(surfaceId),
+                    messages,
+                    onAction: onA2UIAction,
+                    pinKey: surfacePinKey(messages),
+                  });
+                };
 
                 if (item.kind === "message") {
                   return [
@@ -3388,6 +3428,7 @@ export function SessionsPage() {
                       onA2UIAction={onA2UIAction}
                       onCanvasOpApplied={onCanvasOpApplied}
                       onOpenSidebar={openSidebar}
+                      onPinA2UI={pinInlineA2UI}
                       onOpenLink={handleOpenChatLink}
                       onBranch={handleBranchFromMessage}
                       onRollback={handleRollbackToMessage}
@@ -3419,6 +3460,7 @@ export function SessionsPage() {
                       onA2UIAction={onA2UIAction}
                       onCanvasOpApplied={onCanvasOpApplied}
                       onOpenSidebar={openSidebar}
+                      onPinA2UI={pinInlineA2UI}
                       onOpenLink={handleOpenChatLink}
                     />
                   ));
