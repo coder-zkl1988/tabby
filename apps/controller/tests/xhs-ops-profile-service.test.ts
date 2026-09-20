@@ -20,6 +20,7 @@ import {
   parseProfileJson,
   parseProfileVerificationJson,
 } from "../src/services/xhs-ops-task-builder.js";
+import { XHS_TASK_POLICY } from "../src/services/xhs-ops-run-service.js";
 import { XhsOpsStore } from "../src/store/xhs-ops-store.js";
 
 const tempDir = mkdtempSync(join(tmpdir(), "xhs-ops-profile-"));
@@ -1422,10 +1423,76 @@ describe("profile task builder", () => {
     });
     expect(t).toContain("1999-03-02");
     expect(t).toContain("不是可点击控件");
-    expect(t).toContain("慢速拖动");
-    // Flinging overshoots; stepping without checking compounds the error.
+    // SLIDE is already the inertia-free drag; asking for a slow one on top of
+    // that named a duration the action vocabulary cannot express.
+    expect(t).toContain("无惯性精确拖拽");
+    // Flinging overshoots a wheel; stepping without checking compounds it.
     expect(t).toContain("一次最多拖 3 格");
     expect(t).toContain("禁止快速甩动");
+    expect(t).toContain("禁止使用「FLING」");
+  });
+
+  it("sends the region list a fling, which is the only gesture that can reach its end", () => {
+    const t = buildProfileApplyTask({
+      label: "A",
+      platformAccountId: "target-xhs-id",
+      region: "上海",
+    });
+    expect(t).toContain("FLING point1:");
+    // A full-screen SLIDE moves exactly one screen, so the 200+ entry list
+    // needs twenty-odd of them and the run dies mid-list.
+    expect(t).toContain("必须用「FLING」而不是「SLIDE」");
+    expect(t).toContain("12 个动作");
+  });
+
+  it("never names an action the task policy would reject", () => {
+    // The prompt and the policy allowlist are edited separately, and they
+    // drifted: the birthday step told the model LONGPRESSANDDRAG was "not in
+    // this task's allowlist" for a day after it had been added, while the run
+    // that motivated adding it had been killed for using it.
+    const t = buildProfileApplyTask({
+      label: "A",
+      platformAccountId: "target-xhs-id",
+      nickname: "n",
+      bio: "b",
+      avatarFilename: "a.jpg",
+      coverFilename: "c.jpg",
+      gender: "女",
+      birthday: "1999-03-02",
+      region: "上海",
+    });
+    const vocabulary = [
+      "AWAKE",
+      "CLICK",
+      "TYPE",
+      "ENTER",
+      "WAIT",
+      "BACK",
+      "HOME",
+      "SLIDE",
+      "SCROLL",
+      "FLING",
+      "LONGPRESS",
+      "LONGPRESSANDDRAG",
+      "DOUBLE_CLICK",
+      "ZOOM",
+      "TAP_SEQUENCE",
+      "CALL_USER",
+      "COMPLETE",
+      "ABORT",
+    ];
+    const allowed = new Set<string>(XHS_TASK_POLICY.allowedActions);
+    for (const action of vocabulary) {
+      // LONGPRESS is a prefix of LONGPRESSANDDRAG; match on a word boundary.
+      if (!new RegExp(`${action}(?![A-Z_])`).test(t)) continue;
+      expect(
+        allowed.has(action),
+        `${action} is named in the task but not allowed by XHS_TASK_POLICY`,
+      ).toBe(true);
+    }
+    // And it must not claim an allowed action is blocked.
+    expect(t).not.toContain("白名单不含");
+    expect(t).not.toContain("POLICY_ACTION_NOT_ALLOWED");
   });
 
   it("parseProfileJson is lenient about literal newlines and unknown values", () => {
