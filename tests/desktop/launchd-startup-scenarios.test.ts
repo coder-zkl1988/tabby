@@ -14,6 +14,7 @@
  * 11. effectivePorts always returned (cold start and attach)
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleOnFakeClock } from "./fake-clock";
 
 const mockSlimclawRuntimeRoot =
   "/repo/packages/slimclaw/.dist-runtime/openclaw";
@@ -213,6 +214,31 @@ function makeBootstrapEnv(
   };
 }
 
+/**
+ * Drive a bootstrap on a fake clock.
+ *
+ * bootstrapWithLaunchd waits on real timers to let the OS settle; see
+ * ./fake-clock for why the tests do not pay them. The clock is faked only
+ * around the call, so the dynamic import keeps real time.
+ *
+ * controllerReady is settled here too. bootstrapWithLaunchd hands it back still
+ * polling, the way the desktop shell receives it — on a real clock that poll
+ * outlives the test and its probes land on the *next* test's fetch stub.
+ */
+async function runBootstrap(env: Record<string, unknown>) {
+  const { bootstrapWithLaunchd } = await import(
+    "../../apps/desktop/main/services/launchd-bootstrap"
+  );
+  vi.useFakeTimers();
+  try {
+    const result = await settleOnFakeClock(bootstrapWithLaunchd(env as never));
+    await settleOnFakeClock(result.controllerReady);
+    return result;
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 function makeRuntimePorts(overrides?: Record<string, unknown>) {
   return JSON.stringify({
     writtenAt: new Date().toISOString(),
@@ -314,11 +340,7 @@ describe("Launchd Startup Scenarios", () => {
   // Scenario 1: Fresh cold start
   // -----------------------------------------------------------------------
   it("Scenario 1: fresh cold start installs and starts both services", async () => {
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(mockLaunchdManager.installService).toHaveBeenCalledTimes(2);
     expect(result.isAttach).toBe(false);
@@ -353,11 +375,7 @@ describe("Launchd Startup Scenarios", () => {
       vi.fn().mockResolvedValue(createReadyFetchResponse()),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.isAttach).toBe(true);
     expect(result.effectivePorts.controllerPort).toBe(50800);
@@ -396,11 +414,7 @@ describe("Launchd Startup Scenarios", () => {
       }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // Should have bootout the unhealthy controller
     expect(mockLaunchdManager.bootoutAndWaitForExit).toHaveBeenCalled();
@@ -433,11 +447,7 @@ describe("Launchd Startup Scenarios", () => {
       return Promise.resolve(mockWebServer);
     });
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     // Should have tried the next adjacent port after the first failure
     expect(webServerMock.startEmbeddedWebServer).toHaveBeenCalledTimes(2);
@@ -486,11 +496,7 @@ describe("Launchd Startup Scenarios", () => {
       );
     });
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // installService should detect drift and re-bootstrap
     expect(mockLaunchdManager.installService).toHaveBeenCalledTimes(2);
@@ -513,13 +519,7 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/wrong/nexu-home" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(
-      makeBootstrapEnv({ nexuHome: "/correct/nexu-home" }) as never,
-    );
+    await runBootstrap(makeBootstrapEnv({ nexuHome: "/correct/nexu-home" }));
 
     expect(mockLaunchdManager.bootoutAndWaitForExit).toHaveBeenCalled();
     // Should still install and start services after teardown
@@ -534,11 +534,7 @@ describe("Launchd Startup Scenarios", () => {
     // But services are running
     mockLaunchdManager.getServiceStatus.mockResolvedValue(mockRunningService());
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // Should teardown orphaned services
     expect(mockLaunchdManager.bootoutAndWaitForExit).toHaveBeenCalled();
@@ -565,11 +561,7 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     // Should use fresh web port (50810 from env) instead of recovered 55555
     // because the previous Electron is dead and its web server port is stale
@@ -580,11 +572,7 @@ describe("Launchd Startup Scenarios", () => {
   // Scenario 10: effectivePorts always present (cold start)
   // -----------------------------------------------------------------------
   it("Scenario 10: effectivePorts always returned on cold start", async () => {
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.effectivePorts).toBeDefined();
     expect(typeof result.effectivePorts.controllerPort).toBe("number");
@@ -608,11 +596,7 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.effectivePorts).toBeDefined();
     expect(result.isAttach).toBe(true);
@@ -625,11 +609,7 @@ describe("Launchd Startup Scenarios", () => {
   it("Scenario 12: runtime-ports.json is written with actual ports after bootstrap", async () => {
     const fsMock = await import("node:fs/promises");
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // writeFile should have been called for runtime-ports.json
     const writeCalls = (fsMock.writeFile as ReturnType<typeof vi.fn>).mock
@@ -664,11 +644,7 @@ describe("Launchd Startup Scenarios", () => {
       .mockResolvedValueOnce("<plist>old-openclaw-from-v0.1.5</plist>")
       .mockRejectedValue(new Error("ENOENT"));
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // Should have bootout stale services
     expect(mockLaunchdManager.bootoutService).toHaveBeenCalled();
@@ -699,11 +675,7 @@ describe("Launchd Startup Scenarios", () => {
       .mockResolvedValueOnce(openclawPlist)
       .mockRejectedValue(new Error("ENOENT"));
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // Should NOT have tried to bootout (plist cwd matches)
     // Note: bootoutService may be called for other reasons, but unlink
@@ -748,11 +720,7 @@ describe("Launchd Startup Scenarios", () => {
       },
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     // Controller should have been moved to 50801
     expect(result.effectivePorts.controllerPort).toBe(50801);
@@ -789,11 +757,7 @@ describe("Launchd Startup Scenarios", () => {
       },
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.effectivePorts.openclawPort).toBe(18791);
   });
@@ -815,13 +779,7 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
-      makeBootstrapEnv({ isDev: true }) as never,
-    );
+    const result = await runBootstrap(makeBootstrapEnv({ isDev: true }));
 
     // Should NOT reuse prod ports — use fresh defaults
     expect(result.effectivePorts.controllerPort).toBe(50800);
@@ -849,16 +807,12 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
+    const result = await runBootstrap(
       makeBootstrapEnv({
         appVersion: "1.0.0",
         userDataPath: "/tmp/user-data",
         buildSource: "packaged",
-      }) as never,
+      }),
     );
 
     expect(result.isAttach).toBe(false);
@@ -887,23 +841,19 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
+    const result = await runBootstrap(
       makeBootstrapEnv({
         appVersion: "1.0.0",
         openclawStateDir: "/tmp/state",
         userDataPath: "/tmp/user-data",
         buildSource: "stable",
-      }) as never,
+      }),
     );
 
     expect(result.isAttach).toBe(false);
     expect(mockLaunchdManager.bootoutAndWaitForExit).toHaveBeenCalled();
     expect(mockLaunchdManager.installService).toHaveBeenCalledTimes(2);
-  }, 15000);
+  });
 
   it("Scenario 19b: Preview capability downgrade refuses attach", async () => {
     const fsMock = await import("node:fs/promises");
@@ -925,11 +875,7 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
+    const result = await runBootstrap(
       makeBootstrapEnv({
         isDev: false,
         appVersion: "1.0.0",
@@ -937,7 +883,7 @@ describe("Launchd Startup Scenarios", () => {
         userDataPath: "/tmp/user-data",
         buildSource: "stable",
         localAutomationPreviewEnabled: "false",
-      }) as never,
+      }),
     );
 
     expect(result.isAttach).toBe(false);
@@ -973,11 +919,7 @@ describe("Launchd Startup Scenarios", () => {
       .mockResolvedValueOnce(mockStoppedService()) // openclaw ensure
       .mockResolvedValue(mockRunningService()); // openclaw running afterwards
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     // Should still recover ports (anyRunning = true)
     expect(result.effectivePorts.controllerPort).toBe(50800);
@@ -999,26 +941,16 @@ describe("Launchd Startup Scenarios", () => {
       Object.assign(new Error("EADDRINUSE"), { code: "EADDRINUSE" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
+    await expect(runBootstrap(makeBootstrapEnv())).rejects.toThrow(
+      "all port attempts exhausted",
     );
-
-    await expect(
-      bootstrapWithLaunchd(makeBootstrapEnv() as never),
-    ).rejects.toThrow("all port attempts exhausted");
   });
 
   // -----------------------------------------------------------------------
   // Scenario 20: Prod labels used when isDev=false
   // -----------------------------------------------------------------------
   it("Scenario 20: prod mode uses non-dev labels and plist dir", async () => {
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
-      makeBootstrapEnv({ isDev: false }) as never,
-    );
+    const result = await runBootstrap(makeBootstrapEnv({ isDev: false }));
 
     expect(result.labels.controller).toBe("io.nexu.controller");
     expect(result.labels.openclaw).toBe("io.nexu.openclaw");
@@ -1045,11 +977,7 @@ describe("Launchd Startup Scenarios", () => {
       // runtime-ports.json: ENOENT (cleaned by stale cleanup)
       .mockRejectedValue(new Error("ENOENT"));
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // bootout should have been called (for stale controller)
     expect(mockLaunchdManager.bootoutService).toHaveBeenCalled();
@@ -1067,11 +995,7 @@ describe("Launchd Startup Scenarios", () => {
   // Scenario 22: controllerReady promise resolves on cold start
   // -----------------------------------------------------------------------
   it("Scenario 22: controllerReady promise resolves when controller responds", async () => {
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     // controllerReady should be a promise that resolves (fetch mock returns 200)
     await expect(result.controllerReady).resolves.toEqual({ ok: true });
@@ -1092,11 +1016,7 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     // controllerReady should resolve immediately (already healthy)
     await expect(result.controllerReady).resolves.toEqual({ ok: true });
@@ -1114,11 +1034,7 @@ describe("Launchd Startup Scenarios", () => {
       .mockResolvedValueOnce("{{invalid json!!!") // stale session detection
       .mockResolvedValueOnce("{{invalid json!!!"); // recover phase
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     // Should fall back to cold start with default ports
     expect(result.isAttach).toBe(false);
@@ -1152,16 +1068,12 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
+    const result = await runBootstrap(
       makeBootstrapEnv({
         appVersion: "1.0.0",
         userDataPath: "/tmp/user-data",
         buildSource: "stable",
-      }) as never,
+      }),
     );
 
     expect(result.isAttach).toBe(false);
@@ -1187,11 +1099,7 @@ describe("Launchd Startup Scenarios", () => {
       mockRunningService({ NEXU_HOME: "/tmp/nexu-home", PORT: "50800" }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.isAttach).toBe(false);
     expect(mockLaunchdManager.bootoutAndWaitForExit).toHaveBeenCalled();
@@ -1306,17 +1214,13 @@ describe("Launchd Startup Scenarios", () => {
       },
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
+    const result = await runBootstrap(
       makeBootstrapEnv({
         isDev: false,
         appVersion: "1.0.0",
         userDataPath: "/tmp/user-data",
         buildSource: "stable",
-      }) as never,
+      }),
     );
 
     expect(result.isAttach).toBe(false);
@@ -1372,11 +1276,7 @@ describe("Launchd Startup Scenarios", () => {
       pid: 55555,
     });
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.effectivePorts.openclawPort).toBe(18791);
   });
@@ -1403,11 +1303,7 @@ describe("Launchd Startup Scenarios", () => {
       pid: 55555,
     });
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.effectivePorts.openclawPort).toBe(18789);
   });
@@ -1448,11 +1344,7 @@ describe("Launchd Startup Scenarios", () => {
       }
     });
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.effectivePorts.controllerPort).toBe(50801);
     expect(fsMock.writeFile).toHaveBeenCalledWith(
@@ -1460,7 +1352,7 @@ describe("Launchd Startup Scenarios", () => {
       expect.stringContaining('"controllerPort": 50801'),
       "utf8",
     );
-  }, 15000);
+  });
 
   // -----------------------------------------------------------------------
   // Scenario 31: controller port unreachable after start → retry on new port
@@ -1518,18 +1410,14 @@ describe("Launchd Startup Scenarios", () => {
       },
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(mockLaunchdManager.bootoutAndWaitForExit).toHaveBeenCalledWith(
       "io.nexu.controller.dev",
       5000,
     );
     expect(result.effectivePorts.controllerPort).toBe(50801);
-  }, 15000);
+  });
 
   // -----------------------------------------------------------------------
   // Scenario 32: retry success writes effectivePorts to runtime-ports metadata
@@ -1588,18 +1476,14 @@ describe("Launchd Startup Scenarios", () => {
       },
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     expect(fsMock.writeFile).toHaveBeenCalledWith(
       expect.stringContaining("runtime-ports.json.tmp"),
       expect.stringContaining('"controllerPort": 50801'),
       "utf8",
     );
-  }, 15000);
+  });
 
   // -----------------------------------------------------------------------
   // Scenario 33: retry failure throws explicit recovery error
@@ -1654,16 +1538,10 @@ describe("Launchd Startup Scenarios", () => {
       },
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await expect(
-      bootstrapWithLaunchd(makeBootstrapEnv() as never),
-    ).rejects.toThrow(
+    await expect(runBootstrap(makeBootstrapEnv())).rejects.toThrow(
       /Controller startup recovery failed .*originalPort=50800 .*retryPort=50801 .*finalProbeUrl=http:\/\/127\.0\.0\.1:50801\/api\/internal\/desktop\/ready .*runtimePortsValue=/,
     );
-  }, 15000);
+  });
 
   // -----------------------------------------------------------------------
   // Scenario 34: transient controller warm-up does not trigger recovery
@@ -1728,11 +1606,7 @@ describe("Launchd Startup Scenarios", () => {
       }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(result.effectivePorts.controllerPort).toBe(50800);
     expect(
@@ -1740,7 +1614,7 @@ describe("Launchd Startup Scenarios", () => {
         (call) => call[0] === "io.nexu.controller.dev",
       ),
     ).toBe(false);
-  }, 15000);
+  });
 
   // -----------------------------------------------------------------------
   // Scenario 35: HTTP 200 with ready=false is still not controller-ready
@@ -1801,11 +1675,7 @@ describe("Launchd Startup Scenarios", () => {
       }),
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    const result = await runBootstrap(makeBootstrapEnv());
 
     expect(readyAttempts).toBeGreaterThanOrEqual(3);
     expect(result.effectivePorts.controllerPort).toBe(50800);
@@ -1814,7 +1684,7 @@ describe("Launchd Startup Scenarios", () => {
         (call) => call[0] === "io.nexu.controller.dev",
       ),
     ).toBe(false);
-  }, 15000);
+  });
 
   // -----------------------------------------------------------------------
   // Scenario 36: retry port clamps at 65535 instead of probing 65536
@@ -1865,15 +1735,11 @@ describe("Launchd Startup Scenarios", () => {
       },
     );
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
+    const result = await runBootstrap(
       makeBootstrapEnv({
         controllerPort: 65535,
         recoveredPorts: null,
-      }) as never,
+      }),
     );
 
     expect(result.effectivePorts.controllerPort).toBe(65535);
@@ -1882,5 +1748,5 @@ describe("Launchd Startup Scenarios", () => {
         JSON.stringify(call).includes("65536"),
       ),
     ).toBe(false);
-  }, 15000);
+  });
 });

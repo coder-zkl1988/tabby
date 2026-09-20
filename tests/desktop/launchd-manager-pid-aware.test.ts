@@ -14,6 +14,7 @@
  * 9. bootoutAndWaitForExit: bootout fails, no PID → returns gracefully
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { onFakeClock } from "./fake-clock";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -98,7 +99,7 @@ describe("LaunchdManager PID-aware shutdown", () => {
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
     // Should resolve without needing SIGKILL
-    await mgr.waitForExit("io.nexu.controller", 5000);
+    await onFakeClock(() => mgr.waitForExit("io.nexu.controller", 5000));
     expect(callCount).toBeGreaterThanOrEqual(2);
   });
 
@@ -136,7 +137,7 @@ describe("LaunchdManager PID-aware shutdown", () => {
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
     // knownPid=99999 is dead → should return without SIGKILL
-    await mgr.waitForExit("io.nexu.controller", 2000, 99999);
+    await onFakeClock(() => mgr.waitForExit("io.nexu.controller", 2000, 99999));
 
     // process.kill(99999, 0) was called for existence check, not SIGKILL
     const sigkillCalls = killSpy.mock.calls.filter(
@@ -187,7 +188,7 @@ describe("LaunchdManager PID-aware shutdown", () => {
     );
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
-    await mgr.waitForExit("io.nexu.controller", 1500, 77777);
+    await onFakeClock(() => mgr.waitForExit("io.nexu.controller", 1500, 77777));
 
     // Should have sent SIGKILL to the alive process
     const sigkillCalls = killSpy.mock.calls.filter(
@@ -218,7 +219,7 @@ describe("LaunchdManager PID-aware shutdown", () => {
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
     // No knownPid → should return after 3 consecutive unknowns
-    await mgr.waitForExit("io.nexu.controller", 5000);
+    await onFakeClock(() => mgr.waitForExit("io.nexu.controller", 5000));
     // If we got here without timeout, the test passes
   });
 
@@ -245,7 +246,7 @@ describe("LaunchdManager PID-aware shutdown", () => {
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
     // knownPid=11111 — the SIGKILL should use this, not the launchctl PID
-    await mgr.waitForExit("io.nexu.controller", 800, 11111);
+    await onFakeClock(() => mgr.waitForExit("io.nexu.controller", 800, 11111));
 
     const sigkillCalls = killSpy.mock.calls.filter(
       (call) => call[1] === "SIGKILL",
@@ -277,7 +278,7 @@ describe("LaunchdManager PID-aware shutdown", () => {
     );
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
-    await mgr.waitForExit("io.nexu.controller", 800);
+    await onFakeClock(() => mgr.waitForExit("io.nexu.controller", 800));
 
     const sigkillCalls = killSpy.mock.calls.filter(
       (call) => call[1] === "SIGKILL",
@@ -341,7 +342,9 @@ describe("LaunchdManager PID-aware shutdown", () => {
     );
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
-    await mgr.bootoutAndWaitForExit("io.nexu.controller", 3000);
+    await onFakeClock(() =>
+      mgr.bootoutAndWaitForExit("io.nexu.controller", 3000),
+    );
 
     // Should have called launchctl print BEFORE bootout to get PID
     expect(printCallCount).toBeGreaterThanOrEqual(1);
@@ -382,7 +385,9 @@ describe("LaunchdManager PID-aware shutdown", () => {
     );
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
-    await mgr.bootoutAndWaitForExit("io.nexu.controller", 3000);
+    await onFakeClock(() =>
+      mgr.bootoutAndWaitForExit("io.nexu.controller", 3000),
+    );
 
     // Should have sent SIGKILL to the surviving process
     const sigkillCalls = killSpy.mock.calls.filter(
@@ -418,6 +423,8 @@ describe("LaunchdManager PID-aware shutdown", () => {
     const mgr = new LaunchdManager({ plistDir: "/tmp/test" });
 
     // Should NOT throw
-    await mgr.bootoutAndWaitForExit("io.nexu.controller", 2000);
+    await onFakeClock(() =>
+      mgr.bootoutAndWaitForExit("io.nexu.controller", 2000),
+    );
   });
 });

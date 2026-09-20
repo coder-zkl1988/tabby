@@ -21,6 +21,7 @@ import { useDesktopRewardsStatus } from "@/hooks/use-desktop-rewards";
 import {
   closePinnedPanel,
   forgetPinnedSession,
+  setActivePinnedSession,
   usePinnedPanel,
 } from "@/lib/a2ui/a2ui-pinned-panel-store";
 import {
@@ -731,9 +732,15 @@ function WorkspaceLayoutContent() {
   const navigate = useNavigate();
   const previousSessionPathRef = useRef<string | null>(null);
 
-  // The right workbench belongs to the session conversation — close both
-  // modes when leaving sessions, and close the browser when switching
-  // sessions so one conversation never displays another conversation's page.
+  // The right workbench belongs to the session conversation — close every mode
+  // when leaving sessions, and close the browser when switching sessions so
+  // one conversation never displays another conversation's page.
+  //
+  // This list must cover every contributor to `rightSidebarOpen` above. The
+  // pinned panel was added as a third mode and only ever cleared from the
+  // sessions page's `id` effect, which fires on session-to-session moves but
+  // not on unmount — so leaving for 设备 or 首页 left a conversation's pinned
+  // cards on screen (reported 2026-09-20).
   const isSessionRoute = location.pathname.startsWith("/workspace/sessions");
   useEffect(() => {
     const previousSessionPath = previousSessionPathRef.current;
@@ -742,6 +749,9 @@ function WorkspaceLayoutContent() {
     if (!isSessionRoute && rightSidebarOpen) {
       closeCanvasSidebar();
       closeBrowserPanelForRouting();
+      // Clears the active session rather than collapsing the panel: the pins
+      // themselves survive, so coming back to that conversation restores them.
+      setActivePinnedSession(null);
       return;
     }
 

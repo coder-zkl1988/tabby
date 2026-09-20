@@ -7,13 +7,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Every test here reaches its subject through a dynamic import, deliberately:
-// the module has to load after process.execPath/platform are redefined. The
-// first test to pull in a given module therefore pays for transforming its
-// whole graph, which on the Windows runner outran the 5s default and failed a
-// macOS-only assertion for reasons that had nothing to do with it
-// (2026-09-20). Per-test annotation would not hold: which test pays depends on
-// which module it touches first.
-vi.setConfig({ testTimeout: 20_000 });
+// the module has to load after process.execPath/platform are redefined, so the
+// first test to touch a given module pays to transform its whole graph. That
+// cost is why vitest.config.ts raises testTimeout/hookTimeout suite-wide; see
+// the reasoning there rather than adding a number back here.
 
 function normalizePath(value: string): string {
   return value.replace(/\\/g, "/");

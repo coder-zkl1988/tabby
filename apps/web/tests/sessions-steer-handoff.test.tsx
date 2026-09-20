@@ -10,6 +10,12 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getPinnedPanelState,
+  pinSurface,
+  resetPinnedPanelForTests,
+  setActivePinnedSession,
+} from "../src/lib/a2ui/a2ui-pinned-panel-store";
 import { A2UISidebarProvider } from "../src/lib/a2ui/a2ui-sidebar-context";
 import {
   getBrowserPanelState,
@@ -233,6 +239,7 @@ describe("SessionsPage steer handoff (integration)", () => {
     postApiV1ChatSteer.mockReset();
     toastInfo.mockReset();
     resetBrowserPanelForTests();
+    resetPinnedPanelForTests();
     __resetCanvasForTests();
   });
 
@@ -446,5 +453,59 @@ describe("SessionsPage steer handoff (integration)", () => {
         container.querySelector('[data-session-operations="true"]'),
       ).toBeNull(),
     );
+  });
+
+  it("reopens a collapsed pinned panel from the header after Canvas closes", async () => {
+    pinSurface("sess-steer", {
+      surfaceId: "planner",
+      title: "Planner",
+      messages: [],
+      onAction: vi.fn(),
+      pinKey: null,
+    });
+    setActivePinnedSession("sess-steer");
+
+    const { container } = renderSession();
+    const canvasToggle = await screen.findByRole("button", {
+      name: "sessions.chat.canvas",
+    });
+    const pinnedToggle = await screen.findByRole("button", {
+      name: "sessions.chat.pinnedPanelTitle",
+    });
+
+    expect(pinnedToggle.getAttribute("aria-pressed")).toBe("true");
+
+    // Canvas takes ownership of the shared workbench and collapses the pin.
+    fireEvent.click(canvasToggle);
+    await waitFor(() => expect(getPinnedPanelState().isOpen).toBe(false));
+    expect(canvasToggle.getAttribute("aria-pressed")).toBe("true");
+
+    // This models the canvas panel's header X. The pin remains in the session
+    // store and its header icon stays available for a later reopen.
+    act(() => setPanelOpen(false));
+    await waitFor(() =>
+      expect(canvasToggle.getAttribute("aria-pressed")).toBe("false"),
+    );
+    expect(pinnedToggle.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(pinnedToggle);
+    await waitFor(() => expect(getPinnedPanelState().isOpen).toBe(true));
+    expect(pinnedToggle.getAttribute("aria-pressed")).toBe("true");
+
+    // A browser opened by another surface must not make the pin look selected;
+    // clicking the icon still hands the shared workbench back to pins.
+    act(() => openBrowserPanel("agent:bot-1:main"));
+    await waitFor(() =>
+      expect(pinnedToggle.getAttribute("aria-pressed")).toBe("false"),
+    );
+    fireEvent.click(pinnedToggle);
+    await waitFor(() => {
+      expect(getBrowserPanelState().isOpen).toBe(false);
+      expect(getPinnedPanelState().isOpen).toBe(true);
+    });
+    expect(pinnedToggle.getAttribute("aria-pressed")).toBe("true");
+    expect(
+      container.querySelector('[data-session-pinned-toggle="true"]'),
+    ).not.toBeNull();
   });
 });

@@ -14,6 +14,7 @@ import type { A2UIMessage } from "@/lib/a2ui";
 import { surfacePinKey } from "@/lib/a2ui/a2ui-pin-store";
 import {
   closePinnedPanel,
+  openPinnedPanel,
   pinSurface,
   setActivePinnedSession,
   usePinnedPanel,
@@ -111,6 +112,7 @@ import {
   MessageCircleQuestion,
   MessageSquare,
   PanelRight,
+  Pin,
   Presentation,
   RotateCcw,
   Shapes,
@@ -1430,7 +1432,8 @@ export function SessionsPage() {
   const queryClient = useQueryClient();
   const { openWith } = useA2UISidebar();
   const browserPanel = useBrowserPanel();
-  const { isOpen: pinnedPanelOpen } = usePinnedPanel();
+  const { isOpen: pinnedPanelOpen, surfaces: pinnedSurfaces } =
+    usePinnedPanel();
   const [operationsOpen, setOperationsOpen] = useState(false);
 
   useEffect(() => {
@@ -2966,6 +2969,7 @@ export function SessionsPage() {
 
   const browserSelected =
     browserPanel.isOpen && browserPanel.sessionKey === session?.sessionKey;
+  const pinnedSelected = !browserPanel.isOpen && pinnedPanelOpen;
   const canvasSelected =
     !browserPanel.isOpen && !pinnedPanelOpen && canvasPanelOpen;
   const browserHiddenWithContent =
@@ -3270,6 +3274,36 @@ export function SessionsPage() {
                 />
               )}
             </button>
+            {pinnedSurfaces.length > 0 && (
+              <button
+                type="button"
+                data-session-pinned-toggle="true"
+                aria-pressed={pinnedSelected}
+                aria-label={t("sessions.chat.pinnedPanelTitle", {
+                  defaultValue: "固定侧边栏",
+                })}
+                title={t("sessions.chat.pinnedPanelTitle", {
+                  defaultValue: "固定侧边栏",
+                })}
+                onClick={() => {
+                  if (pinnedSelected) {
+                    closePinnedPanel();
+                    return;
+                  }
+                  setOperationsOpen(false);
+                  closeBrowserPanel();
+                  setPanelOpen(false);
+                  openPinnedPanel();
+                }}
+                className={cn(
+                  "rounded-lg p-2 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary",
+                  pinnedSelected &&
+                    "bg-surface-2 text-text-primary shadow-sm ring-1 ring-border",
+                )}
+              >
+                <Pin size={18} />
+              </button>
+            )}
             <button
               type="button"
               data-session-operations-toggle="true"
