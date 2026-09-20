@@ -336,6 +336,17 @@ export interface XhsOpsProfileApplyTaskInput {
 export const PROFILE_JSON_MARKER = "PROFILE_JSON:";
 
 /**
+ * 「我」 remembers where it was last scrolled to. Walk back into it after a
+ * previous task left the phone in the note list and the header is collapsed:
+ * the profile block folds into the title bar as a bare avatar, and 昵称、
+ * 关注/粉丝 and 编辑主页 are all off screen. Agents read that as "wrong page"
+ * and go navigating instead of scrolling back up, so every task that has to
+ * reach 编辑主页 spells out how to unfold it (reported 2026-09-20).
+ */
+export const XHS_ME_TAB_UNFOLD_HINT =
+  '「我」页会保留上次的滚动位置：进入后正文可能已经停在笔记/收藏列表，个人信息折叠进顶部标题栏只剩一个小头像，看不到昵称、关注/粉丝和「编辑主页」。这不是走错页面，也不要退出重进——用 SCROLL direction:"up" 把页面滚回顶部（一次不够就连续几次），头像、昵称与「编辑主页」会重新展开；确认它们可见后再继续。';
+
+/**
  * 按 xhs profile 子技能的纪律组织：每次只改一个字段、保存后回「我」页核对；
  * 头像/背景从刚推送的相册图片里按文件名选；未列出的字段一律不碰。
  * 结束时最后一行 PROFILE_JSON 给桌面回读各字段 done/failed/skipped。
@@ -381,7 +392,7 @@ export function buildProfileApplyTask(
       // The date sheet is a custom-drawn wheel: uiautomator sees three empty
       // Views with no text, nothing scrollable and nothing clickable, so the
       // only way in is a coordinate drag read off the screenshot.
-      `${n++}) 生日：点「生日」→ 底部弹出「选择你的生日」滚轮抽屉。**滚轮上的年/月/日不是可点击控件，点它们没有任何作用，只能拖动**：滚轮区域横向等分为年、月、日三列，当前选中的值在滚轮区域的垂直中心（上下有两条分隔线）。拖动用「SLIDE」：point1 放在该列中心，point2 同列、上下相距约一行高度；向下拖数值变小、向上拖数值变大，每约一行高度前进一格。SLIDE 本身就是无惯性精确拖拽，滚动距离等于手指位移，不必也无法另外指定时长。滚轮对 SLIDE 完全没反应时可以改用「LONGPRESSANDDRAG」（本任务已放行）。**禁止使用「FLING」**——惯性会把滚轮甩过目标值。默认停在今天，所以年份通常要向下拖很多格。`,
+      `${n++}) 生日：点「生日」→ 底部弹出「选择你的生日」滚轮抽屉。**滚轮上的年/月/日不是可点击控件，点它们没有任何作用，只能拖动**：滚轮区域横向等分为年、月、日三列，当前选中的值在滚轮区域的垂直中心（上下有两条分隔线）。拖动用「SLIDE」：point1 放在该列中心，point2 同列、上下相距约一行高度；向下拖数值变小、向上拖数值变大，每约一行高度前进一格。SLIDE 本身就是无惯性精确拖拽，滚动距离等于手指位移，不必也无法另外指定时长。滚轮对 SLIDE 完全没反应时可以改用「LONGPRESSANDDRAG」（本任务已放行）。**禁止甩动式快滑**——惯性会把滚轮甩过目标值。默认停在今天，所以年份通常要向下拖很多格。`,
     );
     steps.push(
       `${n++}) 生日操作纪律：**一次最多拖 3 格就停下截图核对中心行的值**，据此计算还差几格；禁止快速甩动（会惯性滑过），禁止一次拖很长距离。按年→月→日的顺序逐列调到「${input.birthday.trim()}」，三列全部核对无误后再点抽屉右上角的「保存」；差一格也不得将就，调不到就记 failed。`,
@@ -389,7 +400,7 @@ export function buildProfileApplyTask(
   }
   if (input.region?.trim()) {
     steps.push(
-      `${n++}) 地区：点「地区」后第一级是 200+ 项的**全球国家/地区平铺长列表**，没有搜索框也没有 A-Z 索引，「中国」在列表**末端**（邻近项：泽西岛、智利、中国、中非共和国、赞比亚）。**必须用「FLING」而不是「SLIDE」**：SLIDE 是无惯性精确拖拽，一次只走一屏位移，这个列表要滑二十多次才到底，步数不够用（已发生过，60 步全花在这一步上）；FLING 抬指速度高，列表顺着惯性自己滑很远。point1 取列表区域底部、point2 取顶部（如「FLING point1:540,1900 point2:540,400」），连续 FLING 直到画面不再变化即为列表尽头，再在可见项里点「中国」。**这一步最多花 12 个动作**：到第 12 个还没到尽头就停下，记 failed 并在结果里写明滑到了哪个地区名，不要退出重进列表——反复重进同样会把整轮步数耗光。进入「中国」后再按页面层级选择与「${input.region.trim()}」完全一致的地区；存在同名或无法精确匹配就记 failed。`,
+      `${n++}) 地区：点「地区」后第一级是 200+ 项的**全球国家/地区平铺长列表**，没有搜索框也没有 A-Z 索引，「中国」在列表**末端**（邻近项：泽西岛、智利、中国、中非共和国、赞比亚）。**每次 SLIDE 都要跨满一屏**：point1 取列表区域底部、point2 取顶部（如「SLIDE point1:540,1900 point2:540,400」），连续滑动直到画面不再变化即为列表尽头，再在可见项里点「中国」。SLIDE 是无惯性精确拖拽，一次只走一屏位移，所以到尽头要滑二十多次，这是正常的：不要因为滑得慢就换别的动作，也不要退出重进列表——反复重进会把整轮步数耗光（已发生过，60 步全花在这一步上）。**这一步最多花 28 个动作**：到第 28 个还没到尽头就停下，记 failed 并在结果里写明滑到了哪个地区名。进入「中国」后再按页面层级选择与「${input.region.trim()}」完全一致的地区；存在同名或无法精确匹配就记 failed。`,
     );
   }
   const interestTags = (input.interestTags ?? [])
@@ -403,6 +414,7 @@ export function buildProfileApplyTask(
   return [
     `【小红书资料维护任务｜账号定位：${input.label}】`,
     `AWAKE 小红书 → 底部「我」→ 编辑主页，先只读核对“小红书号”与目标「${input.platformAccountId.trim()}」完全一致；不一致立即 failed，禁止修改。身份一致后按下面顺序逐项修改，**每次只改一个字段**，保存后回到「我」页核对再改下一项：`,
+    XHS_ME_TAB_UNFOLD_HINT,
     ...steps,
     // Partial photo access ("仅选择照片") leaves the in-app album showing
     // 「未找到图片文件」 — the pushed pictures are on disk and in MediaStore but
@@ -540,6 +552,7 @@ export function buildProfileReadbackTask(): string {
   return [
     "【小红书资料回读】本任务只读取，不修改、不保存、不登录、不退出、不切换账号，也不执行浏览互动。",
     "AWAKE 小红书 → 底部「我」→ 编辑资料，逐项读取当前已有内容：名字、简介、性别、生日、地区、兴趣标签。",
+    XHS_ME_TAB_UNFOLD_HINT,
     "字段为空或显示为占位提示（如「介绍一下自己」「选择生日」「编辑性别」）时，该字段返回空字符串，不要把占位文案当成内容。",
     "隐私：不得读取或回传小红书号、手机号、实名信息；不要进入任何需要验证的页面。",
     '未登录、停在登录页或找不到编辑资料页时，返回 status:"unavailable" 并结束，不要尝试登录。',
@@ -564,6 +577,7 @@ export function buildAccountIdentityTask(): string {
   return [
     "【小红书当前账号识别】本任务只读取并停留，不修改、不保存、不登录、不退出、不切换账号，也不执行任何浏览、点赞、收藏、关注、评论、发布或私信。",
     "AWAKE 小红书 → 底部「我」→ 编辑主页，停在能看到“小红书号”那一屏。",
+    XHS_ME_TAB_UNFOLD_HINT,
     // The id now travels, but only in the structured last line: the operator
     // wants the field auto-filled, and re-typing it off the screenshot was the
     // step people got wrong. It still stays out of the narrative trail.
@@ -585,6 +599,7 @@ export function buildProfileVerificationTask(
   return [
     "【小红书资料只读验收】本任务只读取并核对资料，不修改、保存、登录、退出、切换账号或执行浏览互动。",
     `AWAKE 小红书 → “我” → 编辑主页，先逐字核对“小红书号”与目标「${input.platformAccountId.trim()}」完全一致；不一致时 accountMatched=false 并结束。不得在过程或回执复述号码。`,
+    XHS_ME_TAB_UNFOLD_HINT,
     `逐项读取并核对目标：昵称「${input.nickname?.trim() ?? ""}」；简介「${input.bio?.trim() ?? ""}」；头像为刚应用的 ${input.avatarFilename ?? "目标图片"}；背景图为刚应用的 ${input.coverFilename ?? "目标图片"}；性别「${input.gender ?? ""}」；生日「${input.birthday?.trim() ?? ""}」；地区「${input.region?.trim() ?? ""}」；兴趣标签「${tags}」。`,
     "文字和选择项必须与目标精确一致；头像、背景图必须在编辑页和主页均显示为刚应用的目标图。无法进入字段、看不清、结果不确定均记 false，不得猜测 true。",
     `核对后 HOME 回桌面并 COMPLETE。return 只能是一行 ${PROFILE_VERIFICATION_JSON_MARKER}{"v":1,"status":"verified|failed","accountMatched":true|false,"fields":{"nickname":true|false,"bio":true|false,"avatar":true|false,"cover":true|false,"gender":true|false,"birthday":true|false,"region":true|false,"interestTags":true|false}}。只有账号匹配且八项全部核对一致时 status=verified；不得增加字段或附带资料原文。`,

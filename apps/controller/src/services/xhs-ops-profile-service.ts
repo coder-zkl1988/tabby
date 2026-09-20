@@ -27,6 +27,7 @@ import type {
 import {
   type DeviceControlService,
   DeviceControlTimeoutError,
+  dispatchRejectionReason,
 } from "./device-control-service.js";
 import {
   buildPreparationRequest,
@@ -106,6 +107,22 @@ type ProfilePreparationOutcome = {
   reason: string;
   cancellationUnconfirmed: boolean;
 };
+
+/** The card's receipt box is small; the controller log keeps the full text. */
+const MAX_APPLY_RESULT_ERROR_CHARS = 200;
+
+/**
+ * A dispatch tabby-control refused outright never reached the phone, so it is
+ * neither uncertain nor a lost result: say so, and hand the operator the
+ * reason instead of letting reconcile() bury it under the generic "no task
+ * result" fallback (which cost hours on 2026-09-20).
+ */
+function dispatchRejectedResult(reason: string): string {
+  return `任务未下发到手机，手机控制端拒绝了本次下发：${reason.slice(
+    0,
+    MAX_APPLY_RESULT_ERROR_CHARS,
+  )}`;
+}
 
 const MIME_BY_EXT: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -772,6 +789,12 @@ export class XhsOpsProfileService {
         verificationTaskId: verified ? verificationTaskId : null,
       });
     } catch (error) {
+      // operationUncertain is armed before a dispatch because a task the phone
+      // has taken must not be written off. A dispatch the control plane itself
+      // refused never got that far, so it is safe to settle here — and the
+      // reason is the only place the operator will ever see it.
+      const rejected = dispatchRejectionReason(error);
+      if (rejected) operationUncertain = false;
       if (
         !completed &&
         !operationUncertain &&
@@ -780,7 +803,9 @@ export class XhsOpsProfileService {
         try {
           await complete({
             applyStatus: "failed",
-            applyResult: "资料应用任务异常结束，请检查手机状态后重试",
+            applyResult: rejected
+              ? dispatchRejectedResult(rejected)
+              : "资料应用任务异常结束，请检查手机状态后重试",
             appliedAt: null,
           });
         } catch {
@@ -1055,11 +1080,17 @@ export class XhsOpsProfileService {
           buildPreparationVerificationRequest(XHS_PACKAGE, platformAccountId),
         ));
       }
-    } catch {
-      return {
-        reason: "安装、登录或目标账号核验执行失败，请检查手机后重试",
-        cancellationUnconfirmed: true,
-      };
+    } catch (error) {
+      const rejected = dispatchRejectionReason(error);
+      return rejected
+        ? {
+            reason: dispatchRejectedResult(rejected),
+            cancellationUnconfirmed: false,
+          }
+        : {
+            reason: "安装、登录或目标账号核验执行失败，请检查手机后重试",
+            cancellationUnconfirmed: true,
+          };
     }
     const preparation = interpretPreparationResult(result);
     if (result.needsInteraction) {

@@ -167,6 +167,39 @@ export class DeviceControlRpcError extends Error {
   }
 }
 
+/**
+ * Markers tabby-control raises from execute_task before the task goes on the
+ * wire: an unknown device, one already busy, a whitelist naming an action the
+ * phone never declared, or a WebSocket send that failed outright. All of them
+ * are thrown ahead of the send, and tabby-control leaves the device's own
+ * state alone for them, so the phone provably never saw the task.
+ *
+ * Deliberately an allowlist and not "any RPC error": TIMEOUT and NO_FIRST_STEP
+ * come back through the same channel and both mean the phone *did* take the
+ * task, so reading them as never-dispatched would write off work that may
+ * still be running.
+ */
+const DISPATCH_REJECTION_MARKERS = [
+  "UNKNOWN_PHONE_ACTION",
+  "DEVICE_NOT_FOUND",
+  "TASK_ALREADY_RUNNING",
+  "DEVICE_OFFLINE",
+];
+
+/**
+ * Why a task never reached the phone, or null when the error proves no such
+ * thing. Only a structured RPC error can qualify: a transport failure means
+ * the answer was lost, not that the dispatch was refused.
+ */
+export function dispatchRejectionReason(error: unknown): string | null {
+  if (!(error instanceof DeviceControlRpcError)) return null;
+  return DISPATCH_REJECTION_MARKERS.some((marker) =>
+    error.message.includes(marker),
+  )
+    ? error.message
+    : null;
+}
+
 export class DeviceControlService {
   constructor(
     private readonly configStore: NexuConfigStore,

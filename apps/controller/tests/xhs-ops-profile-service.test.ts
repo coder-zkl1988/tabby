@@ -8,6 +8,11 @@ import type {
   XhsOpsAccount,
 } from "@nexu/shared";
 import { afterAll, describe, expect, it } from "vitest";
+import { DeviceControlRpcError } from "../src/services/device-control-service.js";
+import {
+  buildPreparationRequest,
+  buildPreparationVerificationRequest,
+} from "../src/services/xhs-ops-preparation.js";
 import {
   XhsOpsProfileService,
   buildProfileTextPrompt,
@@ -17,7 +22,11 @@ import {
 } from "../src/services/xhs-ops-profile-service.js";
 import { XHS_TASK_POLICY } from "../src/services/xhs-ops-run-service.js";
 import {
+  XHS_ME_TAB_UNFOLD_HINT,
+  buildAccountIdentityTask,
   buildProfileApplyTask,
+  buildProfileReadbackTask,
+  buildProfileVerificationTask,
   parseProfileJson,
   parseProfileVerificationJson,
 } from "../src/services/xhs-ops-task-builder.js";
@@ -1275,6 +1284,128 @@ describe("XhsOpsProfileService.apply", () => {
     ).resolves.toMatchObject({ deviceId: null });
   });
 
+  it("records a refused dispatch on the account instead of leaving it to reconcile", async () => {
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({ status: "idle", lastSeen: Date.now() }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          throw new DeviceControlRpcError(
+            "INTERNAL_ERROR",
+            "UNKNOWN_PHONE_ACTION: FLING — this device would ignore it, leaving a narrower whitelist than intended.",
+          );
+        },
+      },
+    });
+
+    await expect(svc.apply(account.id)).rejects.toThrow("UNKNOWN_PHONE_ACTION");
+
+    // The operator's card is the only place this reason ever surfaces: before
+    // this, the operation sat running until reconcile() overwrote it with the
+    // generic "no task result" line and the real cause stayed in the log.
+    const settled = await store.getAccount(account.id);
+    expect(settled?.profileDraft.applyOperation?.status).toBe("completed");
+    expect(settled?.profileDraft.applyStatus).toBe("failed");
+    expect(settled?.profileDraft.applyResult).toContain("任务未下发到手机");
+    expect(settled?.profileDraft.applyResult).toContain("UNKNOWN_PHONE_ACTION");
+    expect(settled?.profileDraft.applyResult).not.toContain(
+      "未收到手机任务结果",
+    );
+    // Nothing was ever handed to the phone, so the binding is free right away
+    // rather than waiting for a sweep to prove the device idle.
+    await expect(
+      store.updateAccount(account.id, { deviceId: null }),
+    ).resolves.toMatchObject({ deviceId: null });
+  });
+
+  it("keeps a task the phone already accepted uncertain, however it failed", async () => {
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({ status: "idle", lastSeen: Date.now() }) as never,
+        pushMedia: async () => ({ results: [] }),
+        executeTask: async (_id, body) => {
+          if (!body.task.includes("PROFILE_JSON:")) {
+            return { result: resultForTask(body) };
+          }
+          // Same transport, same error class as a refused dispatch — but this
+          // one says the phone took the task, so it must not be settled here.
+          throw new DeviceControlRpcError(
+            "INTERNAL_ERROR",
+            "NO_FIRST_STEP: device dev-x accepted task t_1 but did not start step 1 within 60000ms",
+          );
+        },
+      },
+    });
+
+    await expect(svc.apply(account.id)).rejects.toThrow("NO_FIRST_STEP");
+    expect(
+      (await store.getAccount(account.id))?.profileDraft.applyOperation?.status,
+    ).toBe("running");
+    await expect(
+      store.updateAccount(account.id, { deviceId: null }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(svc.reconcile(account.id)).resolves.toMatchObject({
+      profileDraft: {
+        applyStatus: "failed",
+        applyOperation: { status: "completed" },
+      },
+    });
+  });
+
+  it("records a refused preparation dispatch, which never reaches the phone either", async () => {
+    const { account: created } = await seed();
+    const account = await prepareReadyAccount(created);
+    const svc = new XhsOpsProfileService({
+      store,
+      mediaRoot,
+      media: {
+        generateText: async () => ({ text: "" }),
+        generateImage: async () => ({ path: "", items: [] }),
+      },
+      deviceControl: {
+        getDevice: async () =>
+          ({ status: "idle", lastSeen: Date.now() }) as never,
+        pushMedia: async () => ({ results: [] }),
+        // The device went busy between the idle probe and the dispatch.
+        executeTask: async () => {
+          throw new DeviceControlRpcError(
+            "INTERNAL_ERROR",
+            "TASK_ALREADY_RUNNING: device dev-x is busy",
+          );
+        },
+      },
+    });
+
+    await expect(svc.apply(account.id)).rejects.toMatchObject({ status: 409 });
+    const settled = await store.getAccount(account.id);
+    expect(settled?.profileDraft.applyOperation?.status).toBe("completed");
+    expect(settled?.profileDraft.applyResult).toContain("TASK_ALREADY_RUNNING");
+    expect(settled?.profileDraft.applyResult).not.toContain(
+      "安装、登录或目标账号核验执行失败",
+    );
+  });
+
   it("reconciles an uncertain operation after a controller restart", async () => {
     const { account: created } = await seed();
     const account = await prepareReadyAccount(created);
@@ -1429,20 +1560,51 @@ describe("profile task builder", () => {
     // Flinging overshoots a wheel; stepping without checking compounds it.
     expect(t).toContain("一次最多拖 3 格");
     expect(t).toContain("禁止快速甩动");
-    expect(t).toContain("禁止使用「FLING」");
+    expect(t).toContain("禁止甩动式快滑");
   });
 
-  it("sends the region list a fling, which is the only gesture that can reach its end", () => {
+  it("tells every task that reaches 编辑主页 how to unfold a collapsed 我 page", () => {
+    // 「我」 keeps its scroll position, so a phone left in the note list opens
+    // with the profile folded into the title bar as a bare avatar — no 昵称,
+    // no 编辑主页. Without this the agent reads the note list as the wrong
+    // page and goes looking elsewhere instead of scrolling back up.
+    const input = { label: "A", platformAccountId: "target-xhs-id" };
+    const tasks = [
+      buildProfileApplyTask({ ...input, nickname: "n" }),
+      buildProfileReadbackTask(),
+      buildAccountIdentityTask(),
+      buildProfileVerificationTask(input),
+      buildPreparationRequest("com.xingin.xhs", "target-xhs-id").task,
+      buildPreparationVerificationRequest("com.xingin.xhs", "target-xhs-id")
+        .task,
+    ];
+    for (const task of tasks) expect(task).toContain(XHS_ME_TAB_UNFOLD_HINT);
+
+    // The hint asks for a scroll, so every one of those policies has to allow
+    // one — the read-only verification policy did not.
+    for (const policy of [
+      XHS_TASK_POLICY,
+      buildPreparationRequest("com.xingin.xhs").taskPolicy,
+      buildPreparationVerificationRequest("com.xingin.xhs").taskPolicy,
+    ]) {
+      expect(policy?.allowedActions).toContain("SCROLL");
+    }
+  });
+
+  it("walks the region list with full-screen slides, budgeted to actually arrive", () => {
     const t = buildProfileApplyTask({
       label: "A",
       platformAccountId: "target-xhs-id",
       region: "上海",
     });
-    expect(t).toContain("FLING point1:");
-    // A full-screen SLIDE moves exactly one screen, so the 200+ entry list
-    // needs twenty-odd of them and the run dies mid-list.
-    expect(t).toContain("必须用「FLING」而不是「SLIDE」");
-    expect(t).toContain("12 个动作");
+    // FLING is the gesture this list wants, but the fleet's phones do not
+    // report it, and naming an action they lack gets the whole dispatch
+    // rejected. Until a build declaring it ships, the step is a SLIDE walk —
+    // and its cap has to exceed the twenty-odd screens the list really is,
+    // or the step is arithmetically unable to arrive.
+    expect(t).toContain("SLIDE point1:");
+    expect(t).not.toContain("FLING");
+    expect(t).toContain("28 个动作");
   });
 
   it("never names an action the task policy would reject", () => {
