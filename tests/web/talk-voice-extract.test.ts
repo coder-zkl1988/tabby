@@ -37,6 +37,17 @@ describe("extractTalkAudio", () => {
     );
   });
 
+  // `delta` holds base64 audio on audio events and plain text on transcript
+  // events. Probing it blind sent sentences to `atob`, which throws on the
+  // first space and took the whole message handler down with it.
+  it("does not mistake a transcript delta's text for audio", () => {
+    const result = extractTalkAudio({
+      type: "response.audio_transcript.delta",
+      delta: "Hello there",
+    });
+    expect(result.audioBase64).toBe(undefined);
+  });
+
   it("marks a delta transcript as non-final so it is not committed", () => {
     const result = extractTalkAudio({
       type: "transcript.delta",

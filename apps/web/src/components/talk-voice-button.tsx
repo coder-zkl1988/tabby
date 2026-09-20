@@ -63,6 +63,11 @@ export function TalkVoiceButton({ sessionKey }: { sessionKey?: string }) {
         outputSampleRateHz: data.outputSampleRateHz,
       });
     } catch (error) {
+      // `start()` can fail after the microphone is already live (a rejected
+      // upgrade, a restarting controller). Dropping the reference without
+      // tearing down leaves the mic hot and the gateway session open, and leaks
+      // one AudioContext per retry until the browser refuses to make more.
+      await sessionRef.current?.stop().catch(() => {});
       sessionRef.current = null;
       setStatus("idle");
       toast.error(

@@ -22,11 +22,22 @@ import type { OpenClawGatewayService } from "./openclaw-gateway-service.js";
 
 const PATH_PREFIX = "/api/v1/talk/stream";
 
-function parseSessionId(url: string): string | null {
+/**
+ * "Not our path" and "our path, but unusable" need different answers: the first
+ * must fall through to the next proxy, the second must be rejected here because
+ * nobody downstream will claim it.
+ */
+function parseUpgradeTarget(url: string): {
+  owned: boolean;
+  sessionId: string | null;
+} {
   const [path, query] = url.split("?");
-  if (path !== PATH_PREFIX) return null;
+  if (path !== PATH_PREFIX) return { owned: false, sessionId: null };
   const sessionId = new URLSearchParams(query ?? "").get("sessionId");
-  return sessionId && sessionId.length > 0 ? sessionId : null;
+  return {
+    owned: true,
+    sessionId: sessionId && sessionId.length > 0 ? sessionId : null,
+  };
 }
 
 export class TalkVoiceProxy {
@@ -41,8 +52,18 @@ export class TalkVoiceProxy {
    * upgrade then succeeds), so the caller can stop offering it to others.
    */
   handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): boolean {
-    const sessionId = parseSessionId(req.url ?? "");
-    if (sessionId === null) return false;
+    const target = parseUpgradeTarget(req.url ?? "");
+    if (!target.owned) return false;
+
+    const { sessionId } = target;
+    if (sessionId === null) {
+      // Claiming the URL means owning its failure too. Returning false here
+      // would leave the socket half-open until the OS timed it out, because no
+      // other proxy matches this path either.
+      socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return true;
+    }
 
     this.wss.handleUpgrade(req, socket, head, (clientWs) => {
       this.bridge(clientWs, sessionId);
@@ -122,6 +143,15 @@ export class TalkVoiceProxy {
   }
 
   close(): void {
+    // On a `noServer` server `wss.close()` only stops accepting new upgrades —
+    // live sockets keep running, so their close handlers never fire and each
+    // Gateway talk session stays alive until its own TTL while the browser
+    // keeps pushing microphone audio at a disposed service. Terminate rather
+    // than close: a closing handshake can outlive the process shutdown, and
+    // `teardown` has to run.
+    for (const clientWs of this.wss.clients) {
+      clientWs.terminate();
+    }
     this.wss.close();
   }
 }

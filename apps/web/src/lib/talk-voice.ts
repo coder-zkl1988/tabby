@@ -49,7 +49,10 @@ function floatToPcm16(input: Float32Array): ArrayBuffer {
 // generic over their backing buffer, and `copyToChannel` refuses the default
 // `ArrayBufferLike` because that admits SharedArrayBuffer.
 function pcm16ToFloat(buffer: ArrayBuffer): Float32Array<ArrayBuffer> {
-  const view = new Int16Array(buffer);
+  // A chunk that decodes to an odd byte count makes the Int16Array constructor
+  // throw ("byte length ... should be a multiple of 2"); drop the stray byte.
+  const usable = buffer.byteLength - (buffer.byteLength % 2);
+  const view = new Int16Array(buffer, 0, usable / 2);
   const out = new Float32Array(view.length);
   for (let i = 0; i < view.length; i += 1) {
     out[i] = (view[i] ?? 0) / 0x8000;
@@ -80,7 +83,15 @@ export function extractTalkAudio(payload: unknown): {
   const event = (record.talkEvent ?? record) as Record<string, unknown>;
   const inner = (event.payload ?? event) as Record<string, unknown>;
 
-  const audioBase64 = [inner.audio, inner.delta, event.audio].find(
+  const type = typeof event.type === "string" ? event.type : "";
+  // `delta` carries base64 audio on audio events but plain *text* on transcript
+  // events. Probing it blind fed sentences to `atob`, which throws on the first
+  // space; `audio` is unambiguous, `delta` is only trusted otherwise.
+  const audioBase64 = (
+    /transcript|text/i.test(type)
+      ? [inner.audio, event.audio]
+      : [inner.audio, inner.delta, event.audio]
+  ).find(
     (value): value is string => typeof value === "string" && value.length > 0,
   );
   const turnId = [inner.turnId, event.turnId].find(
@@ -90,7 +101,6 @@ export function extractTalkAudio(payload: unknown): {
   const text = [inner.transcript, inner.text].find(
     (value): value is string => typeof value === "string" && value.length > 0,
   );
-  const type = typeof event.type === "string" ? event.type : "";
   const transcript =
     text === undefined
       ? undefined
@@ -129,7 +139,7 @@ export class TalkVoiceSession {
     this.context = context;
     await context.audioWorklet.addModule("/talk-capture-worklet.js");
 
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
         echoCancellation: true,
@@ -137,7 +147,15 @@ export class TalkVoiceSession {
         autoGainControl: true,
       },
     });
-    if (this.disposed) return;
+    if (this.disposed) {
+      // `stop()` ran while the permission prompt was up, so it saw no stream to
+      // release. Assigning this one now would leave the microphone hot for the
+      // life of the page with nothing left to turn it off.
+      for (const track of stream.getTracks()) track.stop();
+      await context.close().catch(() => {});
+      return;
+    }
+    this.stream = stream;
 
     const socket = new WebSocket(
       `${location.origin.replace(/^http/, "ws")}/api/v1/talk/stream?sessionId=${encodeURIComponent(init.sessionId)}`,
@@ -145,7 +163,10 @@ export class TalkVoiceSession {
     socket.binaryType = "arraybuffer";
     this.socket = socket;
     socket.onmessage = (event) => this.handleDownstream(event.data);
-    socket.onerror = () => this.fail("voice stream failed");
+    socket.onerror = () => {
+      // A socket we closed ourselves can still emit `error` on some browsers.
+      if (!this.disposed) this.fail("voice stream failed");
+    };
     socket.onclose = () => {
       if (!this.disposed) this.callbacks.onStatus?.("idle");
     };
@@ -187,7 +208,14 @@ export class TalkVoiceSession {
     if (transcript?.final) {
       this.callbacks.onTranscript?.(transcript.text, transcript.role);
     }
-    if (audioBase64) this.enqueue(decodeBase64(audioBase64));
+    if (audioBase64) {
+      try {
+        this.enqueue(decodeBase64(audioBase64));
+      } catch {
+        // Drop the frame. Letting the throw escape `onmessage` would mute the
+        // rest of the session over one malformed chunk.
+      }
+    }
   }
 
   private enqueue(pcm: ArrayBuffer): void {
@@ -242,11 +270,17 @@ export class TalkVoiceSession {
   async stop(): Promise<void> {
     this.disposed = true;
     this.interrupt();
-    if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type: "close" }));
-      this.socket.close();
-    }
+    const socket = this.socket;
     this.socket = null;
+    if (socket) {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "close" }));
+      }
+      // Closed unconditionally: a socket still in CONNECTING would otherwise be
+      // orphaned mid-handshake, and the controller would keep its talk session
+      // (and the provider billing behind it) alive with no owner left.
+      socket.close();
+    }
     this.worklet?.port.close();
     this.worklet?.disconnect();
     this.worklet = null;
