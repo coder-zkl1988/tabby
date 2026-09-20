@@ -6,6 +6,7 @@
  * - Edge cases: stale services, NEXU_HOME mismatch, port conflicts
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleOnFakeClock } from "./fake-clock";
 
 function normalizePath(value: string): string {
   return value.replace(/\\/g, "/");
@@ -186,6 +187,31 @@ function makeBootstrapEnv(
     controllerStartupValidationTimeoutMs: 500,
     ...overrides,
   };
+}
+
+/**
+ * Drive a bootstrap on a fake clock.
+ *
+ * bootstrapWithLaunchd waits on real timers to let the OS settle; see
+ * ./fake-clock for why the tests do not pay them. The clock is faked only
+ * around the call, so the dynamic import keeps real time.
+ *
+ * controllerReady is settled here too. bootstrapWithLaunchd hands it back still
+ * polling, the way the desktop shell receives it — on a real clock that poll
+ * outlives the test and its probes land on the *next* test's fetch stub.
+ */
+async function runBootstrap(env: Record<string, unknown>) {
+  const { bootstrapWithLaunchd } = await import(
+    "../../apps/desktop/main/services/launchd-bootstrap"
+  );
+  vi.useFakeTimers();
+  try {
+    const result = await settleOnFakeClock(bootstrapWithLaunchd(env as never));
+    await settleOnFakeClock(result.controllerReady);
+    return result;
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 const originalPlatform = process.platform;
@@ -420,12 +446,8 @@ describe("bootstrapWithLaunchd", () => {
   });
 
   it("installs and starts both services on fresh boot", async () => {
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
     const env = makeBootstrapEnv();
-    const result = await bootstrapWithLaunchd(env as never);
+    const result = await runBootstrap(env);
 
     // Both services should have been installed
     expect(mockLaunchdManager.installService).toHaveBeenCalledTimes(2);
@@ -466,11 +488,7 @@ describe("bootstrapWithLaunchd", () => {
       );
     });
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(makeBootstrapEnv() as never);
+    await runBootstrap(makeBootstrapEnv());
 
     // installService is always called so it can detect plist content changes
     expect(mockLaunchdManager.installService).toHaveBeenCalled();
@@ -484,16 +502,12 @@ describe("bootstrapWithLaunchd", () => {
       typeof vi.fn
     >;
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(
+    await runBootstrap(
       makeBootstrapEnv({
         langfusePublicKey: "pk_test",
         langfuseSecretKey: "sk_test",
         langfuseBaseUrl: "https://langfuse.example.com",
-      }) as never,
+      }),
     );
 
     expect(generatePlistMock).toHaveBeenCalledWith(
@@ -538,26 +552,14 @@ describe("bootstrapWithLaunchd", () => {
       env: { NEXU_HOME: "/wrong/home" },
     });
 
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    await bootstrapWithLaunchd(
-      makeBootstrapEnv({ nexuHome: "/correct/home" }) as never,
-    );
+    await runBootstrap(makeBootstrapEnv({ nexuHome: "/correct/home" }));
 
     // Should have tried to bootout stale services
     expect(mockLaunchdManager.bootoutService).toHaveBeenCalled();
   });
 
   it("uses prod labels when isDev is false", async () => {
-    const { bootstrapWithLaunchd } = await import(
-      "../../apps/desktop/main/services/launchd-bootstrap"
-    );
-
-    const result = await bootstrapWithLaunchd(
-      makeBootstrapEnv({ isDev: false }) as never,
-    );
+    const result = await runBootstrap(makeBootstrapEnv({ isDev: false }));
 
     expect(result.labels.controller).toBe("io.nexu.controller");
     expect(result.labels.openclaw).toBe("io.nexu.openclaw");

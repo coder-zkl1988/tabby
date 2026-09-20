@@ -6,6 +6,28 @@ export default defineConfig({
   plugins: [react()],
   test: {
     fileParallelism: false,
+    // Vitest defaults to 5s per test and 10s per hook. Both are too tight for
+    // this suite, for one measured reason — and it is not a slow assertion.
+    //
+    // Cold dynamic import: 21 of the 85 tests/desktop files reach their subject
+    // through `await import(...)` from inside a test or a hook, deliberately —
+    // the module has to load after process.execPath/platform are redefined.
+    // Whichever test touches a module first pays to transform its whole graph:
+    // ~200ms on a dev machine, but over 5s on the windows-latest runner, where
+    // that file also spent 14s in collect (2026-09-20, PR #23). It is transform
+    // work, so it scales with the runner. Three of those imports sit in
+    // beforeEach, which is why hookTimeout has to move with testTimeout.
+    //
+    // 20s is what that was observed to need on windows-latest. Suite-wide on
+    // purpose: the cause is spread across 21 files, and a per-file override only
+    // relocates the next argument about the number. Raise it only with a
+    // measurement.
+    //
+    // The suite's other former cost — 38 launchd tests idling 2.6s each on
+    // bootstrapWithLaunchd's real sleeps, 102s of the 122s of test time — is
+    // gone: they now drive a fake clock through tests/desktop/fake-clock.ts.
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
     include: ["tests/**/*.test.{ts,tsx}"],
     exclude: ["tests/api/**"],
     setupFiles: [
