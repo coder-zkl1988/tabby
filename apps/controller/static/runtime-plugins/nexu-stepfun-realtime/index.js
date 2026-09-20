@@ -14,27 +14,26 @@
 //
 // Docs: https://platform.stepfun.com/docs/zh/api-reference/realtime/chat
 
-import { createRequire } from "node:module";
-
 /**
- * `ws`, resolved from openclaw's own node_modules.
+ * OpenClaw's own provider WebSocket opener.
  *
  * Plugins are materialized into `<state>/extensions/<id>/`, which has no
- * node_modules of its own, so a bare `import ... from "ws"` fails with
- * "Cannot find package 'ws'" at load time (verified against a live gateway).
- * The global WebSocket cannot be used instead: StepFun authenticates with an
- * `Authorization` header, which the WHATWG constructor does not accept.
- * Anchoring a CJS resolver at an openclaw module reaches the runtime's own
- * copy. Resolved lazily so a load-time failure cannot take the plugin down.
+ * node_modules of its own, so a bare `import ... from "ws"` fails at load time
+ * with "Cannot find package 'ws'" (verified against a live gateway). The host's
+ * `plugin-sdk` subpaths *do* resolve from there, and this one does what a raw
+ * socket cannot: it applies the runtime's proxy dispatcher (desktop propagates
+ * `HTTP_PROXY`/`HTTPS_PROXY` into the OpenClaw child), the SSRF and TLS policy,
+ * and a connect timeout — without it a blackholed endpoint hangs `connect()`
+ * until the OS TCP timeout. Imported lazily so the unit tests can load this
+ * module with no openclaw runtime on the resolution path.
  */
-let cachedWebSocket = null;
-function resolveWebSocket() {
-  if (cachedWebSocket) return cachedWebSocket;
-  const anchor = import.meta.resolve("openclaw/plugin-sdk/core");
-  const nodeRequire = createRequire(anchor);
-  const mod = nodeRequire("ws");
-  cachedWebSocket = mod.WebSocket ?? mod.default?.WebSocket ?? mod;
-  return cachedWebSocket;
+let cachedSocketOpener = null;
+async function resolveSocketOpener() {
+  if (!cachedSocketOpener) {
+    const sdk = await import("openclaw/plugin-sdk/provider-http");
+    cachedSocketOpener = sdk.openProviderWebSocket;
+  }
+  return cachedSocketOpener;
 }
 
 const DEFAULT_URL = "wss://api.stepfun.com/v1/realtime";
@@ -42,20 +41,56 @@ const DEFAULT_MODEL = "stepaudio-3-realtime-preview";
 // StepFun documents pcm16 only; their console drives it through OpenAI's client,
 // which is 24 kHz mono. Keep these in sync with `capabilities` below.
 const SAMPLE_RATE_HZ = 24000;
+const CONNECT_TIMEOUT_MS = 15_000;
 
 /**
- * Build the `session.update` payload from plugin config.
+ * Translate OpenClaw's tool descriptors into StepFun's realtime shape.
+ *
+ * OpenClaw hands `{type, name, description, parameters}`; StepFun follows the
+ * OpenAI *realtime* flattening, where a function tool keeps those at the top
+ * level rather than nesting them under `function` the way chat completions do.
+ */
+export function toStepfunTools(tools) {
+  if (!Array.isArray(tools)) return [];
+  return tools
+    .filter(
+      (tool) => tool?.type === "function" && typeof tool?.name === "string",
+    )
+    .map((tool) => ({
+      type: "function",
+      name: tool.name,
+      description: typeof tool.description === "string" ? tool.description : "",
+      parameters: tool.parameters ?? { type: "object", properties: {} },
+    }));
+}
+
+/**
+ * Build the `session.update` payload.
+ *
+ * `req` is the host's bridge request: it carries the instructions and tools
+ * that implement the selected brain (`agent-consult` composes a tool the model
+ * must call to reach the Nexu agent). Dropping them leaves StepFun answering
+ * from its own weights, so host-supplied values win over local config.
  *
  * Split out from the socket so the mapping is unit-testable without a network.
  */
-export function buildSessionUpdate(config) {
+export function buildSessionUpdate(config, req) {
   const session = {
     modalities: ["text", "audio"],
     input_audio_format: "pcm16",
     output_audio_format: "pcm16",
   };
-  if (typeof config?.instructions === "string" && config.instructions) {
-    session.instructions = config.instructions;
+  const instructions =
+    typeof req?.instructions === "string" && req.instructions
+      ? req.instructions
+      : config?.instructions;
+  if (typeof instructions === "string" && instructions) {
+    session.instructions = instructions;
+  }
+  const tools = toStepfunTools(req?.tools);
+  if (tools.length > 0) {
+    session.tools = tools;
+    session.tool_choice = "auto";
   }
   if (typeof config?.voice === "string" && config.voice) {
     session.voice = config.voice;
@@ -78,6 +113,17 @@ export function buildSessionUpdate(config) {
   return { type: "session.update", session };
 }
 
+function parseToolArgs(raw) {
+  if (typeof raw !== "string" || raw.length === 0) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // `args` is `unknown` in the contract, so hand the blob over unparsed
+    // rather than dropping a tool call the model did ask for.
+    return raw;
+  }
+}
+
 /**
  * Map one inbound StepFun event onto OpenClaw bridge callbacks.
  *
@@ -97,19 +143,33 @@ export function handleServerEvent(event, callbacks) {
     }
     case "response.audio_transcript.done": {
       if (typeof event.transcript === "string" && event.transcript) {
-        callbacks.onTranscript?.(event.transcript);
+        callbacks.onTranscript?.("assistant", event.transcript, true);
         return "transcript";
       }
       return "ignored";
     }
     case "conversation.item.input_audio_transcription.completed": {
-      // What the *user* said. Reported separately so the session can show both
-      // sides; StepFun delivers it asynchronously from the response.
+      // What the *user* said. Both sides travel through the one `onTranscript`
+      // callback in the contract, told apart by role.
       if (typeof event.transcript === "string" && event.transcript) {
-        callbacks.onInputTranscript?.(event.transcript);
+        callbacks.onTranscript?.("user", event.transcript, true);
         return "input-transcript";
       }
       return "ignored";
+    }
+    case "response.function_call_arguments.done": {
+      // The model asked to call a host tool. This is the only path back to the
+      // Nexu agent under the `agent-consult` brain.
+      if (typeof event.call_id !== "string" || typeof event.name !== "string") {
+        return "ignored";
+      }
+      callbacks.onToolCall?.({
+        itemId: typeof event.item_id === "string" ? event.item_id : event.call_id,
+        callId: event.call_id,
+        name: event.name,
+        args: parseToolArgs(event.arguments),
+      });
+      return "tool-call";
     }
     case "input_audio_buffer.speech_started": {
       // Server VAD confirmed a human started talking over the assistant. This
@@ -158,7 +218,9 @@ function createStepfunBridge(req, pluginConfig) {
   let ready = false;
 
   const send = (payload) => {
-    if (socket?.readyState === socket?.OPEN) {
+    // `socket?.readyState === socket?.OPEN` would compare undefined to
+    // undefined once the socket is nulled, pass, and then dereference null.
+    if (socket !== null && socket.readyState === socket.OPEN) {
       socket.send(JSON.stringify(payload));
     }
   };
@@ -167,25 +229,48 @@ function createStepfunBridge(req, pluginConfig) {
     // StepFun answers a tool call with one result; there is no "working then
     // final" continuation like some providers expose.
     supportsToolResultContinuation: false,
+    // `response.create` is a separate frame, so a result can be handed back
+    // without asking StepFun to speak again.
+    supportsToolResultSuppression: true,
 
     connect: async () => {
       if (!config.apiKey) {
         throw new Error("StepFun realtime requires an API key");
       }
-      const WebSocketImpl = resolveWebSocket();
+      const openSocket = await resolveSocketOpener();
       const target = `${config.url}?model=${encodeURIComponent(config.model)}`;
-      socket = new WebSocketImpl(target, {
+      socket = await openSocket({
+        url: target,
+        baseUrl: config.url,
         headers: { Authorization: `Bearer ${config.apiKey}` },
+        timeoutMs: CONNECT_TIMEOUT_MS,
       });
 
+      // The opener returns a socket that is still connecting, and registers its
+      // own `close` listener to release the dispatcher agent — so detach only
+      // the three listeners below, never `removeAllListeners`.
       await new Promise((resolve, reject) => {
-        const failOpen = (error) => reject(error ?? new Error("socket closed"));
-        socket.once("open", resolve);
-        socket.once("error", failOpen);
-        socket.once("close", failOpen);
+        const detach = () => {
+          socket.off("open", onOpen);
+          socket.off("error", onFail);
+          socket.off("close", onFail);
+        };
+        const onOpen = () => {
+          detach();
+          resolve();
+        };
+        const onFail = (error) => {
+          detach();
+          reject(
+            error instanceof Error
+              ? error
+              : new Error("StepFun realtime socket closed before it opened"),
+          );
+        };
+        socket.on("open", onOpen);
+        socket.on("error", onFail);
+        socket.on("close", onFail);
       });
-      socket.removeAllListeners("error");
-      socket.removeAllListeners("close");
 
       socket.on("message", (raw) => {
         let event;
@@ -196,14 +281,21 @@ function createStepfunBridge(req, pluginConfig) {
         }
         if (event?.type === "session.created" && !ready) {
           ready = true;
-          send(buildSessionUpdate(config));
+          send(buildSessionUpdate(config, req));
+          // The relay gates its own readiness on this callback. Without it no
+          // `session.ready` is broadcast, provider errors are attributed to the
+          // connect phase, and every normal hang-up reports "closed before the
+          // session became ready" after a conversation that worked.
+          req.onReady?.();
         }
         handleServerEvent(event, req);
       });
       socket.on("error", (error) => req.onError?.(error));
-      socket.on("close", () => {
+      socket.on("close", (code) => {
         ready = false;
-        req.onClose?.();
+        // 1000/1005 are the normal-closure codes; anything else — including the
+        // 1006 a timeout abort produces — did not finish cleanly.
+        req.onClose?.(code === 1000 || code === 1005 ? "completed" : "error");
       });
     },
 
@@ -222,16 +314,20 @@ function createStepfunBridge(req, pluginConfig) {
       send({ type: "response.cancel" });
     },
 
-    submitToolResult: (toolCallId, result) => {
+    submitToolResult: (callId, result, options) => {
       send({
         type: "conversation.item.create",
         item: {
           type: "function_call_output",
-          call_id: toolCallId,
+          call_id: callId,
           output: typeof result === "string" ? result : JSON.stringify(result),
         },
       });
-      send({ type: "response.create" });
+      // The host suppresses the follow-up when another channel already spoke
+      // the answer; asking for a response anyway would answer twice.
+      if (!options?.suppressResponse) {
+        send({ type: "response.create" });
+      }
     },
 
     acknowledgeMark: () => {},
