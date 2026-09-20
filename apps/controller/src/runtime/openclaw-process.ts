@@ -23,6 +23,21 @@ const RESTART_WINDOW_MS = 120_000;
 // EX_CONFIG from sysexits.h. OpenClaw >=2026.7.1 exits with this on
 // configuration errors; supervisors must not auto-restart (restart storm).
 const EXIT_CONFIG_ERROR = 78;
+
+/**
+ * OpenClaw >=2026.9 gates gateway startup on an offline migration of each
+ * agent's SQLite store: a database written by an older runtime reports schema
+ * version 0, and the gateway refuses to start until `doctor --fix` has
+ * migrated its persisted media. It exits EX_CONFIG, which is otherwise the
+ * "a human must edit openclaw.json" signal, so the two have to be told apart
+ * by what the runtime printed. The desktop has no operator to run the command,
+ * so the controller runs it.
+ */
+const MAINTENANCE_REQUIRED_MARKERS = [
+  "gateway.maintenance_required",
+  "requires offline media migration",
+  "openclaw doctor --fix",
+];
 // OpenClaw full-process restarts can take tens of seconds before the successor
 // starts listening again (observed ~20s during first-time Feishu enablement).
 // Keep a generous grace window so the outer supervisor does not spawn a second
@@ -46,6 +61,8 @@ export class OpenClawProcessManager {
   private controlledRestartSuccessorPid: number | null = null;
   private eventListeners = new Set<(event: OpenClawRuntimeEvent) => void>();
   private vlmCredentialRepush: (() => Promise<void>) | null = null;
+  private maintenanceRequired = false;
+  private maintenanceRepairAttempted = false;
 
   constructor(private readonly env: ControllerEnv) {}
 
@@ -130,6 +147,7 @@ export class OpenClawProcessManager {
     }
     this.controlledRestartExpected = false;
     this.controlledRestartSuccessorPid = null;
+    this.maintenanceRequired = false;
 
     this.killOrphanedOpenClawProcesses();
 
@@ -191,6 +209,9 @@ export class OpenClawProcessManager {
 
     if (child.stderr) {
       createInterface({ input: child.stderr }).on("line", (line) => {
+        if (MAINTENANCE_REQUIRED_MARKERS.some((m) => line.includes(m))) {
+          this.maintenanceRequired = true;
+        }
         logger.warn({ stream: "stderr", source: "openclaw" }, line);
       });
     }
@@ -219,6 +240,15 @@ export class OpenClawProcessManager {
         // configuration errors (including the crash-loop safe-mode path).
         // Restarting cannot fix a config error — suppress auto-restart so we
         // don't enter a restart storm; surface the state for diagnostics.
+        if (
+          code === EXIT_CONFIG_ERROR &&
+          this.maintenanceRequired &&
+          !this.maintenanceRepairAttempted
+        ) {
+          this.maintenanceRepairAttempted = true;
+          void this.runOfflineMaintenance();
+          return;
+        }
         if (code === EXIT_CONFIG_ERROR) {
           logger.error(
             { code, event: "openclaw_exit_config_error" },
@@ -320,6 +350,82 @@ export class OpenClawProcessManager {
       });
       current.kill("SIGTERM");
     });
+  }
+
+  /**
+   * Run OpenClaw's own repair pass, then bring the gateway back.
+   *
+   * `--non-interactive` matters more than it reads: this child has no stdin, so
+   * a prompt would not hang, it would fail — and the migration would be skipped
+   * while the gateway kept refusing to start. Attempted once per controller
+   * lifetime; if the repair itself fails, the gateway stays down rather than
+   * entering a repair/restart loop.
+   */
+  private async runOfflineMaintenance(): Promise<void> {
+    const spec = getOpenClawCommandSpec(this.env);
+    logger.warn(
+      { event: "openclaw_offline_maintenance_start" },
+      "openclaw requires an offline migration before the gateway can start; running doctor --fix",
+    );
+
+    const exitCode = await new Promise<number | null>((resolve) => {
+      const doctor = spawn(
+        spec.command,
+        [...spec.argsPrefix, "doctor", "--fix", "--non-interactive"],
+        {
+          cwd: path.resolve(this.env.openclawStateDir),
+          env: {
+            ...process.env,
+            ...spec.extraEnv,
+            OPENCLAW_LOG_LEVEL: "info",
+            OPENCLAW_CONFIG_PATH: this.env.openclawConfigPath,
+            ...(process.platform === "darwin"
+              ? { OPENCLAW_IMAGE_BACKEND: "sips" }
+              : {}),
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+
+      if (doctor.stdout) {
+        createInterface({ input: doctor.stdout }).on("line", (line) => {
+          logger.info({ stream: "stdout", source: "openclaw-doctor" }, line);
+        });
+      }
+
+      if (doctor.stderr) {
+        createInterface({ input: doctor.stderr }).on("line", (line) => {
+          logger.warn({ stream: "stderr", source: "openclaw-doctor" }, line);
+        });
+      }
+
+      doctor.once("error", (error) => {
+        logger.error(
+          {
+            event: "openclaw_offline_maintenance_failed",
+            error: error.message,
+          },
+          "failed to spawn openclaw doctor",
+        );
+        resolve(null);
+      });
+
+      doctor.once("exit", (code) => resolve(code));
+    });
+
+    if (exitCode !== 0) {
+      logger.error(
+        { event: "openclaw_offline_maintenance_failed", exitCode },
+        "openclaw doctor --fix did not complete; the gateway stays down",
+      );
+      return;
+    }
+
+    logger.info(
+      { event: "openclaw_offline_maintenance_complete" },
+      "offline migration finished; restarting openclaw",
+    );
+    this.start();
   }
 
   private scheduleRestart(
