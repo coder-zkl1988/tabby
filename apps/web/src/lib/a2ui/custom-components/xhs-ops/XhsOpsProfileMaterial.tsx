@@ -40,7 +40,7 @@ import {
 /**
  * Step 3b (P2-1): 账号基础资料与素材。昵称/简介由服务端文本生成，头像/背景各
  * 生成 3 张备选，运营点选并补齐性别、生日、地区和兴趣标签。手机操作先核对
- * 目标账号，再应用八项资料并独立只读验收。上报 `xhs_ops_profile_applied`。
+ * 目标账号，再应用七项资料并独立只读验收。上报 `xhs_ops_profile_applied`。
  */
 export function XhsOpsProfileMaterial({
   comp,
@@ -57,7 +57,7 @@ export function XhsOpsProfileMaterial({
     <CardShell
       testId="profile-material"
       title="账号资料与素材"
-      subtitle="确认目标账号与八项资料；手机应用并完成只读生效核验后才能开始养号"
+      subtitle="确认目标账号与八项资料；手机应用七项并完成只读生效核验后才能开始养号"
     >
       <ErrorLine message={resolution.error} />
       {!projectId ? (
@@ -503,7 +503,7 @@ function ProfileMaterialRow({
         result: d.applyResult,
         agentInstruction:
           d.applyStatus === "applied" && d.verifiedAt
-            ? "目标账号身份与八项资料已在手机上完成独立只读核验，可以进入养号计划。"
+            ? "目标账号身份与七项资料已在手机上完成独立只读核验，可以进入养号计划。"
             : "资料应用或独立只读核验未完成（见 result）；只提示用户检查后重新执行，不得声称资料已生效或已解锁养号。",
       });
     }
@@ -624,12 +624,12 @@ function ProfileMaterialRow({
             onChange={(e) => editDraft({ region: e.target.value })}
           />
         </Field>
-        <Field label="兴趣标签">
+        <Field label="兴趣标签（仅人设，不写入手机）">
           <input
             className={inputClass}
             value={draft.interestTags.join("、")}
             disabled={disabled}
-            placeholder="多个标签用逗号分隔"
+            placeholder="多个标签用逗号分隔；编辑主页没有这个入口，不会应用到手机"
             onChange={(e) =>
               editDraft({
                 interestTags: e.target.value
@@ -776,7 +776,7 @@ function ProfileMaterialRow({
       ) : null}
       {ready ? (
         verified ? (
-          <HintLine>目标账号与八项资料已核验生效，可以进入养号计划。</HintLine>
+          <HintLine>目标账号与七项资料已核验生效，可以进入养号计划。</HintLine>
         ) : (
           <HintLine>
             资料已人工确认；完成手机应用与独立只读核验后才能进入养号。

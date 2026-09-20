@@ -147,7 +147,7 @@ function applyResult(): TaskResult {
     taskId: "profile-apply",
     success: true,
     message:
-      'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"done","cover":"done","gender":"done","birthday":"done","region":"done","interestTags":"done","note":"ok"}',
+      'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"done","cover":"done","gender":"done","birthday":"done","region":"done","note":"ok"}',
   };
 }
 
@@ -156,7 +156,7 @@ function verificationResult(overrides: Partial<TaskResult> = {}): TaskResult {
     taskId: "profile-verification",
     success: true,
     message:
-      'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true,"interestTags":true}}',
+      'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true}}',
     finalScreenshot: "verified-screen.png",
     ...overrides,
   };
@@ -497,7 +497,6 @@ describe("XhsOpsProfileService.generate", () => {
         gender: "男",
         birthday: "1998-03-02",
         region: "上海",
-        interestTags: ["羽毛球", "约球"],
         avatarPath: "/media/outbound/a/tabby-image/pick.png",
         coverPath: null,
       } as never,
@@ -507,8 +506,6 @@ describe("XhsOpsProfileService.generate", () => {
         gender: "男",
         birthday: "",
         region: "上海",
-        // Same set, different order — not a change.
-        interestTags: ["约球", "羽毛球"],
       },
     );
     const byField = Object.fromEntries(rows.map((r) => [r.field, r]));
@@ -519,7 +516,8 @@ describe("XhsOpsProfileService.generate", () => {
     // Identical -> nothing to do.
     expect(byField.gender?.differs).toBe(false);
     expect(byField.region?.differs).toBe(false);
-    expect(byField.interestTags?.differs).toBe(false);
+    // 兴趣标签 is persona-only now: never pushed, so never diffed.
+    expect(byField.interestTags).toBeUndefined();
     // Images cannot be compared; a selected one still counts as a write.
     expect(byField.avatar).toMatchObject({ comparable: false, differs: true });
     expect(byField.cover).toMatchObject({ comparable: false, differs: false });
@@ -541,7 +539,7 @@ describe("XhsOpsProfileService.generate", () => {
               success: true,
               finalScreenshot: "/var/shots/edit.png",
               message:
-                'PROFILE_READBACK_JSON:{"v":1,"status":"read","nickname":"云朵漫游簿","bio":"","gender":"","birthday":"","region":"","interestTags":[]}',
+                'PROFILE_READBACK_JSON:{"v":1,"status":"read","nickname":"云朵漫游簿","bio":"","gender":"","birthday":"","region":""}',
             },
           };
         },
@@ -901,7 +899,7 @@ describe("XhsOpsProfileService.apply", () => {
     expect(updated.profileDraft.applyStatus).toBe("applied");
     expect(updated.profileDraft.appliedAt).toBe("2026-09-04T13:00:00.000Z");
     expect(updated.profileDraft.applyResult).toBe(
-      "八项资料与目标账号已完成只读核验",
+      "七项资料与目标账号已完成只读核验",
     );
     expect(updated.profileDraft.verifiedAccountId).toBe(
       account.platformAccountId,
@@ -1132,7 +1130,7 @@ describe("XhsOpsProfileService.apply", () => {
     await expect(svc.apply(account.id)).rejects.toMatchObject({ status: 409 }); // 设备忙
   });
 
-  it("lets a selection of only gender/birthday/region/interestTags pass the empty-selection guard", async () => {
+  it("lets a selection of only gender/birthday/region pass the empty-selection guard", async () => {
     const { account: created } = await seed();
     const account = await prepareReadyAccount(created);
     const svc = new XhsOpsProfileService({
@@ -1148,10 +1146,10 @@ describe("XhsOpsProfileService.apply", () => {
         executeTask: async (_id, body) => ({ result: resultForTask(body) }),
       },
     });
-    // 只勾后四个字段：守卫必须放行，随后撞到"设备忙"的 409，而不是 400
-    await expect(
-      svc.apply(account.id, ["region", "interestTags"]),
-    ).rejects.toMatchObject({ status: 409 });
+    // 只勾后几个字段：守卫必须放行，随后撞到"设备忙"的 409，而不是 400
+    await expect(svc.apply(account.id, ["region"])).rejects.toMatchObject({
+      status: 409,
+    });
     await expect(svc.apply(account.id, ["gender"])).rejects.toMatchObject({
       status: 409,
     });
@@ -1159,7 +1157,7 @@ describe("XhsOpsProfileService.apply", () => {
       status: 409,
     });
     // 「勾了但草稿为空」这条 400 分支在 ready 账号上不可达：store 本身就不允许
-    // region/interestTags 为空的账号进入 ready（见 xhsOpsProfileDraftMissingFields）。
+    // region 为空的账号进入 ready（见 xhsOpsProfileDraftMissingFields）。
   });
 
   it("rejects images outside the media root", async () => {
@@ -1669,7 +1667,6 @@ describe("profile task builder", () => {
       gender: "skipped",
       birthday: "skipped",
       region: "skipped",
-      interestTags: "skipped",
       note: "x",
     });
     expect(parseProfileJson("no marker")).toBeNull();
@@ -1692,12 +1689,12 @@ describe("profile task builder", () => {
     });
     expect(
       parseProfileVerificationJson(
-        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":false,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true,"interestTags":true}}',
+        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":false,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true}}',
       ),
     ).toBeNull();
     expect(
       parseProfileVerificationJson(
-        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true,"interestTags":true},"extra":"rejected"}',
+        'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true},"extra":"rejected"}',
       ),
     ).toBeNull();
     expect(

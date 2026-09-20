@@ -211,13 +211,6 @@ export function resolveBirthday(
 }
 
 /** Tag lists compare as sets — the phone's ordering is not meaningful. */
-function tagsEqual(a: readonly string[], b: readonly string[]): boolean {
-  const norm = (list: readonly string[]) =>
-    [...new Set(list.map((t) => t.trim()).filter(Boolean))].sort();
-  const left = norm(a);
-  const right = norm(b);
-  return left.length === right.length && left.every((t, i) => t === right[i]);
-}
 
 /**
  * Compare the phone's current profile against the draft, one field at a time.
@@ -234,7 +227,6 @@ export function diffProfileFields(
     gender: string;
     birthday: string;
     region: string;
-    interestTags: string[];
   },
 ): XhsOpsProfileFieldDiff[] {
   const text = (
@@ -267,19 +259,6 @@ export function diffProfileFields(
     text("gender", phone.gender, draft.gender),
     text("birthday", phone.birthday, draft.birthday),
     text("region", phone.region, draft.region),
-    {
-      field: "interestTags",
-      comparable: true,
-      phone: phone.interestTags
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .join("、"),
-      draft: draft.interestTags
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .join("、"),
-      differs: !tagsEqual(phone.interestTags, draft.interestTags),
-    },
   ];
 }
 
@@ -626,8 +605,6 @@ export class XhsOpsProfileService {
       const wantBirthday =
         picked("birthday") && draft.birthday.trim().length > 0;
       const wantRegion = picked("region") && draft.region.trim().length > 0;
-      const wantInterestTags =
-        picked("interestTags") && draft.interestTags.length > 0;
       if (
         !wantNickname &&
         !wantBio &&
@@ -635,8 +612,7 @@ export class XhsOpsProfileService {
         !wantCover &&
         !wantGender &&
         !wantBirthday &&
-        !wantRegion &&
-        !wantInterestTags
+        !wantRegion
       ) {
         throw new XhsOpsError(
           400,
@@ -713,7 +689,6 @@ export class XhsOpsProfileService {
         gender: (picked("gender") && draft.gender) || null,
         birthday: (picked("birthday") && draft.birthday) || null,
         region: (picked("region") && draft.region) || null,
-        interestTags: picked("interestTags") ? draft.interestTags : [],
       });
       const body: DeviceExecuteTaskBody = {
         task,
@@ -733,7 +708,6 @@ export class XhsOpsProfileService {
         wantGender,
         wantBirthday,
         wantRegion,
-        wantInterestTags,
       });
       if (outcome.status !== "applied") {
         return await complete({
@@ -762,7 +736,6 @@ export class XhsOpsProfileService {
             gender: draft.gender || null,
             birthday: draft.birthday || null,
             region: draft.region || null,
-            interestTags: draft.interestTags,
           }),
           maxSteps: XHS_PROFILE_VERIFY_MAX_STEPS,
           timeout: XHS_PROFILE_VERIFY_TIMEOUT_MS,
@@ -782,7 +755,7 @@ export class XhsOpsProfileService {
         appliedAt: this.nowIso(),
         applyStatus: verified ? "applied" : "partial",
         applyResult: verified
-          ? "八项资料与目标账号已完成只读核验"
+          ? "七项资料与目标账号已完成只读核验"
           : "资料应用任务已结束，但独立只读核验未通过，请人工检查后重试",
         verifiedAt: verified ? this.nowIso() : null,
         verifiedAccountId: verified ? account.platformAccountId : null,
@@ -1026,7 +999,6 @@ export class XhsOpsProfileService {
       wantGender: boolean;
       wantBirthday: boolean;
       wantRegion: boolean;
-      wantInterestTags: boolean;
     },
   ): { status: XhsOpsProfileApplyStatus; summary: string } {
     const parsed = parseProfileJson(result.message);
@@ -1044,7 +1016,6 @@ export class XhsOpsProfileService {
       ["wantGender", "gender"],
       ["wantBirthday", "birthday"],
       ["wantRegion", "region"],
-      ["wantInterestTags", "interestTags"],
     ];
     const outcomes = requested
       .filter(([w]) => want[w])
@@ -1056,7 +1027,7 @@ export class XhsOpsProfileService {
         : done > 0
           ? "partial"
           : "failed";
-    const summary = `昵称=${parsed.nickname} 简介=${parsed.bio} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region} 兴趣标签=${parsed.interestTags}`;
+    const summary = `昵称=${parsed.nickname} 简介=${parsed.bio} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region}`;
     return { status, summary };
   }
 

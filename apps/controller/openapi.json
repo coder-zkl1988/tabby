@@ -29394,8 +29394,7 @@
                               "cover",
                               "gender",
                               "birthday",
-                              "region",
-                              "interestTags"
+                              "region"
                             ]
                           },
                           "comparable": {
@@ -29540,12 +29539,11 @@
                         "cover",
                         "gender",
                         "birthday",
-                        "region",
-                        "interestTags"
+                        "region"
                       ]
                     },
                     "minItems": 1,
-                    "maxItems": 8
+                    "maxItems": 7
                   }
                 }
               }
