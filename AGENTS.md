@@ -54,7 +54,7 @@ pnpm typecheck                        # Typecheck all
 pnpm lint                             # Biome lint
 pnpm format                           # Biome format
 pnpm test                             # Vitest
-pnpm generate-types                   # OpenAPI spec → frontend SDK
+pnpm generate-types                   # Rebuild @nexu/shared, then OpenAPI spec → frontend SDK
 ```
 
 After API route/schema changes: `pnpm generate-types` then `pnpm typecheck`.
@@ -187,6 +187,7 @@ The desktop test suite includes real launchd integration tests that run on macOS
 - All API routes must use `createRoute()` + `app.openapi()` from `@hono/zod-openapi`. Never use plain `app.get()`/`app.post()` etc — those bypass OpenAPI spec generation and the SDK won't have corresponding functions.
 - All request bodies, path params, query params, and responses must have Zod schemas. Shared schemas go in `packages/shared/src/schemas/`, route-local param schemas (e.g. `z.object({ id: z.string() })`) can stay in the route file.
 - After adding or modifying API routes: run `pnpm generate-types` to regenerate `openapi.json` -> `sdk.gen.ts` -> `types.gen.ts`, then update frontend call sites to use the new SDK functions.
+- `generate-types` rebuilds `@nexu/shared` first, and must keep doing so. `packages/shared` exports its TypeScript source under `types` but its built `dist` under `import`, so `pnpm typecheck` reads source while the generators read `dist`. With a stale `dist` the generators emit a spec that silently drops whatever schema the source added — a merge that brings in someone else's schema plus a local regenerate is enough to delete their API surface with a green typecheck and no error anywhere. CI's `Generated API surface is up to date` step regenerates and fails on any diff.
 - Config generator output must match `specs/references/openclaw-config-schema.md`.
 - Do not add dependencies without explicit approval.
 - **`auto-install-peers=false`** (`.npmrc`). pnpm will not silently invent a package to satisfy a peer range, so any required peer must be declared explicitly by the workspace that needs it — that is why `apps/web` declares `@testing-library/dom` and `apps/desktop` declares `electron-builder-squirrel-windows`. If an install starts reporting `missing peer X`, add X to the right workspace rather than turning this setting back on. The one deliberate exception is `openclaw` itself, silenced via `pnpm.peerDependencyRules.ignoreMissing`: the bundled channel plugins peer-depend on it, but the real runtime is installed by slimclaw with npm (`packages/slimclaw/runtime-seed`), which sits outside this pnpm workspace on purpose. With auto-install on, pnpm resolved an unrelated stale `openclaw` from the registry just to fill that peer.
