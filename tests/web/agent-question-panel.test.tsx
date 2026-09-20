@@ -79,6 +79,48 @@ describe("AgentQuestionPanel", () => {
     expect(container.querySelector("[data-agent-question]")).toBeNull();
   });
 
+  // The local sessionKey is undefined until the session-meta query resolves.
+  // Treating that as a wildcard rendered another session's prompt here, and a
+  // click would answer it — which cannot be taken back.
+  it("hides a prompt owned by another session while its own key is unknown", async () => {
+    apiMocks.listQuestions.mockResolvedValue({
+      data: {
+        connected: true,
+        available: true,
+        questions: [questionRecord({ sessionKey: "session-b" })],
+      },
+    });
+    const { container } = renderPanel(undefined);
+    await waitFor(() => expect(apiMocks.listQuestions).toHaveBeenCalled());
+    expect(container.querySelector("[data-agent-question]")).toBeNull();
+  });
+
+  it("hides a prompt owned by a different session", async () => {
+    apiMocks.listQuestions.mockResolvedValue({
+      data: {
+        connected: true,
+        available: true,
+        questions: [questionRecord({ sessionKey: "session-b" })],
+      },
+    });
+    const { container } = renderPanel("session-a");
+    await waitFor(() => expect(apiMocks.listQuestions).toHaveBeenCalled());
+    expect(container.querySelector("[data-agent-question]")).toBeNull();
+  });
+
+  // A record with no sessionKey is gateway-wide and still belongs everywhere.
+  it("still shows a gateway-wide prompt that names no session", async () => {
+    apiMocks.listQuestions.mockResolvedValue({
+      data: {
+        connected: true,
+        available: true,
+        questions: [questionRecord({ sessionKey: undefined })],
+      },
+    });
+    renderPanel("session-a");
+    expect(await screen.findByText("Staging (Recommended)")).toBeTruthy();
+  });
+
   it("answers a single-select question with the chosen label", async () => {
     apiMocks.listQuestions.mockResolvedValue({
       data: { connected: true, available: true, questions: [questionRecord()] },

@@ -306,8 +306,14 @@ const runtimeQuestionsResponseSchema = z.object({
   questions: z.array(runtimeQuestionSchema),
 });
 
+const rawQuestionSchema = runtimeQuestionSchema.passthrough();
+// The envelope is validated, the records are not: each is parsed on its own
+// below so one record this schema does not model — a status a later OpenClaw
+// adds, say — cannot hide an actionable prompt sitting next to it. A hidden
+// prompt stalls the agent run for its full 900s timeout, which is the hang this
+// whole surface exists to prevent.
 const rawQuestionListSchema = z.object({
-  questions: z.array(runtimeQuestionSchema.passthrough()),
+  questions: z.array(z.unknown()),
 });
 
 const recordSchema = z.record(z.unknown());
@@ -1216,9 +1222,13 @@ export function registerRuntimeOperationsRoutes(
         }
         // Only pending records are actionable; resolved ones are kept by the
         // Gateway briefly so other surfaces can show the answer summary.
-        const questions = parsed.data.questions
-          .filter((question) => question.status === "pending")
-          .sort((left, right) => left.expiresAtMs - right.expiresAtMs);
+        const questions = parsed.data.questions.flatMap((record) => {
+          const question = rawQuestionSchema.safeParse(record);
+          return question.success && question.data.status === "pending"
+            ? [question.data]
+            : [];
+        });
+        questions.sort((left, right) => left.expiresAtMs - right.expiresAtMs);
         return c.json({ connected: true, available: true, questions }, 200);
       } catch {
         return c.json(

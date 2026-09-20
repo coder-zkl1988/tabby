@@ -65,14 +65,15 @@ export function AgentQuestionPanel({ sessionKey }: { sessionKey?: string }) {
   });
 
   // Only surface a prompt that belongs to this session. Records without a
-  // sessionKey are gateway-wide and shown everywhere.
+  // sessionKey are gateway-wide and shown everywhere; a record that names a
+  // session is ours only on an exact match. Treating an unloaded local
+  // sessionKey as a wildcard would render another session's prompt here and let
+  // the user answer it, which cannot be taken back.
   const active = useMemo<RuntimeQuestion | null>(() => {
     const records = (questionsQuery.data?.questions ?? []) as RuntimeQuestion[];
     const match = records.find(
       (record) =>
-        record.sessionKey === undefined ||
-        sessionKey === undefined ||
-        record.sessionKey === sessionKey,
+        record.sessionKey === undefined || record.sessionKey === sessionKey,
     );
     return match ?? null;
   }, [questionsQuery.data, sessionKey]);
