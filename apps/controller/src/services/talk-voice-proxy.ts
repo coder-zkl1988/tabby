@@ -118,7 +118,7 @@ export class TalkVoiceProxy {
         return;
       }
 
-      let control: { type?: string; turnId?: string };
+      let control: { type?: string; turnId?: string; markName?: string };
       try {
         control = JSON.parse(String(data)) as typeof control;
       } catch {
@@ -129,6 +129,18 @@ export class TalkVoiceProxy {
           .cancelTalkOutput({ sessionId, turnId: control.turnId })
           .catch(() => {
             // Cancelling a finished turn is a no-op, not an error.
+          });
+        return;
+      }
+      if (
+        control.type === "acknowledgeMark" &&
+        typeof control.markName === "string" &&
+        control.markName.length > 0
+      ) {
+        void this.gateway
+          .acknowledgeTalkPlayback({ sessionId, markName: control.markName })
+          .catch(() => {
+            // Playback may finish after the Gateway has closed the call.
           });
         return;
       }

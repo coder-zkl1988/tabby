@@ -10,6 +10,7 @@ import {
   validateInviteSchema,
 } from "@nexu/shared";
 import type { ControllerContainer } from "../app/container.js";
+import { resolveDefaultBotFromConfig } from "../lib/default-bot.js";
 import { logger } from "../lib/logger.js";
 import { proxyFetch } from "../lib/proxy-fetch.js";
 import type { ControllerBindings } from "../types.js";
@@ -234,15 +235,14 @@ export function registerMiscCompatRoutes(
       const requestedAgentId = resolveAgentIdFromHeader(
         c.req.header("x-openclaw-agent-id"),
       );
-      const agentId =
-        requestedAgentId ??
-        openclawConfig.agents.list.find((agent) => agent.default)?.id ??
-        openclawConfig.agents.list[0]?.id ??
-        "main";
-      const agent =
-        openclawConfig.agents.list.find((item) => item.id === agentId) ??
-        openclawConfig.agents.list.find((item) => item.default) ??
-        openclawConfig.agents.list[0];
+      const defaultAgentId = resolveDefaultBotFromConfig(
+        await container.configStore.getConfig(),
+      )?.id;
+      const agentId = requestedAgentId ?? defaultAgentId ?? "main";
+      const resolvedBotId = openclawConfig.agents.entries[agentId]
+        ? agentId
+        : (defaultAgentId ?? agentId);
+      const agent = openclawConfig.agents.entries[resolvedBotId];
       const rawModel =
         typeof agent?.model === "string"
           ? agent.model
@@ -263,7 +263,6 @@ export function registerMiscCompatRoutes(
       const compatSessionKey = sessionContext
         ? buildCompatSessionKey(sessionContext)
         : null;
-      const resolvedBotId = agent?.id ?? agentId;
       logger.info(
         {
           route: "compat.chatCompletions",

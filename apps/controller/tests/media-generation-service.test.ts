@@ -7,9 +7,93 @@ import {
   ImageGenerationFailedError,
   InvalidMediaReferenceError,
   MediaGenerationService,
+  extractLatestGatewayAssistantReply,
   extractMediaPath,
   extractMediaPaths,
 } from "../src/services/media-generation-service.js";
+
+describe("extractLatestGatewayAssistantReply", () => {
+  it("reads plain assistant text and ignores user or tool-result messages", () => {
+    expect(
+      extractLatestGatewayAssistantReply({
+        messages: [
+          { role: "assistant", content: " earlier response " },
+          { role: "user", content: "please generate" },
+          { role: "toolResult", content: "tool output" },
+          { role: "assistant", content: '  {"profile":"ready"}  ' },
+        ],
+      }),
+    ).toEqual({ status: "done", text: '{"profile":"ready"}' });
+  });
+
+  it("returns the latest assistant text and ignores non-text blocks", () => {
+    expect(
+      extractLatestGatewayAssistantReply({
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking", text: "internal reasoning" },
+              { type: "text", text: " /tmp/media/out.png " },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({ status: "done", text: "/tmp/media/out.png" });
+  });
+
+  it("does not treat assistant preamble before a tool call as the final result", () => {
+    expect(
+      extractLatestGatewayAssistantReply({
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "text", text: "I will generate it now." },
+              { type: "toolCall", name: "image_generate", arguments: {} },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({ status: "running", text: null });
+  });
+
+  it("keeps polling after a tool-only assistant message", () => {
+    expect(
+      extractLatestGatewayAssistantReply({
+        messages: [
+          { role: "assistant", content: [{ type: "text", text: "old" }] },
+          {
+            role: "assistant",
+            content: [{ type: "tool_use", name: "image_generate" }],
+          },
+        ],
+      }),
+    ).toEqual({ status: "running", text: null });
+  });
+
+  it("surfaces an assistant error as failed", () => {
+    expect(
+      extractLatestGatewayAssistantReply({
+        messages: [
+          {
+            role: "assistant",
+            stopReason: "error",
+            content: [{ type: "text", text: "provider failed" }],
+          },
+        ],
+      }),
+    ).toEqual({ status: "failed", text: null });
+  });
+
+  it("fails on error even when the provider returned no text", () => {
+    expect(
+      extractLatestGatewayAssistantReply({
+        messages: [{ role: "assistant", stopReason: "error", content: [] }],
+      }),
+    ).toEqual({ status: "failed", text: null });
+  });
+});
 
 describe("extractMediaPath", () => {
   it("pulls the first media file path out of a noisy reply", () => {
@@ -75,6 +159,7 @@ describe("extractMediaPaths", () => {
 describe("MediaGenerationService", () => {
   let tmpDir: string;
   let sendChat: ReturnType<typeof vi.fn>;
+  let readGatewayHistory: ReturnType<typeof vi.fn>;
   let readSessionEntry: ReturnType<typeof vi.fn>;
   let readAssistantReply: ReturnType<typeof vi.fn>;
 
@@ -83,6 +168,7 @@ describe("MediaGenerationService", () => {
       {
         pickUtilityBotId: async () => "bot-1",
         sendChat,
+        readGatewayHistory,
         readSessionEntry,
         readAssistantReply,
         openclawStateDir: tmpDir,
@@ -108,6 +194,7 @@ describe("MediaGenerationService", () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "media generation-"));
     sendChat = vi.fn(async () => ({ status: "started" }));
+    readGatewayHistory = vi.fn(async () => null);
     readSessionEntry = vi.fn(async () => ({
       status: "done",
       sessionFile: "/fake/session.jsonl",
@@ -182,6 +269,89 @@ describe("MediaGenerationService", () => {
     expect(tabbyMediaRunner.generateImage).not.toHaveBeenCalled();
     expect(sendChat).toHaveBeenCalledOnce();
   });
+
+  it("reads the completed utility lane from gateway history on OpenClaw 9.4", async () => {
+    const out = makeMediaFile("tool-image-generation/gateway.png");
+    readSessionEntry.mockResolvedValue(null);
+    readGatewayHistory.mockResolvedValue({
+      messages: [
+        {
+          role: "assistant",
+          content: [{ type: "tool_use", name: "image_generate" }],
+        },
+        {
+          role: "assistant",
+          content: [{ type: "text", text: ` ${out} ` }],
+        },
+      ],
+    });
+
+    const result = await buildService().generateImage({ prompt: "a cat" });
+
+    expect(result.path).toBe(out);
+    expect(readGatewayHistory).toHaveBeenCalledWith(
+      expect.stringContaining("subagent:imagegen"),
+      200,
+    );
+    expect(readAssistantReply).not.toHaveBeenCalled();
+  });
+
+  it("keeps polling gateway history after a tool-only turn", async () => {
+    const out = makeMediaFile("tool-image-generation/polled.png");
+    readSessionEntry.mockResolvedValue(null);
+    readGatewayHistory
+      .mockResolvedValueOnce({
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "tool_call", name: "image_generate" }],
+          },
+        ],
+      })
+      .mockResolvedValue({
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "tool_call", name: "image_generate" }],
+          },
+          { role: "toolResult", content: "ok" },
+          { role: "assistant", content: [{ type: "text", text: out }] },
+        ],
+      });
+
+    const result = await buildService().generateImage({ prompt: "a cat" });
+
+    expect(result.path).toBe(out);
+    expect(readGatewayHistory.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("fails promptly when gateway history reports an assistant error", async () => {
+    readSessionEntry.mockResolvedValue(null);
+    readGatewayHistory.mockResolvedValue({
+      messages: [
+        {
+          role: "assistant",
+          stopReason: "error",
+          content: [{ type: "text", text: "provider failed" }],
+        },
+      ],
+    });
+
+    await expect(
+      buildService().generateImage({ prompt: "a cat" }),
+    ).rejects.toThrow("generation session failed");
+  });
+
+  it("falls back to the legacy transcript when gateway history is unavailable", async () => {
+    readGatewayHistory.mockRejectedValue(new Error("method unavailable"));
+    readAssistantReply.mockResolvedValue("legacy result");
+
+    await expect(
+      buildService().generateText({ prompt: "summarize" }),
+    ).resolves.toEqual({ text: "legacy result" });
+    expect(readAssistantReply).toHaveBeenCalledWith("/fake/session.jsonl");
+  });
+
   it("returns the servable url for a file inside the media dir", async () => {
     const mediaFile = join(tmpDir, "media", "tool-image-generation", "a.png");
     rmSync(join(tmpDir, "media"), { recursive: true, force: true });

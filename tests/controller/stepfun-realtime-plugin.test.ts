@@ -133,6 +133,69 @@ describe("stepfun realtime plugin", () => {
   });
 
   describe("handleServerEvent", () => {
+    it("forwards response and item identities without including provider payloads", () => {
+      const onEvent = vi.fn();
+      handleServerEvent(
+        {
+          type: "response.audio.delta",
+          delta: "AAAA",
+          item_id: "item-1",
+          response_id: "response-1",
+        },
+        { onEvent },
+      );
+      expect(onEvent).toHaveBeenCalledExactlyOnceWith({
+        direction: "server",
+        type: "response.audio.delta",
+        itemId: "item-1",
+        responseId: "response-1",
+      });
+    });
+
+    it("reports a typed failed response before the legacy terminal event", () => {
+      const onResponseDone = vi.fn();
+      const onEvent = vi.fn();
+      handleServerEvent(
+        {
+          type: "response.done",
+          response: {
+            id: "response-1",
+            status: "failed",
+            status_details: {
+              error: {
+                code: "rate_limit_exceeded",
+                message: "provider detail",
+              },
+            },
+          },
+        },
+        { onResponseDone, onEvent },
+      );
+      expect(onResponseDone).toHaveBeenCalledWith({
+        responseId: "response-1",
+        status: "failed",
+        message: "StepFun realtime response did not complete",
+        error: { code: "rate_limit_exceeded" },
+      });
+      expect(onResponseDone.mock.invocationCallOrder[0]).toBeLessThan(
+        onEvent.mock.invocationCallOrder[0] ?? 0,
+      );
+    });
+
+    it.each(["completed", "cancelled", "incomplete"])(
+      "preserves the terminal response status %s",
+      (status) => {
+        const onResponseDone = vi.fn();
+        handleServerEvent(
+          { type: "response.done", response: { id: "response-1", status } },
+          { onResponseDone },
+        );
+        expect(onResponseDone).toHaveBeenCalledWith(
+          expect.objectContaining({ responseId: "response-1", status }),
+        );
+      },
+    );
+
     it("decodes base64 audio deltas into PCM buffers", () => {
       const onAudio = vi.fn();
       const pcm = Buffer.from([0x01, 0x02, 0x03, 0x04]);

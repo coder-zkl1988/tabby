@@ -479,6 +479,7 @@ export class DeviceControlService {
           "device.push_media",
           {
             deviceId,
+            album: body.album,
             filename: image.filename,
             mimeType: image.mimeType,
             dataBase64: image.dataBase64,

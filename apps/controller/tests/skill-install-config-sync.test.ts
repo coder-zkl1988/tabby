@@ -168,7 +168,7 @@ describe("skill install → config sync integration", () => {
       slugs,
     );
 
-    expect(compiled.agents.list[0].skills).toEqual(["taobao-native"]);
+    expect(compiled.agents.entries["bot-1"].skills).toEqual(["taobao-native"]);
   });
 
   it("empty ledger omits skills field (legacy upgrade path)", () => {
@@ -182,7 +182,7 @@ describe("skill install → config sync integration", () => {
       slugs,
     );
 
-    expect(compiled.agents.list[0]).not.toHaveProperty("skills");
+    expect(compiled.agents.entries["bot-1"]).not.toHaveProperty("skills");
   });
 
   it("uninstall removes skill from compiled agent config", () => {
@@ -200,7 +200,7 @@ describe("skill install → config sync integration", () => {
       slugs,
     );
 
-    expect(compiled.agents.list[0].skills).toEqual(["taobao-native"]);
+    expect(compiled.agents.entries["bot-1"].skills).toEqual(["taobao-native"]);
   });
 
   it("user-installed skills are included in compiled agent config", () => {
@@ -217,7 +217,7 @@ describe("skill install → config sync integration", () => {
       slugs,
     );
 
-    expect(compiled.agents.list[0].skills).toEqual([
+    expect(compiled.agents.entries["bot-1"].skills).toEqual([
       "obsidian",
       "playwright-skill",
     ]);
@@ -262,8 +262,8 @@ describe("skill install → config sync integration", () => {
       slugs,
     );
 
-    expect(compiled.agents.list).toHaveLength(2);
-    for (const agent of compiled.agents.list) {
+    expect(Object.keys(compiled.agents.entries)).toHaveLength(2);
+    for (const agent of Object.values(compiled.agents.entries)) {
       expect(agent.skills).toEqual(["calendar"]);
     }
   });

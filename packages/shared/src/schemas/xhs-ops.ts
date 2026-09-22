@@ -197,6 +197,330 @@ export const xhsOpsPersonaSchema = z.object({
   lifeStatus: text(),
 });
 
+/** First-level occupation categories exposed by the Xiaohongshu picker. */
+export const XHS_OCCUPATION_CATEGORIES = [
+  "时尚",
+  "美妆",
+  "潮流",
+  "影视娱乐",
+  "音乐",
+  "游戏",
+  "文化",
+  "教育",
+  "广告营销",
+  "咨询服务",
+  "科技数码",
+  "互联网",
+  "美食",
+  "情感",
+  "兴趣爱好",
+  "运动健身",
+  "生活服务",
+  "出行",
+  "交通运输",
+  "地产建筑",
+  "生产物流",
+  "农林牧渔",
+  "宠物",
+  "搞笑",
+  "家居家装",
+  "母婴",
+  "婚嫁",
+  "职能",
+  "AI创作者",
+  "技能服务",
+  "其他",
+] as const;
+
+/** Every first-level category and its second-level identities, enumerated from the phone picker. */
+export const XHS_OCCUPATION_GROUPS = [
+  {
+    category: "时尚",
+    options: [
+      "时尚博主",
+      "设计师",
+      "服装设计师",
+      "品牌创始人",
+      "品牌主理人",
+      "模特",
+      "造型师",
+      "时尚买手",
+      "时尚编辑",
+      "珠宝设计师",
+    ],
+  },
+  {
+    category: "美妆",
+    options: [
+      "美妆博主",
+      "美容师",
+      "美甲师",
+      "化妆师",
+      "发型师",
+      "护肤博主",
+      "纹身师",
+      "香水博主",
+    ],
+  },
+  {
+    category: "潮流",
+    options: [
+      "潮流博主",
+      "潮流买手",
+      "潮流音乐人",
+      "潮玩博主",
+      "潮玩设计师",
+      "潮鞋博主",
+    ],
+  },
+  {
+    category: "影视娱乐",
+    options: [
+      "漫画博主",
+      "动漫博主",
+      "coser",
+      "影视博主",
+      "娱乐博主",
+      "演员",
+      "导演",
+      "编剧",
+      "编导",
+      "舞者",
+      "舞蹈博主",
+      "灯光师",
+      "导播",
+      "影视后期",
+      "经纪人",
+      "艺人",
+      "音效师",
+      "虚拟偶像",
+      "相声演员",
+      "脱口秀演员",
+      "魔术师",
+      "体育明星",
+      "绘画博主",
+    ],
+  },
+  {
+    category: "音乐",
+    options: [
+      "音乐博主",
+      "乐评人",
+      "乐队",
+      "音乐人",
+      "歌手",
+      "演奏者",
+      "吉他手",
+      "贝斯手",
+      "鼓手",
+      "音乐指挥",
+      "调音师",
+      "合唱团",
+      "组合",
+    ],
+  },
+  {
+    category: "游戏",
+    options: [
+      "游戏博主",
+      "电竞教练",
+      "电竞选手",
+      "电竞主持人",
+      "电竞赛事解说",
+      "游戏策划",
+      "游戏制作人",
+    ],
+  },
+  {
+    category: "文化",
+    options: [
+      "文化博主",
+      "作家",
+      "撰稿人",
+      "漫画家",
+      "画家",
+      "艺术创作者",
+      "诗歌博主",
+      "雕塑家",
+      "戏曲演员",
+      "非遗传承人",
+    ],
+  },
+  {
+    category: "教育",
+    options: ["教育博主", "学者", "留学顾问", "职业顾问", "职场博主"],
+  },
+  {
+    category: "广告营销",
+    options: [
+      "市场营销",
+      "市场策划",
+      "市场拓展",
+      "市场调研",
+      "品牌公关",
+      "品牌策划",
+      "媒介投放",
+      "广告创意",
+      "会展策划",
+    ],
+  },
+  {
+    category: "咨询服务",
+    options: ["管理咨询", "战略咨询", "IT咨询", "猎头顾问"],
+  },
+  { category: "科技数码", options: ["数码博主", "摄影师", "摄影博主"] },
+  {
+    category: "互联网",
+    options: [
+      "互联网从业者",
+      "互联网运营",
+      "产品经理",
+      "交互设计师",
+      "前端开发工程师",
+      "后端开发工程师",
+      "数据分析师",
+      "测试开发工程师",
+      "用户研究员",
+      "程序员",
+      "算法工程师",
+      "软件工程师",
+      "项目经理",
+      "视觉设计师",
+      "硬件工程师",
+    ],
+  },
+  {
+    category: "美食",
+    options: [
+      "美食博主",
+      "料理博主",
+      "厨师",
+      "咖啡师",
+      "烘焙师",
+      "茶艺师",
+      "调酒师",
+      "面点师",
+      "餐饮店主",
+    ],
+  },
+  { category: "情感", options: ["情感博主", "心理博主"] },
+  {
+    category: "兴趣爱好",
+    options: [
+      "vlog博主",
+      "手工博主",
+      "手帐博主",
+      "插画师",
+      "模型博主",
+      "花艺师",
+      "鲜花博主",
+    ],
+  },
+  {
+    category: "运动健身",
+    options: [
+      "健身博主",
+      "运动博主",
+      "运动员",
+      "户外博主",
+      "户外运动教练",
+      "教练",
+      "裁判",
+    ],
+  },
+  { category: "生活服务", options: ["服务人员", "家政从业者", "导购", "保安"] },
+  {
+    category: "出行",
+    options: [
+      "旅行博主",
+      "探店博主",
+      "导游",
+      "民宿主理人",
+      "民宿博主",
+      "营地主理人",
+      "讲解员",
+      "酒店博主",
+      "露营博主",
+    ],
+  },
+  {
+    category: "交通运输",
+    options: [
+      "司机",
+      "汽车博主",
+      "汽车工程师",
+      "汽车改装师",
+      "汽车维修",
+      "列车车长",
+      "安检员",
+      "航天员",
+      "航空乘务员",
+      "船员",
+      "船长",
+      "飞机机长",
+      "飞行员",
+    ],
+  },
+  {
+    category: "地产建筑",
+    options: [
+      "建筑工人",
+      "建筑工程师",
+      "建筑设计师",
+      "城市规划师",
+      "工程造价师",
+      "建造师",
+      "房产评估师",
+      "景观设计师",
+      "物业人员",
+    ],
+  },
+  { category: "生产物流", options: ["物流从业者", "生产工人"] },
+  { category: "农林牧渔", options: ["饲养员"] },
+  { category: "宠物", options: ["宠物博主", "宠物美容师"] },
+  { category: "搞笑", options: ["搞笑博主"] },
+  { category: "家居家装", options: ["家居博主", "室内设计师"] },
+  { category: "母婴", options: ["母婴博主", "育儿博主"] },
+  { category: "婚嫁", options: ["司仪", "婚礼主持人", "婚礼策划师"] },
+  { category: "职能", options: ["HR", "行政", "采购", "销售", "客服"] },
+  { category: "AI创作者", options: ["AI虚拟人"] },
+  {
+    category: "技能服务",
+    options: [
+      "书法定制师",
+      "修图师",
+      "刺绣行家",
+      "剪辑师",
+      "化妆师",
+      "妆娘",
+      "平面设计师",
+      "形象设计师",
+      "手工培训师",
+      "手工艺人",
+      "拼豆行家",
+      "摄影培训师",
+      "摄影师",
+      "毛娘",
+      "画师",
+      "粘土行家",
+      "美甲师",
+      "自由模特",
+      "花艺师",
+      "设计师",
+      "造型师",
+      "钩织行家",
+      "陶艺行家",
+    ],
+  },
+  { category: "其他", options: ["翻译"] },
+] as const;
+
+/** Flattened compatibility list for callers that do not render grouped options. */
+export const XHS_OCCUPATION_OPTIONS = XHS_OCCUPATION_GROUPS.flatMap(
+  (group) => group.options,
+);
+export const XHS_OCCUPATION_IDENTITIES = XHS_OCCUPATION_OPTIONS;
+
 /** Compact persona tags are distinct from the larger, rotating interest pool. */
 export const xhsOpsPersonaTagsSchema = z.object({
   vertical: textList(),
@@ -243,6 +567,8 @@ export const xhsOpsProfileDraftSchema = z.object({
   nickname: text(),
   /** 星座+MBTI / 自我介绍 / 兴趣介绍 三段，≤100 字 */
   bio: text(),
+  /** Generated from the reviewed persona and optionally applied to the phone. */
+  occupation: text(),
   gender: z.enum(["", "男", "女", "不展示"]).default(""),
   /**
    * Exact date, and it must still be confirmed by the operator. Generation
@@ -392,6 +718,7 @@ export type XhsOpsAccountIdentity = z.infer<
 export const xhsOpsProfileFieldSchema = z.enum([
   "nickname",
   "bio",
+  "occupation",
   "avatar",
   "cover",
   "gender",
@@ -403,6 +730,7 @@ export type XhsOpsProfileField = z.infer<typeof xhsOpsProfileFieldSchema>;
 export const XHS_PROFILE_FIELD_LABEL: Record<XhsOpsProfileField, string> = {
   nickname: "名字",
   bio: "简介",
+  occupation: "职业",
   avatar: "头像",
   cover: "背景图",
   gender: "性别",
@@ -451,7 +779,7 @@ export type XhsOpsProfileReadback = z.infer<
 
 /** Apply body: omit `fields` to write every field the draft has filled in. */
 export const xhsOpsProfileApplyBodySchema = z.object({
-  fields: z.array(xhsOpsProfileFieldSchema).min(1).max(7).optional(),
+  fields: z.array(xhsOpsProfileFieldSchema).min(1).max(8).optional(),
 });
 
 export const xhsOpsProfileGenerateBodySchema = z.object({
@@ -465,6 +793,8 @@ export const xhsOpsProfileGenerateBodySchema = z.object({
 export const xhsOpsAccountSchema = z.object({
   id: z.string(),
   projectId: z.string(),
+  /** Whether this workflow creates a new account or optimizes an existing phone account. */
+  entryMode: z.enum(["new", "existing"]).default("new"),
   /** 账号定位名，如"北京亲子周末号" */
   label: z.string().min(1).max(40),
   /** 一句话内容方向与风格 */
@@ -578,12 +908,20 @@ export function xhsOpsAccountNurtureIssues(
   account: z.infer<typeof xhsOpsAccountSchema>,
   project: z.infer<typeof xhsOpsProjectSchema> | null,
 ): string[] {
-  const issues = xhsOpsPersonaIssues(account);
+  const existingAccount = account.entryMode === "existing";
+  const issues = existingAccount
+    ? [
+        ...(account.label.trim() ? [] : ["请补充账号定位名"]),
+        ...(account.positioning.trim() ? [] : ["请补充内容方向与风格"]),
+      ]
+    : xhsOpsPersonaIssues(account);
   if (!project?.profile?.confirmedAt) issues.unshift("请先确认目标用户画像");
-  if (!account.personaReviewedAt)
+  if (!existingAccount && !account.personaReviewedAt)
     issues.push("人设或目标画像已变化，请重新核对并确认人设");
   if (!xhsOpsProfileDraftReady(account.profileDraft))
-    issues.push("请先完成八项账号资料与素材并校验确认");
+    issues.push("请先完成九项账号资料与素材并校验确认");
+  if (existingAccount && !account.profileDraft.occupation.trim())
+    issues.push("请先生成或选择职业/身份");
   const draft = account.profileDraft;
   if (draft.applyOperation?.status === "running")
     issues.push("资料应用任务仍在执行或等待手机状态核验");

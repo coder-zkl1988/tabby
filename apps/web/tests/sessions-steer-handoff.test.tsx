@@ -8,7 +8,13 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigationType,
+} from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getPinnedPanelState,
@@ -102,6 +108,8 @@ vi.mock("@/lib/api/event-source", () => ({
 
 const postApiV1ChatLocal = vi.fn();
 const postApiV1ChatSteer = vi.fn();
+const messageBranch = vi.fn();
+const messageRollback = vi.fn();
 const toastInfo = vi.hoisted(() => vi.fn());
 
 vi.mock("sonner", () => ({
@@ -172,10 +180,37 @@ vi.mock("../lib/api/sdk.gen", () => ({
   postApiV1ChatIntent: vi.fn(async () => ({ data: undefined })),
   postApiV1ChatSideQuestion: vi.fn(async () => ({ data: undefined })),
   postApiV1SessionsByIdReset: vi.fn(async () => ({ data: undefined })),
+  postApiV1SessionsByIdMessagesByMessageIdBranch: (...args: unknown[]) =>
+    messageBranch(...args),
+  postApiV1SessionsByIdMessagesByMessageIdRollback: (...args: unknown[]) =>
+    messageRollback(...args),
   postApiV1TtsSpeak: vi.fn(async () => ({ data: undefined })),
 }));
 
-function renderSession() {
+function SessionLocationProbe() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  return (
+    <output data-testid="session-location">
+      {JSON.stringify({
+        pathname: location.pathname,
+        search: location.search,
+        state: location.state,
+        navigationType,
+      })}
+    </output>
+  );
+}
+
+function renderSession(
+  initialEntry:
+    | string
+    | {
+        pathname: string;
+        search?: string;
+        state?: Record<string, unknown>;
+      } = "/workspace/sessions/sess-steer",
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -215,7 +250,8 @@ function renderSession() {
   return render(
     <QueryClientProvider client={queryClient}>
       <A2UISidebarProvider>
-        <MemoryRouter initialEntries={["/workspace/sessions/sess-steer"]}>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <SessionLocationProbe />
           <Routes>
             <Route path="/workspace/sessions/:id" element={<SessionsPage />} />
           </Routes>
@@ -237,6 +273,8 @@ describe("SessionsPage steer handoff (integration)", () => {
     invokeDesktopHost.mockReset();
     postApiV1ChatLocal.mockReset();
     postApiV1ChatSteer.mockReset();
+    messageBranch.mockReset();
+    messageRollback.mockReset();
     toastInfo.mockReset();
     resetBrowserPanelForTests();
     resetPinnedPanelForTests();
@@ -246,6 +284,108 @@ describe("SessionsPage steer handoff (integration)", () => {
   afterEach(() => {
     cleanup();
   });
+
+  it("consumes a pending navigation handoff once and does not rearm a completed run after refresh", async () => {
+    const view = renderSession({
+      pathname: "/workspace/sessions/sess-steer",
+      search:
+        "?keep=filters&deskpetSessionKey=agent%3Abot-1%3Amain&deskpetRunId=pending-run&deskpetStartedAt=123",
+      state: {
+        deskpetPendingRunId: "pending-run",
+        deskpetPendingSessionKey: "agent:bot-1:main",
+        deskpetPendingReplyText: "Starting the reply",
+        unrelatedSelection: "preserve-me",
+      },
+    });
+
+    // The handoff still arms the fresh run before its final event arrives.
+    expect(
+      await screen.findByRole("button", { name: "Stop current task" }),
+    ).toBeTruthy();
+    await waitFor(() =>
+      expect(capturedStreamHandlers?.onFinal).toBeTypeOf("function"),
+    );
+    const consumed = JSON.parse(
+      screen.getByTestId("session-location").textContent ?? "null",
+    ) as {
+      pathname: string;
+      search: string;
+      state: Record<string, unknown>;
+      navigationType: string;
+    };
+    expect(consumed).toEqual({
+      pathname: "/workspace/sessions/sess-steer",
+      search: "?keep=filters",
+      state: { unrelatedSelection: "preserve-me" },
+      navigationType: "REPLACE",
+    });
+
+    await act(async () => {
+      capturedStreamHandlers?.onFinal?.({
+        runId: "pending-run",
+        seq: 1,
+        message: { role: "assistant", content: "Finished" },
+        stopReason: "stop",
+      });
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Stop current task" }),
+      ).toBeNull(),
+    );
+    expect(moodsInvoked()).toContain("success");
+
+    // A real refresh remounts the page from the same browser history entry.
+    // Refs reset, so only consuming the router state prevents re-arming it.
+    view.unmount();
+    invokeDesktopHost.mockClear();
+    renderSession(consumed);
+    await screen.findByRole("textbox");
+    expect(
+      screen.queryByRole("button", { name: "Stop current task" }),
+    ).toBeNull();
+    expect(moodsInvoked()).not.toContain("lobster-replying");
+  });
+
+  it.each(["branch", "rollback"] as const)(
+    "restores the selected user draft after native %s changes the transcript id",
+    async (action) => {
+      const response = {
+        data: {
+          id: "replaced-session",
+          sessionKey: "agent:bot-1:main",
+          editorText: "original prompt restored",
+          editorAttachments: [{ mimeType: "image/png", data: "aGVsbG8=" }],
+        },
+      };
+      messageBranch.mockResolvedValue(response);
+      messageRollback.mockResolvedValue(response);
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+      try {
+        const { container } = renderSession();
+        const label =
+          action === "branch"
+            ? "sessions.chat.branchFromMessage"
+            : "sessions.chat.rollbackToMessage";
+        fireEvent.click(await screen.findByRole("button", { name: label }));
+        await waitFor(() =>
+          expect(
+            (screen.getByRole("textbox") as HTMLTextAreaElement).value,
+          ).toBe("original prompt restored"),
+        );
+        expect(
+          action === "branch" ? messageBranch : messageRollback,
+        ).toHaveBeenCalledWith({
+          path: { id: "sess-steer", messageId: "msg-1" },
+        });
+        expect(
+          container.querySelector('img[src="data:image/png;base64,aGVsbG8="]'),
+        ).toBeTruthy();
+      } finally {
+        confirm.mockRestore();
+      }
+    },
+  );
 
   it("survives old-run-aborted -> replacement-accepted -> replacement-final without dropping waitingForReply or signaling desktop-pet error, and still reports success", async () => {
     postApiV1ChatLocal.mockResolvedValue({

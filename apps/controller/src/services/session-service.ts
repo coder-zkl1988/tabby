@@ -7,7 +7,10 @@ import type {
   SessionRunState,
   UpdateSessionInput,
 } from "@nexu/shared";
-import { mintDerivedSessionKey } from "../lib/desktop-session-key.js";
+import {
+  isDesktopSessionKey,
+  mintDerivedSessionKey,
+} from "../lib/desktop-session-key.js";
 import { logger } from "../lib/logger.js";
 import {
   SessionMessageNotFoundError,
@@ -36,6 +39,18 @@ function normalizeCheckpoint(
       ? { summary: checkpoint.summary }
       : {}),
   };
+}
+
+function rethrowMessageMutationError(error: unknown): never {
+  if (
+    error instanceof Error &&
+    /message entry not found|message entry is not on the active path|entry is not a user message/i.test(
+      error.message,
+    )
+  ) {
+    throw new SessionMessageNotFoundError();
+  }
+  throw error;
 }
 
 export class SessionService {
@@ -143,7 +158,12 @@ export class SessionService {
     // Mirror a rename into OpenClaw's session store label so gateway-side
     // views (Control UI, deriveSessionTitle) agree with nexu. Best-effort:
     // the .meta.json title above stays nexu's display authority.
-    if (session && input.title && this.gatewayService?.isConnected()) {
+    if (
+      session &&
+      input.title &&
+      !this.sessionsRuntime.usesGatewayPersistence?.() &&
+      this.gatewayService?.isConnected()
+    ) {
       try {
         await this.gatewayService.sessionsPatch({
           key: session.sessionKey,
@@ -233,10 +253,12 @@ export class SessionService {
     const title = `${session.title} · recovery`;
     let materializedId: string | null = null;
     try {
-      materializedId = await this.sessionsRuntime.materializeSessionFile(
-        result.entry?.sessionFile,
-        title,
-      );
+      materializedId = this.sessionsRuntime.usesGatewayPersistence?.()
+        ? `${result.sessionId}.jsonl`
+        : await this.sessionsRuntime.materializeSessionFile(
+            result.entry?.sessionFile,
+            title,
+          );
       await this.gatewayService.sessionsPatch({
         key: result.key,
         agentId: session.botId,
@@ -287,13 +309,29 @@ export class SessionService {
     });
     const sessionFile = created.entry?.sessionFile;
     const forkTitle = `${session.title} · fork`;
-    const materialized = await this.sessionsRuntime.materializeSessionFile(
-      sessionFile,
-      forkTitle,
-    );
+    const materialized = this.sessionsRuntime.usesGatewayPersistence?.()
+      ? created.sessionId
+        ? `${created.sessionId}.jsonl`
+        : created.entry?.sessionId
+          ? `${created.entry.sessionId}.jsonl`
+          : null
+      : await this.sessionsRuntime.materializeSessionFile(
+          sessionFile,
+          forkTitle,
+        );
+    if (!materialized) {
+      throw new Error("OpenClaw did not return the forked session details");
+    }
+    if (this.sessionsRuntime.usesGatewayPersistence?.()) {
+      await this.gatewayService.sessionsPatch({
+        key: created.key ?? forkKey,
+        agentId: session.botId,
+        label: forkTitle,
+      });
+    }
     this.sessionsRuntime.invalidateSessionsCache();
     return {
-      id: materialized ?? "",
+      id: materialized,
       botId: session.botId,
       sessionKey: created.key ?? forkKey,
       title: forkTitle,
@@ -307,51 +345,47 @@ export class SessionService {
     if (!this.gatewayService?.isConnected()) {
       throw new Error("OpenClaw gateway is not connected");
     }
-    const sourceContainsMessage =
-      await this.sessionsRuntime.sessionContainsActiveMessage({
-        botId: session.botId,
+    // The native fork RPC owns its target key. Do not turn a channel
+    // transcript into a desktop-origin conversation through this action.
+    if (
+      !isDesktopSessionKey(session.sessionKey) &&
+      !/^agent:[^:]+:dashboard:[0-9a-f-]+$/i.test(session.sessionKey)
+    ) {
+      throw new Error(
+        "Message branches are only available for desktop conversations",
+      );
+    }
+    let created: Awaited<ReturnType<OpenClawGatewayService["sessionsFork"]>>;
+    try {
+      created = await this.gatewayService.sessionsFork({
         sessionKey: session.sessionKey,
-        messageId,
+        agentId: session.botId,
+        entryId: messageId,
       });
-    if (!sourceContainsMessage) throw new SessionMessageNotFoundError();
-
-    const branchKey = mintDerivedSessionKey(
-      session.botId,
-      session.sessionKey,
-      "branch",
-    );
-    const created = await this.gatewayService.sessionsCreate({
-      key: branchKey,
-      agentId: session.botId,
-      parentSessionKey: session.sessionKey,
-      fork: true,
-    });
-    const resolvedBranchKey = created.key ?? branchKey;
+    } catch (error) {
+      rethrowMessageMutationError(error);
+    }
     const branchTitle = `${session.title} · branch`;
-    const materialized = await this.sessionsRuntime.materializeSessionFile(
-      created.entry?.sessionFile,
-      branchTitle,
-    );
-    await this.sessionsRuntime.selectActiveMessage({
-      botId: session.botId,
-      sessionKey: resolvedBranchKey,
-      messageId,
-      ...(created.entry?.sessionFile
-        ? { sessionFile: created.entry.sessionFile }
-        : {}),
+    await this.gatewayService.sessionsPatch({
+      key: created.sessionKey,
+      agentId: session.botId,
+      label: branchTitle,
     });
     this.sessionsRuntime.invalidateSessionsCache();
-    const branchId =
-      materialized ?? (created.sessionId ? `${created.sessionId}.jsonl` : null);
-    if (!branchId) {
+    const branch = await this.sessionsRuntime.getSessionBySessionKey(
+      session.botId,
+      created.sessionKey,
+    );
+    if (!branch)
       throw new Error("OpenClaw did not return the message branch details");
-    }
     return {
-      id: branchId,
+      id: branch.id,
       botId: session.botId,
-      sessionKey: resolvedBranchKey,
+      sessionKey: created.sessionKey,
       title: branchTitle,
       messageId,
+      editorText: created.editorText,
+      editorAttachments: created.editorAttachments,
     };
   }
 
@@ -362,16 +396,31 @@ export class SessionService {
     if (!this.gatewayService?.isConnected()) {
       throw new Error("OpenClaw gateway is not connected");
     }
-    await this.sessionsRuntime.selectActiveMessage({
-      botId: session.botId,
-      sessionKey: session.sessionKey,
-      messageId,
-    });
+    let result: Awaited<ReturnType<OpenClawGatewayService["sessionsRewind"]>>;
+    try {
+      result = await this.gatewayService.sessionsRewind({
+        sessionKey: session.sessionKey,
+        agentId: session.botId,
+        entryId: messageId,
+      });
+    } catch (error) {
+      rethrowMessageMutationError(error);
+    }
+    this.sessionsRuntime.invalidateSessionsCache();
+    // Rewind replaces the underlying SQLite transcript identity.
+    const restored = await this.sessionsRuntime.getSessionBySessionKey(
+      session.botId,
+      session.sessionKey,
+    );
+    if (!restored)
+      throw new Error("OpenClaw did not return the rewound session details");
     return {
       ok: true as const,
-      id: session.id,
+      id: restored.id,
       sessionKey: session.sessionKey,
       messageId,
+      editorText: result.editorText,
+      editorAttachments: result.editorAttachments,
     };
   }
 

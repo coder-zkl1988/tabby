@@ -436,13 +436,13 @@ function isLocalAutomationPreviewEnabled(env: ControllerEnv): boolean {
   return env.localAutomationPreviewEnabled === true;
 }
 
-function compileAgentList(
+function compileAgentEntries(
   config: NexuConfig,
   env: ControllerEnv,
   oauthState: OAuthConnectionState,
   installedSkillSlugs?: readonly string[],
   workspaceSkillsByAgent?: ReadonlyMap<string, readonly string[]>,
-): OpenClawConfig["agents"]["list"] {
+): OpenClawConfig["agents"]["entries"] {
   const browserEnabled =
     isLocalAutomationPreviewEnabled(env) &&
     config.localAutomation?.browser.enabled === true;
@@ -450,46 +450,46 @@ function compileAgentList(
     left.localeCompare(right),
   );
 
-  // Which agent OpenClaw's unbound entrypoints land on. Resolution order is
-  // explicit defaultBotId → system bot → first active bot by slug; the list
-  // itself stays slug-sorted for deterministic output.
-  const resolvedDefault = resolveDefaultBotFromConfig(config);
+  return Object.fromEntries(
+    config.bots
+      .filter((bot) => bot.status === "active")
+      .sort((left, right) => left.slug.localeCompare(right.slug))
+      .map((bot) => {
+        const workspaceSlugs = [
+          ...(workspaceSkillsByAgent?.get(bot.id) ?? []),
+        ].sort((left, right) => left.localeCompare(right));
+        const merged = Array.from(
+          new Set([...sharedSlugs, ...workspaceSlugs]),
+        ).sort((left, right) => left.localeCompare(right));
 
-  return config.bots
-    .filter((bot) => bot.status === "active")
-    .sort((left, right) => left.slug.localeCompare(right.slug))
-    .map((bot) => {
-      const workspaceSlugs = [
-        ...(workspaceSkillsByAgent?.get(bot.id) ?? []),
-      ].sort((left, right) => left.localeCompare(right));
-      const merged = Array.from(
-        new Set([...sharedSlugs, ...workspaceSlugs]),
-      ).sort((left, right) => left.localeCompare(right));
-
-      // Chat assistants (not installed experts) can delegate one turn to an
-      // expert bot via native sub-agents (in-chat auto-routing). OpenClaw's
-      // sub-agent tool policy strips these tools from spawned children, so a
-      // delegated expert cannot recurse. See
-      // specs/design-docs/2026-06-30-in-chat-expert-auto-route.md.
-      return {
-        id: bot.id,
-        name: bot.name,
-        workspace: `${env.openclawStateDir}/agents/${bot.id}`,
-        default: bot.id === resolvedDefault?.id,
-        model: bot.modelId
-          ? { primary: resolveModelId(config, env, bot.modelId, oauthState) }
-          : undefined,
-        ...(merged.length > 0 ? { skills: merged } : {}),
-        tools: {
-          alsoAllow: [
-            ...SUBAGENT_DELEGATION_TOOLS,
-            ...WORKBOARD_WORKER_TOOLS,
-            ...(browserEnabled ? EMBEDDED_BROWSER_TOOLS : []),
-          ],
-        },
-        subagents: { allowAgents: ["*"] },
-      };
-    });
+        // Chat assistants (not installed experts) can delegate one turn to an
+        // expert bot via native sub-agents (in-chat auto-routing). OpenClaw's
+        // sub-agent tool policy strips these tools from spawned children, so a
+        // delegated expert cannot recurse. See
+        // specs/design-docs/2026-06-30-in-chat-expert-auto-route.md.
+        return [
+          bot.id,
+          {
+            name: bot.name,
+            workspace: `${env.openclawStateDir}/agents/${bot.id}`,
+            model: bot.modelId
+              ? {
+                  primary: resolveModelId(config, env, bot.modelId, oauthState),
+                }
+              : undefined,
+            ...(merged.length > 0 ? { skills: merged } : {}),
+            tools: {
+              alsoAllow: [
+                ...SUBAGENT_DELEGATION_TOOLS,
+                ...WORKBOARD_WORKER_TOOLS,
+                ...(browserEnabled ? EMBEDDED_BROWSER_TOOLS : []),
+              ],
+            },
+            subagents: { allowAgents: ["*"] },
+          },
+        ];
+      }),
+  );
 }
 
 /** Key for the MemOS Cloud token inside the encrypted `secrets` table. */
@@ -516,18 +516,50 @@ function isRealtimeVoiceModelId(id: string): boolean {
 }
 
 /**
- * Realtime voice config for the StepFun plugin, derived from the Tabby cloud
- * connection so the user never handles a provider key.
- *
- * The cloud gateway fronts the model, so we reuse its credential and swap the
- * `/v1` REST base for the `/v1/realtime` WebSocket endpoint. Enabled only when
- * the connected account actually exposes a realtime model: without one the
- * plugin reports `isConfigured: false`, `talk.catalog` stays `ready: false`,
- * and the voice button hides itself.
+ * Prefer an enabled official StepFun provider with a configured realtime model.
+ * Its realtime endpoint is independent of the REST/coding-plan base path.
+ * Otherwise retain the Tabby cloud realtime route, when available.
  */
 function compileStepfunRealtimeConfig(
   config: NexuConfig,
 ): { apiKey: string; url: string; model: string } | null {
+  for (const descriptor of listModelProviderRuntimeDescriptors(config)) {
+    if (descriptor.providerId !== "stepfun" || !descriptor.provider.enabled) {
+      continue;
+    }
+
+    const apiKey = resolveModelProviderApiKey(descriptor);
+    // The realtime plugin accepts concrete keys, not OpenClaw SecretRefs.
+    if (typeof apiKey !== "string" || apiKey.trim().length === 0) continue;
+
+    let baseUrl: URL;
+    try {
+      baseUrl = new URL(descriptor.provider.baseUrl);
+    } catch {
+      continue;
+    }
+    // Never redirect credentials configured for a custom proxy to StepFun.
+    if (
+      baseUrl.protocol !== "https:" ||
+      !["api.stepfun.com", "api.stepfun.ai"].includes(baseUrl.hostname) ||
+      baseUrl.port !== "" ||
+      baseUrl.username ||
+      baseUrl.password
+    ) {
+      continue;
+    }
+
+    const realtimeModel = descriptor.provider.models.find((model) => {
+      const id = model.id.trim().toLowerCase();
+      return /^stepaudio.*realtime/.test(id) && !id.includes("tts");
+    });
+    if (!realtimeModel) continue;
+
+    const url = new URL("/v1/realtime", baseUrl.origin);
+    url.protocol = "wss:";
+    return { apiKey: apiKey.trim(), url: url.href, model: realtimeModel.id };
+  }
+
   const cloud = isDesktopCloudConfig(config.desktop.cloud)
     ? config.desktop.cloud
     : null;
@@ -873,6 +905,7 @@ export function compileOpenClawConfig(
 ): OpenClawConfig {
   const disableMdnsDiscovery = process.env.CI === "true";
   const activeBots = config.bots.filter((bot) => bot.status === "active");
+  const defaultBot = resolveDefaultBotFromConfig(config);
   // agents.defaults.model is what every bot without its own binding runs on,
   // so it has to be the configured default. This once read the first active
   // bot first, which only worked because changing the default rewrote every
@@ -1008,42 +1041,49 @@ export function compileOpenClawConfig(
       },
       // TEMP: removed to debug device_list visibility
     },
+    memory: {
+      search: {
+        enabled: memoryConfig.enabled,
+        sources: memoryConfig.sources,
+        experimental: { sessionMemory: sessionMemoryEnabled },
+        // Provider aliases such as `link` reuse the matching compiled model
+        // provider's base URL and credential without duplicating secrets.
+        provider: memoryProvider,
+        ...(semanticMemoryEnabled && memoryConfig.model
+          ? { model: memoryConfig.model }
+          : {}),
+        fallback: "none",
+        ...(memoryConfig.extraPaths.length > 0
+          ? { extraPaths: memoryConfig.extraPaths }
+          : {}),
+        store: {
+          fts: { tokenizer: "trigram" },
+          vector: { enabled: semanticMemoryEnabled },
+        },
+        // Without this OpenClaw applies its own 0.35 floor. Hybrid scoring
+        // caps a purely semantic hit at 0.7 * cosine, so that floor drops
+        // most of them and semantic recall reads as "no matches". Stored
+        // configs always carry the field (schema default 0.2); a raw legacy
+        // object that bypassed the schema gets no query block rather than
+        // `{ minScore: undefined }`.
+        ...(typeof memoryConfig.minScore === "number"
+          ? { query: { minScore: memoryConfig.minScore } }
+          : {}),
+      },
+    },
     agents: {
+      ownership: "explicit",
       defaults: {
+        ...(defaultBot
+          ? {
+              systemAgent: { agentId: defaultBot.id },
+              heartbeat: { agentId: defaultBot.id },
+              sessionStore: { agentId: defaultBot.id },
+            }
+          : {}),
         model: {
           primary: defaultModelId,
           ...(modelFallbacks.length > 0 ? { fallbacks: modelFallbacks } : {}),
-        },
-        memorySearch: {
-          enabled: memoryConfig.enabled,
-          sources: memoryConfig.sources,
-          experimental: { sessionMemory: sessionMemoryEnabled },
-          // Provider aliases such as `link` reuse the matching compiled model
-          // provider's base URL and credential without duplicating secrets.
-          provider: memoryProvider,
-          ...(semanticMemoryEnabled && memoryConfig.model
-            ? { model: memoryConfig.model }
-            : {}),
-          fallback: "none",
-          ...(memoryConfig.extraPaths.length > 0
-            ? { extraPaths: memoryConfig.extraPaths }
-            : {}),
-          store: {
-            fts: { tokenizer: "trigram" },
-            vector: { enabled: semanticMemoryEnabled },
-          },
-          // Without this OpenClaw applies its own 0.35 floor. Hybrid scoring
-          // caps a purely semantic hit at 0.7 * cosine, so that floor drops
-          // most of them and semantic recall reads as "no matches". Stored
-          // configs always carry the field (schema default 0.2); a raw legacy
-          // object that bypassed the schema gets no query block rather than
-          // `{ minScore: undefined }`.
-          ...(typeof memoryConfig.minScore === "number"
-            ? { query: { minScore: memoryConfig.minScore } }
-            : {}),
-          sync: {
-            intervalMinutes: memoryConfig.syncIntervalMinutes,
-          },
         },
         // Route short internal tasks (generated session/thread titles) through
         // a cheaper model when configured; OpenClaw falls back to the primary
@@ -1054,10 +1094,8 @@ export function compileOpenClawConfig(
           // approaches context window. The safeguard extension (compaction-
           // safeguard.ts) handles LLM summarization with quality guards.
           mode: "safeguard",
-          // Max fraction of context window for retained history after
-          // compaction. 0.3 = 70% reserved for system prompt + response.
-          // Tested: 0.5 was too tight for models with large system prompts.
-          maxHistoryShare: 0.3,
+          // OpenClaw owns the history budget in 2026.9.4; keep the supported
+          // recent-token and turn safeguards instead of retired tuning keys.
           keepRecentTokens: 20000,
           recentTurnsPreserve: 5,
           qualityGuard: { enabled: true },
@@ -1076,7 +1114,7 @@ export function compileOpenClawConfig(
         //
         // A ceiling still earns its place: a runaway run holds an OpenClaw
         // lane and leaves the bot unreachable. But detecting a hung run is the
-        // stalled-session watchdog's job (see diagnostics.stuckSessionAbortMs)
+        // stalled-session watchdog's job (OpenClaw owns its thresholds)
         // — it measures lack of progress, which is the actual symptom. This
         // only needs to be high enough that no legitimate turn reaches it.
         timeoutSeconds: 2 * 60 * 60,
@@ -1085,7 +1123,7 @@ export function compileOpenClawConfig(
         },
         verboseDefault: "off",
       },
-      list: compileAgentList(
+      entries: compileAgentEntries(
         config,
         env,
         oauthState,
@@ -1093,6 +1131,7 @@ export function compileOpenClawConfig(
         workspaceSkillsByAgent,
       ),
     },
+    ...(defaultBot ? { talk: { agentId: defaultBot.id } } : {}),
     tools: {
       profile: "full",
       // Desktop agents can use the native exec/process surface by default.
@@ -1147,7 +1186,6 @@ export function compileOpenClawConfig(
     messages: {
       ackReaction: "eyes",
       ackReactionScope: "group-mentions",
-      removeAckAfterReply: true,
     },
     models: compileModelsConfig(config, env),
     channels: compileChannelsConfig({
@@ -1161,7 +1199,6 @@ export function compileOpenClawConfig(
     skills: {
       load: {
         watch: true,
-        watchDebounceMs: 250,
         extraDirs: [env.openclawSkillsDir, env.userSkillsDir].filter(Boolean),
       },
     },
@@ -1169,7 +1206,6 @@ export function compileOpenClawConfig(
       native: "auto",
       nativeSkills: "auto",
       restart: false,
-      ownerDisplay: "raw",
       // OpenClaw 2026.7.1 treats a wildcard command owner as "every sender is
       // an owner", which exposes the owner-only `nodes`, `gateway`, and `cron`
       // tools to any channel. Do not reintroduce it on the strength of the
@@ -1177,16 +1213,7 @@ export function compileOpenClawConfig(
     },
     diagnostics: {
       enabled: true,
-      // Stalled-session watchdog. The default aborts a session whose active
-      // tool call has shown no session-level progress for 6 minutes (2m warn
-      // x3) — sized for chat turns, not for device automation, where a phone
-      // works for many minutes while its progress heartbeats stay inside the
-      // tabby-control plugin and never reach the session. 20 minutes keeps the
-      // watchdog able to reclaim a genuinely hung session, which holds an
-      // OpenClaw lane and leaves the bot unreachable, without executing healthy
-      // device runs. The warn threshold keeps its 2-minute default: it only
-      // logs, and an early diagnostic trail is useful.
-      stuckSessionAbortMs: 20 * 60_000,
+      // Watchdog thresholds are runtime-owned in OpenClaw 2026.9.4.
       ...(process.env.DD_API_KEY || process.env.OTEL_EXPORTER_OTLP_ENDPOINT
         ? {
             otel: {

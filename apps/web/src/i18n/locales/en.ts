@@ -1139,6 +1139,12 @@ const en = {
   "sessions.chat.talkStart": "Start voice conversation",
   "sessions.chat.talkStop": "End voice conversation",
   "sessions.chat.talkFailed": "Could not start the voice conversation.",
+  "sessions.chat.talkConnectionFailed":
+    "Could not connect to the voice service. Please try again later. Text chat is still available.",
+  "sessions.chat.talkMicrophoneDenied":
+    "Microphone access was denied. Allow microphone access to start a voice conversation.",
+  "sessions.chat.talkMicrophoneMissing":
+    "No microphone was found. Connect a microphone and try again.",
   "sessions.chat.agentQuestionOther": "Type your own answer…",
   "sessions.chat.agentQuestionConfirm": "Confirm",
   "sessions.chat.agentQuestionSkip": "Skip",
@@ -1156,13 +1162,13 @@ const en = {
   "sessions.chat.sideQuestionFailed": "Could not answer the side question",
   "sessions.chat.sideAnswer": "Quick answer",
   "sessions.chat.sideAnswerDismiss": "Dismiss quick answer",
-  "sessions.chat.branchFromMessage": "Branch from this message",
-  "sessions.chat.rollbackToMessage": "Roll back to this message",
+  "sessions.chat.branchFromMessage": "Branch before this message",
+  "sessions.chat.rollbackToMessage": "Roll back before this message",
   "sessions.chat.rollbackConfirm":
-    "Roll this conversation back to the selected message? Later messages will be hidden from the active branch.",
+    "Roll back before this message and restore its text and attachments for editing?",
   "sessions.chat.branchCreated": "Message branch created",
   "sessions.chat.branchFailed": "Could not create the message branch",
-  "sessions.chat.rollbackComplete": "Rolled back to the selected message",
+  "sessions.chat.rollbackComplete": "Rolled back; the message is ready to edit",
   "sessions.chat.rollbackFailed": "Could not roll back to the selected message",
   "sessions.operations.title": "Run center",
   "sessions.operations.close": "Close run center",
@@ -1961,6 +1967,8 @@ const en = {
   "localChat.defaultBadge": "Default",
   "localChat.setDefault": "Set as default",
   "localChat.waiting": "Waiting for reply…",
+  "localChat.sendFailed":
+    "Message could not be sent. Your draft is saved; please try again.",
   "localChat.inputPlaceholder":
     "Ask Tabby… (Enter to send, Shift+Enter for newline)",
   "localChat.attachFile": "Attach image or file",
@@ -2108,7 +2116,8 @@ const en = {
   "memory.crossSessionHint": "Include prior session history in recall.",
   "memory.scope": "Additional index paths",
   "memory.scopePlaceholder": "One local directory or Markdown file per line",
-  "memory.syncInterval": "Sync interval (minutes)",
+  "memory.autoSyncHint":
+    "When memory search is enabled, the index syncs automatically when files change, a session starts, or a search runs.",
   "memory.saveScope": "Save scope",
   "memory.status": "Status",
   "memory.statusReady": "Ready",
@@ -2152,7 +2161,6 @@ const en = {
   "memos.save": "Save",
   "memory.minScore": "Recall min score",
   "memory.minScoreInvalid": "Recall min score must be between 0 and 1",
-  "memory.intervalInvalid": "Sync interval must be between 1 and 1440 minutes.",
 
   // ── Host command execution ──
   "hostExecution.title": "Host command execution",

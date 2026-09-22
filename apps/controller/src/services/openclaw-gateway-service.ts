@@ -286,6 +286,64 @@ export class OpenClawGatewayService {
     return this.wsClient.request("system.info", {});
   }
 
+  /** Read the runtime-owned session index, including SQLite-backed sessions. */
+  async listStoredSessions(): Promise<{ sessions: unknown[] }> {
+    const sessions: unknown[] = [];
+    let offset = 0;
+    for (;;) {
+      const page = z
+        .object({
+          sessions: z.array(z.unknown()),
+          hasMore: z.boolean().optional(),
+          nextOffset: z.number().int().nonnegative().nullable().optional(),
+        })
+        .parse(
+          await this.wsClient.request("sessions.list", {
+            limit: 200,
+            offset,
+            includeDerivedTitles: true,
+            configuredAgentsOnly: true,
+            archived: "all",
+          }),
+        );
+      sessions.push(...page.sessions);
+      if (!page.hasMore) return { sessions };
+      if (page.nextOffset == null || page.nextOffset <= offset) {
+        throw new Error("OpenClaw session pagination did not advance");
+      }
+      offset = page.nextOffset;
+    }
+  }
+
+  /** Preserve gateway message metadata for the transcript normalizer. */
+  async getStoredChatHistory(
+    sessionKey: string,
+    limit = 200,
+    sessionId?: string,
+    offset?: number,
+  ): Promise<{
+    messages: unknown[];
+    hasMore?: boolean;
+    nextOffset?: number;
+    totalMessages?: number;
+  }> {
+    return z
+      .object({
+        messages: z.array(z.unknown()),
+        hasMore: z.boolean().optional(),
+        nextOffset: z.number().int().nonnegative().optional(),
+        totalMessages: z.number().int().nonnegative().optional(),
+      })
+      .parse(
+        await this.wsClient.request("chat.history", {
+          sessionKey,
+          limit: Math.max(1, Math.min(1000, Math.floor(limit))),
+          ...(sessionId ? { sessionId } : {}),
+          ...(offset !== undefined ? { offset } : {}),
+        }),
+      );
+  }
+
   /**
    * Recent Feishu direct-DM peers of one agent, newest first.
    *
@@ -388,6 +446,44 @@ export class OpenClawGatewayService {
     model?: string | null;
   }): Promise<unknown> {
     return this.wsClient.request("sessions.patch", params);
+  }
+
+  async sessionsReset(params: {
+    key: string;
+    agentId?: string;
+    reason?: "new" | "reset";
+  }): Promise<unknown> {
+    return this.wsClient.request("sessions.reset", params);
+  }
+
+  async sessionsDelete(params: {
+    key: string;
+    agentId?: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("sessions.delete", params);
+  }
+
+  async sessionsFork(params: {
+    sessionKey: string;
+    agentId?: string;
+    entryId: string;
+  }): Promise<{
+    sessionKey: string;
+    editorText?: string;
+    editorAttachments?: Array<{ mimeType: string; data: string }>;
+  }> {
+    return this.wsClient.request("sessions.fork", params);
+  }
+
+  async sessionsRewind(params: {
+    sessionKey: string;
+    agentId?: string;
+    entryId: string;
+  }): Promise<{
+    editorText?: string;
+    editorAttachments?: Array<{ mimeType: string; data: string }>;
+  }> {
+    return this.wsClient.request("sessions.rewind", params);
   }
 
   /**
@@ -506,7 +602,7 @@ export class OpenClawGatewayService {
   }): Promise<unknown> {
     return this.wsClient.request("talk.session.appendAudio", {
       sessionId: params.sessionId,
-      audio: params.audio,
+      audioBase64: params.audio,
     });
   }
 
@@ -527,6 +623,13 @@ export class OpenClawGatewayService {
 
   async closeTalkSession(sessionId: string): Promise<unknown> {
     return this.wsClient.request("talk.session.close", { sessionId });
+  }
+
+  async acknowledgeTalkPlayback(params: {
+    sessionId: string;
+    markName: string;
+  }): Promise<unknown> {
+    return this.wsClient.request("talk.session.acknowledgeMark", params);
   }
 
   /** Voice/model catalog, including which realtime providers are configured. */

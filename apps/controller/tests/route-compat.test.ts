@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ControllerContainer } from "../src/app/container.js";
 import { createApp } from "../src/app/create-app.js";
 import type { ControllerEnv } from "../src/app/env.js";
+import * as proxyFetchModule from "../src/lib/proxy-fetch.js";
 import { ControlPlaneHealthService } from "../src/runtime/control-plane-health.js";
 import { CreditGuardStateWriter } from "../src/runtime/credit-guard-state-writer.js";
 import { OpenClawAuthProfilesStore } from "../src/runtime/openclaw-auth-profiles-store.js";
@@ -248,6 +249,79 @@ describe("controller route compatibility", () => {
     expect(meResponse.status).toBe(200);
     const me = (await meResponse.json()) as { email: string };
     expect(me.email).toBe("desktop@nexu.local");
+  });
+
+  it("routes keyed-agent chat completions to the configured default or explicit agent", async () => {
+    const firstBot = await container.configStore.createBot({
+      name: "Alphabetically first",
+      slug: "alpha",
+    });
+    const defaultBot = await container.configStore.createBot({
+      name: "Desktop default",
+      slug: "zulu",
+    });
+    await container.configStore.setDesktopDefaultBot(defaultBot.id);
+    await mkdir(path.dirname(container.env.openclawConfigPath), {
+      recursive: true,
+    });
+    await writeFile(
+      container.env.openclawConfigPath,
+      JSON.stringify({
+        gateway: { auth: { mode: "none" } },
+        agents: {
+          ownership: "explicit",
+          entries: {
+            [firstBot.id]: { model: "custom/first" },
+            [defaultBot.id]: { model: "custom/default" },
+          },
+        },
+        models: {
+          providers: {
+            custom: {
+              baseUrl: "https://model.example.test/v1",
+              apiKey: "test-key",
+              api: "openai-completions",
+              models: [],
+            },
+          },
+        },
+        channels: {},
+        bindings: [],
+        plugins: {},
+        skills: {},
+        commands: {},
+      }),
+    );
+    const completionFetch = vi
+      .spyOn(proxyFetchModule, "proxyFetch")
+      .mockImplementation(async () => new Response("data: [DONE]\n\n"));
+    const app = createApp(container);
+
+    for (const [requestedAgentId, expectedModel] of [
+      [undefined, "default"],
+      [firstBot.id, "first"],
+      ["missing-agent", "default"],
+    ] as const) {
+      const response = await app.request("/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(requestedAgentId
+            ? { "x-openclaw-agent-id": requestedAgentId }
+            : {}),
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("data: [DONE]");
+      const request = completionFetch.mock.lastCall?.[1];
+      expect(JSON.parse(String(request?.body))).toMatchObject({
+        model: expectedModel,
+      });
+    }
   });
 
   it("rejects cross-site compatible automation POSTs without JSON", async () => {

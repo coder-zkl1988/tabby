@@ -44,6 +44,9 @@ function createRuntimeStub(sessions: SessionResponse[]) {
       async (id: string) => sessions.find((item) => item.id === id) ?? null,
     ),
     invalidateSessionsCache: vi.fn(),
+    getSessionBySessionKey: vi.fn(async (_botId: string, sessionKey: string) =>
+      session({ id: "new-session.jsonl", sessionKey }),
+    ),
     materializeSessionFile: vi.fn(async () => "recovery.jsonl"),
     sessionContainsMessage: vi.fn(async () => true),
     sessionContainsActiveMessage: vi.fn(async () => true),
@@ -58,6 +61,11 @@ function createGatewayStub() {
     sessionsCompactionList: vi.fn(async () => ({ checkpoints: [] })),
     sessionsCompactionBranch: vi.fn(async () => ({})),
     sessionsCreate: vi.fn(async () => ({})),
+    sessionsFork: vi.fn(async () => ({
+      sessionKey: "agent:bot-1:dashboard:12345678-1234-1234-1234-123456789abc",
+      editorText: "edit this prompt",
+    })),
+    sessionsRewind: vi.fn(async () => ({ editorText: "edit this prompt" })),
   } as unknown as OpenClawGatewayService;
 }
 
@@ -244,58 +252,69 @@ describe("SessionService organization and recovery", () => {
     },
   );
 
-  it("uses OpenClaw's real fork mode for whole-session and message branches", async () => {
-    const runtime = createRuntimeStub([session()]);
+  it("uses native SQLite message forks and returns the editable user draft", async () => {
+    const runtime = createRuntimeStub([
+      session({ sessionKey: "agent:bot-1:main" }),
+    ]);
     const gateway = createGatewayStub();
-    vi.mocked(gateway.sessionsCreate).mockResolvedValue({
-      ok: true,
-      key: "agent:bot-1:forked",
-      sessionId: "forked",
-      entry: {
-        sessionId: "forked",
-        sessionFile: "/tmp/forked.jsonl",
-      },
-    });
     const service = new SessionService(runtime, gateway);
 
-    await service.forkSession("session-1.jsonl");
     const branch = await service.branchAtMessage(
       "session-1.jsonl",
       "message-1",
     );
-
-    expect(gateway.sessionsCreate).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        agentId: "bot-1",
-        parentSessionKey: "agent:bot-1:session-1",
-        fork: true,
-      }),
-    );
-    expect(gateway.sessionsCreate).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        agentId: "bot-1",
-        parentSessionKey: "agent:bot-1:session-1",
-        fork: true,
-      }),
-    );
-    expect(runtime.sessionContainsActiveMessage).toHaveBeenCalledWith({
-      botId: "bot-1",
-      sessionKey: "agent:bot-1:session-1",
-      messageId: "message-1",
+    expect(gateway.sessionsFork).toHaveBeenCalledWith({
+      sessionKey: "agent:bot-1:main",
+      agentId: "bot-1",
+      entryId: "message-1",
     });
-    expect(runtime.selectActiveMessage).toHaveBeenCalledWith({
-      botId: "bot-1",
-      sessionKey: "agent:bot-1:forked",
-      sessionFile: "/tmp/forked.jsonl",
-      messageId: "message-1",
-    });
+    expect(runtime.sessionContainsActiveMessage).not.toHaveBeenCalled();
+    expect(runtime.materializeSessionFile).not.toHaveBeenCalled();
+    expect(runtime.selectActiveMessage).not.toHaveBeenCalled();
     expect(branch).toMatchObject({
-      id: "recovery.jsonl",
-      sessionKey: "agent:bot-1:forked",
+      id: "new-session.jsonl",
       messageId: "message-1",
+      editorText: "edit this prompt",
     });
+    expect(gateway.sessionsPatch).toHaveBeenCalledWith({
+      key: branch?.sessionKey,
+      agentId: "bot-1",
+      label: "Release review · branch",
+    });
+  });
+
+  it("uses native rewind and reads back the replacement transcript identity", async () => {
+    const runtime = createRuntimeStub([session()]);
+    const gateway = createGatewayStub();
+    const service = new SessionService(runtime, gateway);
+    const result = await service.rollbackToMessage(
+      "session-1.jsonl",
+      "message-1",
+    );
+    expect(gateway.sessionsRewind).toHaveBeenCalledWith({
+      sessionKey: "agent:bot-1:session-1",
+      agentId: "bot-1",
+      entryId: "message-1",
+    });
+    expect(runtime.selectActiveMessage).not.toHaveBeenCalled();
+    expect(runtime.invalidateSessionsCache).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      ok: true,
+      id: "new-session.jsonl",
+      editorText: "edit this prompt",
+    });
+  });
+
+  it("refuses native message forks from channel sessions", async () => {
+    const runtime = createRuntimeStub([
+      session({ sessionKey: "agent:bot-1:slack:channel:C123" }),
+    ]);
+    const gateway = createGatewayStub();
+    const service = new SessionService(runtime, gateway);
+    await expect(
+      service.branchAtMessage("session-1.jsonl", "message-1"),
+    ).rejects.toThrow("only available for desktop conversations");
+    expect(gateway.sessionsFork).not.toHaveBeenCalled();
   });
 
   it("rejects message branch changes while the session is running", async () => {
@@ -331,14 +350,24 @@ describe("SessionService organization and recovery", () => {
     expect(runtime.selectActiveMessage).not.toHaveBeenCalled();
   });
 
-  it("validates the active source branch before creating a fork", async () => {
-    const runtime = createRuntimeStub([session()]);
+  it("maps native missing or inactive user messages to a not-found result", async () => {
+    const runtime = createRuntimeStub([
+      session({ sessionKey: "agent:bot-1:main" }),
+    ]);
     const gateway = createGatewayStub();
-    vi.mocked(runtime.sessionContainsActiveMessage).mockResolvedValue(false);
+    vi.mocked(gateway.sessionsFork).mockRejectedValue(
+      new Error("message entry is not on the active path: inactive-message"),
+    );
+    vi.mocked(gateway.sessionsRewind).mockRejectedValue(
+      new Error("entry is not a user message: assistant-message"),
+    );
     const service = new SessionService(runtime, gateway);
 
     await expect(
       service.branchAtMessage("session-1.jsonl", "inactive-message"),
+    ).rejects.toBeInstanceOf(SessionMessageNotFoundError);
+    await expect(
+      service.rollbackToMessage("session-1.jsonl", "assistant-message"),
     ).rejects.toBeInstanceOf(SessionMessageNotFoundError);
     expect(gateway.sessionsCreate).not.toHaveBeenCalled();
     expect(runtime.materializeSessionFile).not.toHaveBeenCalled();

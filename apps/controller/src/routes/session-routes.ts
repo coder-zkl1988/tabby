@@ -270,7 +270,7 @@ export function registerSessionRoutes(
             "application/json": { schema: sessionMessageBranchResponseSchema },
           },
           description:
-            "Fork the session and select this message as its active leaf",
+            "Fork before a persisted user message and return its editable draft",
         },
         404: {
           content: { "application/json": { schema: errorSchema } },
@@ -317,7 +317,7 @@ export function registerSessionRoutes(
             },
           },
           description:
-            "Select this message as the current session's active leaf",
+            "Rewind before a persisted user message and return its editable draft",
         },
         404: {
           content: { "application/json": { schema: errorSchema } },

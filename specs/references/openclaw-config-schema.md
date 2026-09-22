@@ -1,6 +1,6 @@
 # OpenClaw config.json Schema 参考
 
-Config 生成器必须输出符合此格式的 JSON。OpenClaw gateway 通过 chokidar 监听文件变更自动热加载。
+本文对应随包 OpenClaw 2026.9.4。Config 生成器必须输出符合此格式的 JSON。OpenClaw gateway 通过 chokidar 监听文件变更自动热加载。
 
 ---
 
@@ -10,7 +10,8 @@ Config 生成器必须输出符合此格式的 JSON。OpenClaw gateway 通过 ch
 {
   "gateway":  { /* 必填：服务器配置 */ },
   "models":   { /* 可选：LLM provider（LiteLLM 等） */ },
-  "agents":   { /* 必填：Agent 列表 */ },
+  "agents":   { /* 必填：以 agentId 为 key 的 entries */ },
+  "memory":   { /* 可选：全局 memory.search */ },
   "channels": { /* 必填：Channel 账号 */ },
   "bindings": [ /* 必填：路由规则 */ ],
   "skills":   { /* 可选：技能热加载 */ },
@@ -89,7 +90,7 @@ Config 生成器必须输出符合此格式的 JSON。OpenClaw gateway 通过 ch
 
 ### 模型 ID 前缀规则
 
-在 `agents.defaults.model` 和 `agents.list[].model` 中引用自定义 provider 的模型时，必须加 provider 名称前缀：
+在 `agents.defaults.model` 和 `agents.entries.<agentId>.model` 中引用自定义 provider 的模型时，必须加 provider 名称前缀：
 
 ```
 原始 model ID:  anthropic/claude-sonnet-4
@@ -127,7 +128,7 @@ Bedrock 使用 OpenClaw 的 AWS SDK 认证链，不在 Nexu 配置中保存 Acce
 
 - `auth: "aws-sdk"` 强制使用运行 Nexu/OpenClaw 进程可见的 AWS 默认凭据链；`apiKey` 应省略。
 - OpenClaw 不接受 `models.bedrockDiscovery`。自动发现属于外置 `@openclaw/amazon-bedrock-provider` 插件，其配置路径是 `plugins.entries.amazon-bedrock.config.discovery`；Nexu 当前不会把旧字段写入运行时配置。
-- **实时语音（StepFun）**：`plugins.entries["nexu-stepfun-realtime"]` 由 compiler 从 Tabby cloud 连接派生，用户不接触 provider key。`apiKey` 复用 `desktop.cloud.apiKey`；`url` 由 `linkUrl` 派生为 `wss://<host>/v1/realtime`（把 REST 的 `/v1` 换成 realtime socket）；`model` 取 `desktop.cloud.models` 中第一个被识别为实时语音的模型 —— 云端统一命名 `tabby-audio`（与 `tabby-video` / `tabby-image-pro` 同一套约定），或直连部署下厂商自己的 `*realtime*` id。云端一侧用精确集合而非前缀匹配，免得将来的 `tabby-audio-tts` 被误当成实时会话。三者任一缺失就不写这个 entry —— 插件随之 `isConfigured: false`、`talk.catalog` 的 `realtime.ready` 为 `false`、前端语音按钮自行隐藏。这要求云端网关满足三个契约：realtime WebSocket 挂在 `/v1/realtime`、鉴权同为 `Authorization: Bearer <cloud apiKey>`、realtime 模型出现在下发的 models 列表里。
+- **实时语音（StepFun）**：`plugins.entries["nexu-stepfun-realtime"]` 优先从已启用的官方 StepFun provider 派生：provider 必须使用 `https://api.stepfun.com` 或 `https://api.stepfun.ai`，拥有具体的非空字符串 key，以及 `stepaudio*realtime` 模型（`tts` 模型不匹配）。`url` 固定由 origin 构造为 `wss://<host>/v1/realtime`，不会继承 coding-plan 的 `/step_plan/v1` 路径；SecretRef、禁用 provider、自定义代理和 HTTP 地址都会跳过，避免把凭据发往非官方主机。`apiKey` 使用该 provider 的具体 key，`model` 保留用户配置的模型 ID。没有可用的官方直连配置时，compiler 才回退到 Tabby cloud：复用 `desktop.cloud.apiKey`，`url` 由 `linkUrl` 派生为 `wss://<host>/v1/realtime`，`model` 取 `desktop.cloud.models` 中精确匹配的 `tabby-audio`（或直连部署下厂商自己的 `*realtime*` id）。三者任一缺失就不写这个 entry——插件随之 `isConfigured: false`、`talk.catalog` 的 `realtime.ready` 为 `false`、前端语音按钮自行隐藏。
 - 外置的不只是自动发现：`bedrock-converse-stream` 这个 api 本身就由该插件注册。2026.9.4 随包分发 60 个 bundled extension（含 `google`、`minimax`），其中没有 bedrock，所以在未安装该插件的运行时里，Bedrock 的 probe 会直接返回 `No API provider registered for api: bedrock-converse-stream`。2026.8.2 同样如此，不是升级引入的。Nexu 未打包该插件，而打包后的桌面端不允许用 npm/npx 安装（见 AGENTS.md 硬规则）。由于保存 Bedrock 配置要求实时 probe 返回 `ok`，该表单在缺插件时根本无法保存成功，用户只会看到误导性的「检查凭据/区域/网络」错误，因此 registry 已将 `amazon-bedrock` 的 `modelsPageVisible` 置为 `false`，把它从「设置 → 模型」中摘除；`controllerConfigurable` 保持 `true`，API enum 与既有配置不受影响。若将来随包提供该插件，把这个开关改回 `true` 即可恢复入口。
 - 保存前必须填写当前区域已授权的模型或推理配置 ID。验证通过打包的 OpenClaw 执行最小 token 实时 probe；只有目标 `amazon-bedrock/<modelId>` 明确返回 `ok` 才算成功。
 - 临时 probe 只加载正式运行时扩展目录中的 `amazon-bedrock` 插件。插件未安装时返回明确的不可用错误，不会把传输层缺失误报为 AWS 凭据失败。
@@ -140,32 +141,55 @@ Bedrock 使用 OpenClaw 的 AWS SDK 认证链，不在 Nexu 配置中保存 Acce
 ```json
 {
   "agents": {
+    "ownership": "explicit",
     "defaults": {
-      "model": "anthropic/claude-sonnet-4-20250514"
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "systemAgent": { "agentId": "tenant-abc" },
+      "heartbeat": { "agentId": "tenant-abc" },
+      "sessionStore": { "agentId": "tenant-abc" }
     },
-    "list": [
-      {
-        "id": "tenant-abc",
+    "entries": {
+      "tenant-abc": {
         "name": "ABC Corp Bot",
-        "default": true,
         "workspace": "/data/workspaces/tenant-abc"
       }
-    ]
+    }
   }
 }
 ```
 
-### agents.list[] 字段
+### agents.entries.<agentId> 字段
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `id` | string | **是** | 唯一标识符，用于 `bindings[].agentId` 匹配 |
+| 对象 key | string | **是** | 唯一 agentId，用于 `bindings[].agentId` 匹配；entry 内不再写 `id` |
 | `name` | string | 否 | 显示名称 |
-| `default` | boolean | 否 | 标记为默认 agent（最多一个） |
 | `workspace` | string | 否 | 工作目录路径 |
 | `model` | string \| `{ primary, fallbacks }` | 否 | 模型覆盖 |
 
 ---
+
+`agents.list` 已退休。多 agent 配置使用 `ownership: "explicit"`，桌面对话与渠道分别通过 session key / binding 指明 agent。Nexu 的默认 bot 仍按 `desktop.defaultBotId` → system bot → slug 顺序解析，并用于 `defaults.systemAgent`、`defaults.heartbeat`、`defaults.sessionStore` 和顶层 `talk.agentId`；不再输出 `default` 标记。
+
+## memory
+
+全局检索设置写到 `memory.search`，不再放在 `agents.defaults.memorySearch`。保留 `enabled`、`sources`、`experimental.sessionMemory`、`provider`、`model`、`fallback`、`extraPaths`、`store.fts.tokenizer`、`store.vector.enabled`、`query.minScore`。自定义 embedding provider 仍复用 `models.providers` 的 URL 与鉴权。
+
+2026.9.4 已退休 `memory.search.sync`（包括 `intervalMinutes`），索引调度由 runtime 管理；Nexu 原存储配置中的 `syncIntervalMinutes` 不再写入 OpenClaw 配置。
+
+## 2026.9.4 退休字段
+
+这些字段会使整个配置热加载被拒绝，不能在 controller 同步时重新写回：
+
+| 旧字段 | 当前行为 |
+|------|------|
+| `diagnostics.stuckSessionWarnMs` / `stuckSessionAbortMs` | watchdog 使用 runtime 阈值，不再接受自定义 20 分钟值；总运行时限仍由 `agents.defaults.timeoutSeconds` 控制 |
+| `agents.defaults.compaction.maxHistoryShare` | 历史预算由 runtime 管理；保留 `keepRecentTokens`、`recentTurnsPreserve`、`qualityGuard` 和 `memoryFlush` |
+| `messages.removeAckAfterReply` | runtime 保留 acknowledgement reaction |
+| `commands.ownerDisplay` | owner ID 固定 raw 显示 |
+| `skills.load.watchDebounceMs` | watcher 固定使用 250ms 默认值 |
+
+迁移依据为随包 `openclaw/docs/gateway/doctor/config-migrations.md` 及 runtime schema；校验必须包含真实 OpenClaw validator，自有 Zod schema 通过不能证明 runtime 会加载。
 
 ## channels
 
@@ -313,7 +337,7 @@ Slack channel 有**顶层字段**和 **account 字段**两级。顶层控制全�
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `agentId` | string | **是** | 必须匹配 `agents.list[].id` |
+| `agentId` | string | **是** | 必须匹配 `agents.entries` 的 key |
 | `match.channel` | string | **是** | channel 类型（`"feishu"`, `"slack"` 等） |
 | `match.accountId` | string | 推荐 | 必须匹配 `channels.<type>.accounts` 的 key |
 
@@ -325,7 +349,7 @@ Slack channel 有**顶层字段**和 **account 字段**两级。顶层控制全�
 4. team（Slack）
 5. **account（最常用：channel + accountId）**
 6. channel 通配（`accountId: "*"`）
-7. 默认 agent
+7. 单 agent 可隐式解析；多 agent 必须由 binding 或显式目标确定
 
 ---
 
@@ -338,7 +362,6 @@ Slack channel 有**顶层字段**和 **account 字段**两级。顶层控制全�
   "skills": {
     "load": {
       "watch": true,
-      "watchDebounceMs": 250,
       "extraDirs": ["/data/openclaw/skills"]
     }
   }
@@ -348,7 +371,6 @@ Slack channel 有**顶层字段**和 **account 字段**两级。顶层控制全�
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `load.watch` | boolean | `false` | 启用 chokidar 文件监听，检测 SKILL.md 变化后自动刷新 snapshot |
-| `load.watchDebounceMs` | number | `250` | 文件变化去抖时间（毫秒） |
 | `load.extraDirs` | string[] | `[]` | 额外技能扫描目录。**必须包含 sidecar 写入目录**（`${OPENCLAW_STATE_DIR}/skills`），否则 managed skills 在生产环境不可见 |
 
 ### 常见坑点
@@ -366,8 +388,7 @@ Slack channel 有**顶层字段**和 **account 字段**两级。顶层控制全�
   "commands": {
     "native": "auto",
     "nativeSkills": "auto",
-    "restart": false,
-    "ownerDisplay": "raw"
+    "restart": false
   }
 }
 ```
@@ -377,7 +398,6 @@ Slack channel 有**顶层字段**和 **account 字段**两级。顶层控制全�
 | `native` | `"auto"` \| `"off"` | 原生命令（`/help` 等） |
 | `nativeSkills` | `"auto"` \| `"off"` | 原生技能 |
 | `restart` | boolean | 是否允许通过命令重启 |
-| `ownerDisplay` | `"raw"` \| `"friendly"` | 用户名显示模式 |
 
 Nexu 不生成 wildcard `commands.ownerAllowFrom`。随包 OpenClaw 2026.7.1 会把 `ownerAllowFrom: ["*"]` 解析为任意渠道发送者都是 owner，因此该配置会越权开放 `nodes`、`gateway`、`cron` 等本机控制工具。真实 owner 必须使用带渠道前缀的明确身份，并由后续产品化的 owner 配置流程写入。
 
@@ -395,28 +415,28 @@ Nexu 不生成 wildcard `commands.ownerAllowFrom`。随包 OpenClaw 2026.7.1 会
     "reload": { "mode": "hybrid" }
   },
   "agents": {
+    "ownership": "explicit",
     "defaults": {
-      "model": "anthropic/claude-sonnet-4-20250514"
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "systemAgent": { "agentId": "acme-corp" },
+      "heartbeat": { "agentId": "acme-corp" },
+      "sessionStore": { "agentId": "acme-corp" }
     },
-    "list": [
-      {
-        "id": "acme-corp",
+    "entries": {
+      "acme-corp": {
         "name": "Acme Corp Bot",
-        "default": true,
         "workspace": "/data/workspaces/acme-corp"
       },
-      {
-        "id": "globex-inc",
+      "globex-inc": {
         "name": "Globex Inc Bot",
         "workspace": "/data/workspaces/globex-inc"
       },
-      {
-        "id": "initech-llc",
+      "initech-llc": {
         "name": "Initech LLC Bot",
         "workspace": "/data/workspaces/initech-llc",
         "model": { "primary": "openai/gpt-4o" }
       }
-    ]
+    }
   },
   "channels": {
     "feishu": {
@@ -477,7 +497,7 @@ Nexu 编译器默认省略 `plugins.allow` 与 `plugins.deny`，让 OpenClaw 发
 
 3. **省略 `accountId` 匹配的是 "default" 账号**，不是通配。通配用 `"*"`
 
-4. **一个 config 中只能有一个 `default: true` 的 agent**
+4. **多 agent 使用 `agents.ownership: "explicit"`，不再依赖 `default: true`**
 
 5. **`workspace` 目录必须存在**，gateway 不会自动创建
 

@@ -126,6 +126,26 @@ describe("MemorySettingsSection", () => {
     expect(toastMocks.success).toHaveBeenCalledWith("memory.rebuilt");
   });
 
+  it("saves index paths and score while synchronization is automatic", async () => {
+    renderSection();
+
+    expect(await screen.findByText("memory.autoSyncHint")).toBeTruthy();
+    expect(screen.queryByLabelText("memory.syncInterval")).toBeNull();
+    fireEvent.change(screen.getByLabelText("memory.scope"), {
+      target: { value: "docs\nnotes" },
+    });
+    fireEvent.change(screen.getByLabelText("memory.minScore"), {
+      target: { value: "0.3" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "memory.saveScope" }));
+
+    await waitFor(() =>
+      expect(apiMocks.patchSettings).toHaveBeenCalledWith({
+        body: { extraPaths: ["docs", "notes"], minScore: 0.3 },
+      }),
+    );
+  });
+
   it("shows when the memory index needs synchronization", async () => {
     apiMocks.getStatus.mockResolvedValue({
       data: {

@@ -195,6 +195,93 @@ async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }
 
+/** Adapt the shipped Lark extension to OpenClaw 2026.9's public contract. */
+export async function patchLarkOpenClawCompatibility(outputDir) {
+  const replacements = [
+    ["index.js", "openclaw/plugin-sdk", "openclaw/plugin-sdk/plugin-entry"],
+    [
+      "src/card/reply-dispatcher.js",
+      "openclaw/plugin-sdk/channel-runtime",
+      "openclaw/plugin-sdk/channel-reply-pipeline",
+    ],
+    [
+      "src/card/tool-use-config.js",
+      "openclaw/plugin-sdk/config-runtime",
+      "openclaw/plugin-sdk/session-store-runtime",
+    ],
+  ];
+  for (const [relativePath, previous, current] of replacements) {
+    const target = path.join(outputDir, relativePath);
+    const source = await readFile(target, "utf8");
+    // Use the scoped entrypoints that own the symbols this extension imports.
+    // Patch only the copied extension; never modify OpenClaw or the installed
+    // npm package.
+    const patched = source
+      .replaceAll(`require("${previous}")`, `require("${current}")`)
+      .replaceAll(`require('${previous}')`, `require('${current}')`);
+    if (patched !== source) await writeFile(target, patched, "utf8");
+  }
+
+  const agentConfigPath = path.join(outputDir, "src/core/agent-config.js");
+  const agentConfig = await readFile(agentConfigPath, "utf8");
+  const keyedAgentConfig = agentConfig.replace(
+    "return agents?.list ?? [];",
+    "return Object.entries(agents?.entries ?? {}).map(([id, entry]) => ({ ...entry, id }));",
+  );
+  if (keyedAgentConfig !== agentConfig) {
+    await writeFile(agentConfigPath, keyedAgentConfig, "utf8");
+  }
+
+  // The old default-agent resolver rejects multi-agent explicit rosters in
+  // 2026.9. Nexu records that ownership in systemAgent, so preserve the Lark
+  // card/session fallback without losing per-agent skill and display settings.
+  for (const [relativePath, configExpression] of [
+    ["src/card/tool-use-config.js", "cfg"],
+    ["src/card/streaming-card-controller.js", "this.deps.cfg"],
+  ]) {
+    const target = path.join(outputDir, relativePath);
+    const source = await readFile(target, "utf8");
+    const previous = `const defaultAgentId = (0, agent_runtime_1.resolveDefaultAgentId)(${configExpression});`;
+    const current = `const defaultAgentId = ${configExpression}.agents?.defaults?.systemAgent?.agentId ?? (0, agent_runtime_1.resolveDefaultAgentId)(${configExpression});`;
+    if (source.includes(previous)) {
+      await writeFile(target, source.replace(previous, current), "utf8");
+    }
+  }
+
+  // The npm artifact is CommonJS, but two generated helpers still contain
+  // import.meta.url. The 2026.9 native loader lets Node classify those files
+  // as ESM, where their `exports` binding fails before registration.
+  for (const [relativePath, replacements] of [
+    [
+      "src/core/version.js",
+      [
+        [
+          "const __filename = (0, node_url_1.fileURLToPath)(import.meta.url);",
+          "",
+        ],
+        ["const __dirname = (0, node_path_1.dirname)(__filename);", ""],
+      ],
+    ],
+    [
+      "src/core/token-store.js",
+      [
+        [
+          "typeof __filename !== 'undefined' ? __filename : import.meta.url",
+          "__filename",
+        ],
+      ],
+    ],
+  ]) {
+    const target = path.join(outputDir, relativePath);
+    const source = await readFile(target, "utf8");
+    let patched = source;
+    for (const [previous, current] of replacements) {
+      patched = patched.replace(previous, current);
+    }
+    if (patched !== source) await writeFile(target, patched, "utf8");
+  }
+}
+
 async function maybeFixPluginManifest(outputDir) {
   const manifestPath = path.join(outputDir, "openclaw.plugin.json");
   try {
@@ -614,6 +701,10 @@ async function bundlePlugin({ id, npmName, localSource }) {
     filter: localSource ? undefined : shouldCopyPluginPath,
   });
   await maybeFixPluginManifest(outputDir);
+
+  if (id === "openclaw-lark") {
+    await patchLarkOpenClawCompatibility(outputDir);
+  }
 
   // Patch tabby-control to respect OPENCLAW_STATE_DIR when writing screenshots.
   // Without this, SCREENSHOT_DIR resolves to ~/.openclaw/media/tabby-screenshots,

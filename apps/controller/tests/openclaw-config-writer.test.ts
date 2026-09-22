@@ -9,7 +9,7 @@ import { OpenClawConfigWriter } from "../src/runtime/openclaw-config-writer.js";
 function makeConfig(overrides: Partial<OpenClawConfig> = {}): OpenClawConfig {
   return {
     gateway: { port: 18789, mode: "local", bind: "127.0.0.1" },
-    agents: { list: [], defaults: {} },
+    agents: { entries: {}, defaults: {} },
     channels: {},
     bindings: [],
     plugins: { load: { paths: [] }, entries: {} },

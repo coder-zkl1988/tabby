@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { XHS_OCCUPATION_OPTIONS } from "@nexu/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
@@ -100,6 +101,7 @@ function account(
     ...emptyProfileDraft(),
     nickname: "城市生活记录者",
     bio: "天秤座 INFJ｜住在杭州的产品经理｜喜欢羽毛球、咖啡和城市漫游",
+    occupation: "产品经理",
     gender: "女",
     birthday: "1995-01-01",
     region: "杭州",
@@ -307,6 +309,24 @@ describe("xhs-ops component interactions", () => {
     });
   });
 
+  it("offers the occupation labels from the Xiaohongshu profile picker", async () => {
+    apiMocks.listAccounts.mockResolvedValue([account("account-1")]);
+
+    renderWithQuery(
+      <XhsOpsAccountPlanner
+        {...props({ type: "XhsOpsAccountPlanner", projectId: "project-1" })}
+      />,
+    );
+
+    const occupation = await screen.findByLabelText("职业/身份");
+    expect(occupation.tagName).toBe("SELECT");
+    expect(
+      Array.from((occupation as HTMLSelectElement).options).map(
+        (option) => option.value,
+      ),
+    ).toEqual(["", ...XHS_OCCUPATION_OPTIONS]);
+  });
+
   it("blocks project save until the minimum profile inputs are complete", () => {
     render(
       <XhsOpsProjectForm
@@ -323,6 +343,22 @@ describe("xhs-ops component interactions", () => {
       "行业、产品 / 服务、目标年龄段、性别比例、目标地区",
     );
     expect(apiMocks.createProject).not.toHaveBeenCalled();
+  });
+
+  it("disables persona confirmation when no accounts are available", async () => {
+    apiMocks.listAccounts.mockResolvedValue([]);
+
+    renderWithQuery(
+      <XhsOpsAccountPlanner
+        {...props({ type: "XhsOpsAccountPlanner", projectId: "project-1" })}
+      />,
+    );
+
+    const button = await screen.findByRole("button", {
+      name: "确认选定人设，进入素材",
+    });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(apiMocks.confirmPersonas).not.toHaveBeenCalled();
   });
 
   it("generates the profile on the desktop after saving complete project input", async () => {
@@ -649,6 +685,28 @@ describe("xhs-ops component interactions", () => {
     fireEvent.click(screen.getAllByRole("tab")[0] as HTMLElement);
     // Panels stay mounted, so the edit survives the round trip.
     expect(screen.getByDisplayValue("本地未保存昵称")).toBeTruthy();
+  });
+
+  it("keeps both project accounts visible when an action names one account", async () => {
+    apiMocks.listAccounts.mockResolvedValue([
+      account("account-1", { label: "第一个账号" }),
+      account("account-2", { label: "第二个账号" }),
+    ]);
+
+    renderWithQuery(
+      <XhsOpsProfileMaterial
+        {...props({
+          type: "XhsOpsProfileMaterial",
+          projectId: "project-1",
+          accountId: "account-2",
+        })}
+      />,
+    );
+
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0]?.getAttribute("aria-selected")).toBe("false");
+    expect(tabs[1]?.getAttribute("aria-selected")).toBe("true");
   });
 
   it("renders a single account without tab chrome", async () => {
@@ -1283,10 +1341,9 @@ describe("xhs-ops component interactions", () => {
     );
 
     await screen.findByDisplayValue(first.label);
-    const selects = screen.getAllByRole("combobox");
-    const usedOption = Array.from(
-      (selects[1] as HTMLSelectElement).options,
-    ).find((option) => option.value === "device-1");
+    const usedOption = document.querySelector<HTMLOptionElement>(
+      'option[value="device-1"][disabled]',
+    );
     expect(usedOption?.disabled).toBe(true);
     expect(usedOption?.textContent).toContain("已绑定其他账号");
 

@@ -110,7 +110,14 @@ function renderWithQuery(element: ReactElement) {
 }
 
 function chooseDevice(deviceId = "device-2") {
-  fireEvent.change(screen.getByRole("combobox"), {
+  const deviceSelect = screen
+    .getAllByRole("combobox")
+    .find((element) =>
+      Array.from((element as HTMLSelectElement).options).some(
+        (option) => option.value === deviceId,
+      ),
+    );
+  fireEvent.change(deviceSelect as HTMLSelectElement, {
     target: { value: deviceId },
   });
 }
@@ -220,7 +227,13 @@ describe("XhsOpsAccountPlanner device bindings", () => {
     renderWithQuery(<XhsOpsAccountPlanner {...componentProps()} />);
 
     await screen.findByDisplayValue("账号 account-first");
-    const selects = screen.getAllByRole("combobox") as HTMLSelectElement[];
+    const selects = screen
+      .getAllByRole("combobox")
+      .filter((element) =>
+        Array.from((element as HTMLSelectElement).options).some((option) =>
+          option.value.startsWith("device-"),
+        ),
+      ) as HTMLSelectElement[];
     fireEvent.change(selects[0], { target: { value: "device-1" } });
     fireEvent.change(selects[1], { target: { value: "device-2" } });
     const transferButtons = screen.getAllByRole("button", {
@@ -377,9 +390,14 @@ describe("XhsOpsAccountPlanner device bindings", () => {
       name: "转移设备并保存此账号",
     }) as HTMLButtonElement;
     expect(transfer.disabled).toBe(false);
-    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe(
-      "device-2",
-    );
+    const deviceSelect = screen
+      .getAllByRole("combobox")
+      .find((element) =>
+        Array.from((element as HTMLSelectElement).options).some(
+          (option) => option.value === "device-2",
+        ),
+      ) as HTMLSelectElement;
+    expect(deviceSelect.value).toBe("device-2");
     expect(screen.getByDisplayValue("未保存的新账号名")).toBeTruthy();
 
     fireEvent.click(transfer);

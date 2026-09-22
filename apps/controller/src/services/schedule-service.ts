@@ -773,6 +773,7 @@ export class ScheduleService {
       schedule.botId,
       runSessionId,
       limit,
+      sessionKey,
     );
     if (messages === null) return null;
     return { messages, sessionKey };

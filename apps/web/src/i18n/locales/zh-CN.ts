@@ -1051,6 +1051,11 @@ const zhCN = {
   "sessions.chat.talkStart": "开始语音对话",
   "sessions.chat.talkStop": "结束语音对话",
   "sessions.chat.talkFailed": "无法开始语音对话。",
+  "sessions.chat.talkConnectionFailed":
+    "语音服务连接失败，请稍后重试；文字聊天不受影响。",
+  "sessions.chat.talkMicrophoneDenied":
+    "麦克风权限被拒绝，请允许访问麦克风后再开始语音对话。",
+  "sessions.chat.talkMicrophoneMissing": "未检测到麦克风，请连接麦克风后重试。",
   "sessions.chat.agentQuestionOther": "输入你的回答…",
   "sessions.chat.agentQuestionConfirm": "确认",
   "sessions.chat.agentQuestionSkip": "跳过",
@@ -1066,13 +1071,13 @@ const zhCN = {
   "sessions.chat.sideQuestionFailed": "旁路提问失败",
   "sessions.chat.sideAnswer": "即时回答",
   "sessions.chat.sideAnswerDismiss": "关闭即时回答",
-  "sessions.chat.branchFromMessage": "从此消息创建分支",
-  "sessions.chat.rollbackToMessage": "回退到此消息",
+  "sessions.chat.branchFromMessage": "从此消息前创建分支",
+  "sessions.chat.rollbackToMessage": "回退到此消息前",
   "sessions.chat.rollbackConfirm":
-    "将当前对话回退到这条消息，之后的消息会从当前分支隐藏。是否继续？",
+    "将当前对话回退到这条消息之前，并将原消息填回输入框供修改。是否继续？",
   "sessions.chat.branchCreated": "已创建消息分支",
   "sessions.chat.branchFailed": "无法创建消息分支",
-  "sessions.chat.rollbackComplete": "已回退到所选消息",
+  "sessions.chat.rollbackComplete": "已回退，原消息可继续编辑",
   "sessions.chat.rollbackFailed": "无法回退到所选消息",
   "sessions.operations.title": "运行中心",
   "sessions.operations.close": "关闭运行中心",
@@ -1831,6 +1836,7 @@ const zhCN = {
   "localChat.defaultBadge": "默认",
   "localChat.setDefault": "设为默认",
   "localChat.waiting": "等待回复中…",
+  "localChat.sendFailed": "消息发送失败，输入已保留，请重试。",
   "localChat.inputPlaceholder": "问问 Tabby（Enter 发送，Shift+Enter 换行）",
   "localChat.attachFile": "附加图片或文件",
   "localChat.attachImage": "图片",
@@ -1966,7 +1972,8 @@ const zhCN = {
   "memory.crossSessionHint": "召回时包含历史会话内容。",
   "memory.scope": "额外索引路径",
   "memory.scopePlaceholder": "每行填写一个本地目录或 Markdown 文件",
-  "memory.syncInterval": "同步周期（分钟）",
+  "memory.autoSyncHint":
+    "启用记忆检索后，文件变化、会话开始或执行检索时会自动同步索引。",
   "memory.saveScope": "保存范围",
   "memory.status": "状态",
   "memory.statusReady": "就绪",
@@ -2010,7 +2017,6 @@ const zhCN = {
   "memos.save": "保存",
   "memory.minScore": "召回最低分",
   "memory.minScoreInvalid": "召回最低分需在 0 到 1 之间",
-  "memory.intervalInvalid": "同步周期必须在 1 到 1440 分钟之间。",
 
   // ── Host command execution ──
   "hostExecution.title": "本机命令执行",

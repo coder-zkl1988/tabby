@@ -88,7 +88,7 @@ export interface XhsOpsProfileServiceDeps {
 }
 
 /**
- * Applying a full profile is a long run: eight fields, two wheel pickers and a
+ * Applying a full profile is a long run: eight writable fields, two wheel pickers and a
  * 200+ entry region list. Measured 2026-09-20 — 60 steps ran out mid-region and
  * the 5-minute deadline expired while the phone kept working for 18 minutes,
  * so the desktop reported failure for a task that was still going. The phone's
@@ -149,7 +149,7 @@ export function buildProfileTextPrompt(
   const pool = account.interestPool;
   const profile = project.profile;
   return [
-    '为一个小红书 KOC 账号生成公开资料。只输出一行紧凑 JSON：{"nickname":"…","bio":"…","gender":"…","birthday":"…","region":"…","interestTags":["…"]}，不要解释。',
+    '为一个小红书 KOC 账号生成公开资料。只输出一行紧凑 JSON：{"nickname":"…","bio":"…","occupation":"…","gender":"…","birthday":"…","region":"…","interestTags":["…"]}，不要解释。',
     `账号定位：${account.label}｜${account.positioning}`,
     persona ? `人设：${persona}` : "",
     `核心兴趣：${pool.core.join("、")}；扩展：${pool.extended.join("、")}；日常：${pool.general.join("、")}`,
@@ -161,6 +161,9 @@ export function buildProfileTextPrompt(
     // The star sign has to survive intact: the birthday is derived from it, so a
     // stray ♎ next to 巨蟹 makes the finished profile contradict itself.
     "简介：三段合一、总长 ≤100 字：①星座+MBTI（自拟，符合人设；星座只写中文名如「巨蟹座」，不要 ♈♉♊ 这类星座符号或 emoji）②一句自我介绍（年龄段/身份/所在地，口语化）③一句兴趣介绍（围绕核心兴趣但像日常分享）。禁止营销话术、联系方式、引流、品牌名。",
+    account.entryMode === "existing"
+      ? "occupation：这是已有账号优化模式；结合账号定位、项目画像和核心兴趣，从已枚举的职业身份中生成一个最匹配的精确职业，等待人工核对。"
+      : "occupation：必须从人设中的职业/身份原样生成，不能改成泛化或相近职业；如果人设职业为空，留空等待人工选择。",
     'gender：必须是 "男"、"女"、"不展示" 三者之一，与人设一致。',
     "region：人设所在城市，只写城市名（如「上海」「北京」），不带省份或区县。",
     "interestTags：3-5 个小红书兴趣标签，取自上面的核心/扩展兴趣，每个 ≤10 字，不重复、不带井号。",
@@ -232,6 +235,7 @@ export function diffProfileFields(
   phone: {
     nickname: string;
     bio: string;
+    occupation?: string;
     gender: string;
     birthday: string;
     region: string;
@@ -239,14 +243,14 @@ export function diffProfileFields(
 ): XhsOpsProfileFieldDiff[] {
   const text = (
     field: XhsOpsProfileField,
-    phoneValue: string,
+    phoneValue: string | undefined,
     draftValue: string,
   ): XhsOpsProfileFieldDiff => ({
     field,
     comparable: true,
-    phone: phoneValue.trim(),
-    draft: draftValue.trim(),
-    differs: phoneValue.trim() !== draftValue.trim(),
+    phone: (phoneValue ?? "").trim(),
+    draft: (draftValue ?? "").trim(),
+    differs: (phoneValue ?? "").trim() !== (draftValue ?? "").trim(),
   });
   const image = (
     field: XhsOpsProfileField,
@@ -262,6 +266,7 @@ export function diffProfileFields(
   return [
     text("nickname", phone.nickname, draft.nickname),
     text("bio", phone.bio, draft.bio),
+    text("occupation", phone.occupation, draft.occupation),
     image("avatar", draft.avatarPath),
     image("cover", draft.coverPath),
     text("gender", phone.gender, draft.gender),
@@ -304,7 +309,7 @@ export function buildCoverPrompt(
   const who =
     [p.gender, p.age].filter((x) => x.trim()).join("，") || "一位旅行者";
   return withPromptHint(
-    `${place}的风景照，横构图，画面中远处有一位${who}背身望向远方，旅行随拍质感，自然光，无文字、无水印、无品牌 logo。`,
+    `${place}的资料背景风景照，横构图，画面中远处有一位${who}背身望向远方，旅行随拍质感，自然光。背景图只用于个人主页展示，必须是城市或自然风景；不要出现羽毛球场、球拍、运动员、训练场、比赛或其他运动器材，不要把业务兴趣画成内容配图。无文字、无水印、无品牌 logo。`,
     hint,
   );
 }
@@ -312,6 +317,7 @@ export function buildCoverPrompt(
 export type ParsedProfileText = {
   nickname: string;
   bio: string;
+  occupation?: string;
   /** "" when the model returned nothing usable — the operator still picks. */
   gender: XhsOpsProfileDraft["gender"];
   region: string;
@@ -367,6 +373,9 @@ export function parseProfileText(text: string): ParsedProfileText {
         return {
           nickname: nickname.slice(0, 20),
           bio: bio.slice(0, 200),
+          ...(typeof obj.occupation === "string" && obj.occupation.trim()
+            ? { occupation: obj.occupation.trim().slice(0, 80) }
+            : {}),
           gender: readGender(obj.gender),
           region:
             typeof obj.region === "string"
@@ -400,7 +409,7 @@ export function parseProfileText(text: string): ParsedProfileText {
  * the receipt, and parseProfileJson caps it at 200 chars.
  */
 function renderProfileSummary(parsed: XhsOpsProfileJson): string {
-  const fields = `昵称=${parsed.nickname} 简介=${parsed.bio} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region}`;
+  const fields = `昵称=${parsed.nickname} 简介=${parsed.bio} 职业=${parsed.occupation ?? "skipped"} 头像=${parsed.avatar} 背景=${parsed.cover} 性别=${parsed.gender} 生日=${parsed.birthday} 地区=${parsed.region}`;
   const note = parsed.note.trim();
   return note ? `${fields}｜手机说明：${note}` : fields;
 }
@@ -416,6 +425,7 @@ function applyStatusFromReceipt(
   const outcomes = [
     parsed.nickname,
     parsed.bio,
+    ...(parsed.occupation ? [parsed.occupation] : []),
     parsed.avatar,
     parsed.cover,
     parsed.gender,
@@ -500,6 +510,9 @@ export class XhsOpsProfileService {
       await persist((draft) => {
         if (parsed.nickname) draft.nickname = parsed.nickname;
         if (parsed.bio) draft.bio = parsed.bio;
+        if (parsed.occupation) draft.occupation = parsed.occupation;
+        else if (!draft.occupation.trim() && current.persona.occupation.trim())
+          draft.occupation = current.persona.occupation.trim();
         // Only fill what the operator has not already decided; anything they
         // already typed wins over the generated value.
         if (parsed.gender && !draft.gender) draft.gender = parsed.gender;
@@ -598,14 +611,14 @@ export class XhsOpsProfileService {
     if (!project.profile?.confirmedAt) {
       throw new XhsOpsError(409, "请先确认目标用户画像");
     }
-    if (!account.personaReviewedAt) {
+    if (account.entryMode !== "existing" && !account.personaReviewedAt) {
       throw new XhsOpsError(409, "请先确认账号人设");
     }
     if (!account.platformAccountId.trim()) {
       throw new XhsOpsError(409, "请先填写并确认目标小红书号");
     }
     if (!xhsOpsProfileDraftReady(account.profileDraft)) {
-      throw new XhsOpsError(409, "请先完成八项账号资料并人工校验确认");
+      throw new XhsOpsError(409, "请先完成账号资料并人工校验确认");
     }
     const deviceId = account.deviceId;
     const claimed = await this.store.beginProfileApply(
@@ -644,6 +657,8 @@ export class XhsOpsProfileService {
       const wantNickname =
         picked("nickname") && draft.nickname.trim().length > 0;
       const wantBio = picked("bio") && draft.bio.trim().length > 0;
+      const wantOccupation =
+        picked("occupation") && draft.occupation.trim().length > 0;
       const wantAvatar = picked("avatar") && Boolean(draft.avatarPath);
       const wantCover = picked("cover") && Boolean(draft.coverPath);
       const wantGender = picked("gender") && Boolean(draft.gender);
@@ -653,6 +668,7 @@ export class XhsOpsProfileService {
       if (
         !wantNickname &&
         !wantBio &&
+        !wantOccupation &&
         !wantAvatar &&
         !wantCover &&
         !wantGender &&
@@ -695,6 +711,7 @@ export class XhsOpsProfileService {
       }
 
       const short = account.id.slice(0, 8);
+      const mediaAlbum = `Tabby/${short}-${operationId.slice(0, 8)}`;
       const images: DevicePushMediaBody["images"] = [];
       let avatarFilename: string | null = null;
       let coverFilename: string | null = null;
@@ -713,7 +730,10 @@ export class XhsOpsProfileService {
       if (images.length > 0) {
         operationUncertain = true;
         const pushed: DevicePushMediaResponse =
-          await this.deviceControl.pushMedia(deviceId, { images });
+          await this.deviceControl.pushMedia(deviceId, {
+            album: mediaAlbum,
+            images,
+          });
         const failed = pushed.results.filter((r) => !r.success);
         operationUncertain = failed.length > 0;
         if (failed.length > 0) {
@@ -729,8 +749,10 @@ export class XhsOpsProfileService {
         platformAccountId: account.platformAccountId,
         nickname: wantNickname ? draft.nickname : null,
         bio: wantBio ? draft.bio : null,
+        occupation: wantOccupation ? draft.occupation : null,
         avatarFilename,
         coverFilename,
+        mediaAlbum,
         gender: (picked("gender") && draft.gender) || null,
         birthday: (picked("birthday") && draft.birthday) || null,
         region: (picked("region") && draft.region) || null,
@@ -748,6 +770,7 @@ export class XhsOpsProfileService {
       const outcome = this.interpret(result, {
         wantNickname,
         wantBio,
+        wantOccupation,
         wantAvatar: !!avatarFilename,
         wantCover: !!coverFilename,
         wantGender,
@@ -776,6 +799,7 @@ export class XhsOpsProfileService {
             platformAccountId: account.platformAccountId,
             nickname: draft.nickname,
             bio: draft.bio,
+            occupation: draft.occupation || null,
             avatarFilename,
             coverFilename,
             gender: draft.gender || null,
@@ -788,6 +812,7 @@ export class XhsOpsProfileService {
       operationUncertain = false;
       const verification = parseProfileVerificationJson(
         verificationResult.message,
+        { requireOccupation: wantOccupation },
       );
       const verified =
         verificationResult.success &&
@@ -800,7 +825,7 @@ export class XhsOpsProfileService {
         appliedAt: this.nowIso(),
         applyStatus: verified ? "applied" : "partial",
         applyResult: verified
-          ? "七项资料与目标账号已完成只读核验"
+          ? `${wantOccupation ? "八" : "七"}项资料与目标账号已完成只读核验`
           : "资料应用任务已结束，但独立只读核验未通过，请人工检查后重试",
         verifiedAt: verified ? this.nowIso() : null,
         verifiedAccountId: verified ? account.platformAccountId : null,
@@ -1094,6 +1119,7 @@ export class XhsOpsProfileService {
     want: {
       wantNickname: boolean;
       wantBio: boolean;
+      wantOccupation: boolean;
       wantAvatar: boolean;
       wantCover: boolean;
       wantGender: boolean;
@@ -1111,6 +1137,7 @@ export class XhsOpsProfileService {
     const requested: Array<[keyof typeof want, keyof typeof parsed]> = [
       ["wantNickname", "nickname"],
       ["wantBio", "bio"],
+      ["wantOccupation", "occupation"],
       ["wantAvatar", "avatar"],
       ["wantCover", "cover"],
       ["wantGender", "gender"],

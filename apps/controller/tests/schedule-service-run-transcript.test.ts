@@ -93,6 +93,7 @@ describe("ScheduleService.getRunTranscript", () => {
       "bot-1",
       "abc-123",
       undefined,
+      "agent:bot-1:cron:job-1:run:abc-123",
     );
     expect(result).toEqual({
       messages,

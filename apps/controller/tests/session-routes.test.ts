@@ -352,12 +352,16 @@ describe("session routes", () => {
       sessionKey: "agent:bot-1:branch",
       title: "Review · branch",
       messageId: "message-1",
+      editorText: "Original prompt",
+      editorAttachments: [{ mimeType: "image/png", data: "base64-image" }],
     }));
     const rollbackToMessage = vi.fn(async () => ({
       ok: true as const,
       id: "source.jsonl",
       sessionKey: "agent:bot-1:source",
       messageId: "message-1",
+      editorText: "Original prompt",
+      editorAttachments: [{ mimeType: "image/png", data: "base64-image" }],
     }));
     container.sessionService = {
       branchAtMessage,
@@ -378,11 +382,15 @@ describe("session routes", () => {
     expect(await branchResponse.json()).toMatchObject({
       id: "branch.jsonl",
       messageId: "message-1",
+      editorText: "Original prompt",
+      editorAttachments: [{ mimeType: "image/png", data: "base64-image" }],
     });
     expect(rollbackResponse.status).toBe(200);
     expect(await rollbackResponse.json()).toMatchObject({
       ok: true,
       messageId: "message-1",
+      editorText: "Original prompt",
+      editorAttachments: [{ mimeType: "image/png", data: "base64-image" }],
     });
     expect(branchAtMessage).toHaveBeenCalledWith("source.jsonl", "message-1");
     expect(rollbackToMessage).toHaveBeenCalledWith("source.jsonl", "message-1");

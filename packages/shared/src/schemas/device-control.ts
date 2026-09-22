@@ -108,6 +108,8 @@ export const devicePushMediaItemSchema = z.object({
 export type DevicePushMediaItem = z.infer<typeof devicePushMediaItemSchema>;
 
 export const devicePushMediaBodySchema = z.object({
+  /** Relative Pictures subdirectory. Omitted for legacy callers -> Tabby. */
+  album: z.string().min(1).max(128).optional(),
   images: z.array(devicePushMediaItemSchema).min(1).max(9),
 });
 export type DevicePushMediaBody = z.infer<typeof devicePushMediaBodySchema>;

@@ -395,7 +395,8 @@ export class XhsOpsStore {
           throw new XhsOpsError(409, "人设已更新，请重新加载并复核");
         if (account.profileDraft.applyOperation?.status === "running")
           throw new XhsOpsError(409, "账号资料正在应用到手机，请等待任务结束");
-        const issues = xhsOpsPersonaIssues(account);
+        const issues =
+          account.entryMode === "existing" ? [] : xhsOpsPersonaIssues(account);
         if (issues.length)
           throw new XhsOpsError(400, `${account.label}：${issues.join("；")}`);
         if (
@@ -1137,7 +1138,10 @@ export class XhsOpsStore {
       const project = current.projects.find(
         (entry) => entry.id === existing.projectId,
       );
-      if (!project?.profile?.confirmedAt || !existing.personaReviewedAt)
+      if (
+        !project?.profile?.confirmedAt ||
+        (existing.entryMode !== "existing" && !existing.personaReviewedAt)
+      )
         throw new XhsOpsError(409, "请先确认目标画像并复核账号人设");
       if (!existing.platformAccountId.trim())
         throw new XhsOpsError(400, "请填写要配置的目标小红书号");

@@ -131,6 +131,39 @@ function parseToolArgs(raw) {
  */
 export function handleServerEvent(event, callbacks) {
   const type = event?.type;
+  if (typeof type !== "string") return "ignored";
+  const responseId = event.response_id ?? event.response?.id;
+  // 9.4 uses these observations to associate PCM and tools with their response.
+  // Do not include payload text/audio or provider errors in diagnostic events.
+  const reportEvent = () =>
+    callbacks.onEvent?.({
+      direction: "server",
+      type,
+      ...(typeof event.item_id === "string" ? { itemId: event.item_id } : {}),
+      ...(typeof responseId === "string" ? { responseId } : {}),
+    });
+  if (type === "response.done") {
+    const status = event.response?.status;
+    const base = typeof responseId === "string" ? { responseId } : {};
+    if (status === "completed" || status === "cancelled") {
+      callbacks.onResponseDone?.({ ...base, status });
+    } else {
+      const error = event.response?.status_details?.error;
+      callbacks.onResponseDone?.({
+        ...base,
+        status: status === "incomplete" ? "incomplete" : "failed",
+        message: "StepFun realtime response did not complete",
+        ...(typeof error?.code === "string"
+          ? { error: { code: error.code } }
+          : {}),
+      });
+    }
+    // Report the typed result first: the host's legacy response.done fallback
+    // assumes success and must not win over a failed provider response.
+    reportEvent();
+    return "response-done";
+  }
+  reportEvent();
   switch (type) {
     case "response.audio.delta": {
       if (typeof event.delta !== "string" || event.delta.length === 0) {
