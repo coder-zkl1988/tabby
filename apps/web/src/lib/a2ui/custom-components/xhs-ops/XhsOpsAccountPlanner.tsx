@@ -1,5 +1,9 @@
 import { Switch } from "@/components/ui/switch";
-import type { XhsOpsDeviceBinding } from "@nexu/shared";
+import {
+  XHS_OCCUPATION_GROUPS,
+  XHS_OCCUPATION_OPTIONS,
+  type XhsOpsDeviceBinding,
+} from "@nexu/shared";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CustomComponentProps } from "../registry";
@@ -57,6 +61,7 @@ interface AccountRow {
   /** Stable local key (server id is null until the first save). */
   key: string;
   id: string | null;
+  entryMode: "new" | "existing";
   label: string;
   positioning: string;
   persona: XhsOpsPersona;
@@ -102,6 +107,7 @@ function rowFromAccount(account: XhsOpsAccount): AccountRow {
   return {
     key: `acct-${account.id}`,
     id: account.id,
+    entryMode: account.entryMode ?? "new",
     label: account.label ?? "",
     positioning: account.positioning ?? "",
     persona: normalizePersona(account.persona),
@@ -123,6 +129,7 @@ function rowFromSuggestion(s: Suggestion): AccountRow {
   return {
     key: nextKey(),
     id: null,
+    entryMode: "new",
     label: s.label,
     positioning: s.positioning,
     persona: s.persona,
@@ -297,7 +304,8 @@ export function XhsOpsAccountPlanner({
       "label" in patch ||
       "positioning" in patch ||
       "persona" in patch ||
-      "personaTags" in patch;
+      "personaTags" in patch ||
+      "entryMode" in patch;
     patchRow(key, {
       ...patch,
       ...(changesPersona ? { personaReviewedAt: null } : {}),
@@ -482,6 +490,7 @@ export function XhsOpsAccountPlanner({
       const device = row.deviceId ? deviceById.get(row.deviceId) : undefined;
       const deviceName = device ? deviceDisplayName(device) : null;
       const body = {
+        entryMode: row.entryMode,
         label: label.slice(0, 40),
         positioning: row.positioning.trim(),
         persona: row.persona,
@@ -542,7 +551,13 @@ export function XhsOpsAccountPlanner({
       agentInstruction:
         overlapReport.length > 0
           ? "部分人设相似度过高（见 overlapWarnings）。请指出哪些账号相似、建议如何拉开差异，并询问是否对这些账号重新生成人设；不要自动改动已保存账号。"
-          : "账号草稿已保存，仍需运营在卡片中勾选目标分布并确认人设；收到 xhs_ops_personas_confirmed 前不要进入素材或养号。",
+          : saved.some(
+                (account) =>
+                  rows.find((row) => row.id === account.id)?.entryMode ===
+                  "existing",
+              )
+            ? "已有账号已保存并绑定手机。请直接渲染 XhsOpsProfileMaterial，先读取手机账号和现有资料，生成并人工确认优化方案；不要执行登录、退出或切换账号。"
+            : "账号草稿已保存，仍需运营在卡片中勾选目标分布并确认人设；收到 xhs_ops_personas_confirmed 前不要进入素材或养号。",
     });
   };
 
@@ -556,8 +571,32 @@ export function XhsOpsAccountPlanner({
       setFormError("请至少选择一个要进入素材阶段的人设");
       return;
     }
+    const existingSelected = selected.filter(
+      (row) => row.entryMode === "existing",
+    );
+    if (
+      existingSelected.length > 0 &&
+      existingSelected.length === selected.length
+    ) {
+      if (
+        selected.some(
+          (row) => row.dirty || !row.id || !row.updatedAt || !row.deviceId,
+        )
+      ) {
+        setFormError("请先保存已有账号并绑定手机，再进入优化");
+        return;
+      }
+      onAction?.("xhs_ops_existing_accounts_selected", {
+        projectId,
+        accountIds: selected.map((row) => row.id as string),
+        agentInstruction:
+          "已有账号已绑定手机。直接渲染 XhsOpsProfileMaterial：先读取手机账号身份和现有资料，再生成人工确认的优化方案；禁止登录、退出或切换账号。资料核验通过后再渲染养号计划。",
+      });
+      return;
+    }
     const invalid = selected.filter(
       (row) =>
+        row.entryMode !== "existing" &&
         personaArchiveIssues({
           persona: row.persona,
           personaTags: row.personaTags,
@@ -653,6 +692,7 @@ export function XhsOpsAccountPlanner({
         fromAccountId: binding.accountId,
         ...(row.id ? { toAccountId: row.id } : {}),
         account: {
+          entryMode: row.entryMode,
           label: label.slice(0, 40),
           positioning: row.positioning.trim(),
           persona: row.persona,
@@ -724,9 +764,17 @@ export function XhsOpsAccountPlanner({
           </SecondaryButton>
           <PrimaryButton
             onClick={() => void confirmSelectedPersonas()}
-            disabled={disabled || generating}
+            disabled={
+              disabled ||
+              generating ||
+              rows.length === 0 ||
+              selectedRows.length === 0
+            }
           >
-            确认选定人设，进入素材
+            {selectedRows.length > 0 &&
+            selectedRows.every((row) => row.entryMode === "existing")
+              ? "进入已有账号优化"
+              : "确认选定人设，进入素材"}
           </PrimaryButton>
         </>
       }
@@ -1001,7 +1049,22 @@ function AccountRowEditor({
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-0/40 p-2.5">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(120px,0.9fr)_auto] sm:items-end">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(130px,0.8fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(120px,0.9fr)_auto] sm:items-end">
+        <Field label="账号模式">
+          <select
+            className={selectClass}
+            value={row.entryMode}
+            disabled={disabled}
+            onChange={(event) =>
+              onPatch({
+                entryMode: event.target.value as AccountRow["entryMode"],
+              })
+            }
+          >
+            <option value="new">新建账号</option>
+            <option value="existing">已有账号优化</option>
+          </select>
+        </Field>
         <Field label="账号定位名 *">
           <input
             className={inputClass}
@@ -1074,6 +1137,9 @@ function AccountRowEditor({
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-secondary">
+        <span>
+          {row.entryMode === "existing" ? "已有账号优化" : "新建账号"}
+        </span>
         <label className="flex items-center gap-1 text-text-primary">
           <input
             type="checkbox"
@@ -1137,13 +1203,41 @@ function AccountRowEditor({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {PERSONA_FIELDS.map(([key, label, placeholder]) => (
           <Field key={key} label={label}>
-            <input
-              className={inputClass}
-              value={row.persona[key]}
-              disabled={disabled}
-              placeholder={placeholder}
-              onChange={(e) => patchPersona({ [key]: e.target.value })}
-            />
+            {key === "occupation" ? (
+              <select
+                className={selectClass}
+                value={row.persona[key]}
+                disabled={disabled}
+                onChange={(e) => patchPersona({ [key]: e.target.value })}
+              >
+                <option value="">请选择职业</option>
+                {row.persona[key] &&
+                !XHS_OCCUPATION_OPTIONS.includes(
+                  row.persona[key] as (typeof XHS_OCCUPATION_OPTIONS)[number],
+                ) ? (
+                  <option value={row.persona[key]}>
+                    {row.persona[key]}（历史值）
+                  </option>
+                ) : null}
+                {XHS_OCCUPATION_GROUPS.map((group) => (
+                  <optgroup key={group.category} label={group.category}>
+                    {group.options.map((occupation) => (
+                      <option key={occupation} value={occupation}>
+                        {occupation}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            ) : (
+              <input
+                className={inputClass}
+                value={row.persona[key]}
+                disabled={disabled}
+                placeholder={placeholder}
+                onChange={(e) => patchPersona({ [key]: e.target.value })}
+              />
+            )}
           </Field>
         ))}
       </div>

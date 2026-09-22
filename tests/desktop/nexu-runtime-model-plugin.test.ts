@@ -13,6 +13,11 @@ const stateModulePath = path.resolve(
   "../../apps/controller/static/nexu-runtime-model.json",
 );
 
+const configModulePath = path.resolve(
+  testDir,
+  "../../apps/controller/static/openclaw.json",
+);
+
 async function writeState(selectedModelRef: string, promptNotice?: string) {
   await writeFile(
     stateModulePath,
@@ -32,8 +37,10 @@ async function writeState(selectedModelRef: string, promptNotice?: string) {
 
 describe("nexu-runtime-model plugin", () => {
   let beforeState: string | null = null;
+  let beforeConfig: string | null = null;
 
   beforeEach(async () => {
+    beforeConfig = await readFile(configModulePath, "utf8").catch(() => null);
     try {
       beforeState = await readFile(stateModulePath, "utf8");
     } catch {
@@ -42,6 +49,11 @@ describe("nexu-runtime-model plugin", () => {
   });
 
   afterEach(async () => {
+    if (beforeConfig === null) {
+      await unlink(configModulePath).catch(() => undefined);
+    } else {
+      await writeFile(configModulePath, beforeConfig, "utf8");
+    }
     if (beforeState === null) {
       await unlink(stateModulePath).catch(() => undefined);
       return;
@@ -84,6 +96,52 @@ describe("nexu-runtime-model plugin", () => {
     expect(await byokHandler?.()).toEqual({
       providerOverride: "byok_openai",
       modelOverride: "openai/gpt-4.1",
+    });
+  });
+
+  it("preserves per-agent model pins in keyed 2026.9.4 entries", async () => {
+    const { default: plugin } = await import(
+      `${pluginModulePath}?t=${Date.now()}`
+    );
+    await writeState("global-model");
+    await writeFile(
+      configModulePath,
+      JSON.stringify({
+        agents: {
+          entries: {
+            pinned: { model: { primary: "provider/pinned-model" } },
+            stringPinned: { model: "provider/string-model" },
+            followsDefault: {},
+          },
+        },
+      }),
+    );
+    type Handler = (
+      event: Record<string, unknown>,
+      ctx: { agentId: string },
+    ) => Promise<Record<string, string> | undefined>;
+    const handlers = new Map<string, Handler>();
+    plugin.register({
+      on(event: string, handler: Handler) {
+        handlers.set(event, handler);
+      },
+    });
+
+    for (const agentId of ["pinned", "stringPinned"]) {
+      await expect(
+        handlers.get("before_model_resolve")?.({}, { agentId }),
+      ).resolves.toBeUndefined();
+      await expect(
+        handlers.get("before_prompt_build")?.({}, { agentId }),
+      ).resolves.toBeUndefined();
+    }
+    await expect(
+      handlers.get("before_model_resolve")?.({}, { agentId: "followsDefault" }),
+    ).resolves.toEqual({ modelOverride: "global-model" });
+    await expect(
+      handlers.get("before_prompt_build")?.({}, { agentId: "followsDefault" }),
+    ).resolves.toMatchObject({
+      prependSystemContext: expect.stringContaining("global-model"),
     });
   });
 

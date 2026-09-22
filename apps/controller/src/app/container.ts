@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import type { SkillReference } from "@nexu/shared";
+import { resolveDefaultBotFromConfig } from "../lib/default-bot.js";
 import { logger } from "../lib/logger.js";
 import { startChannelHealthWatchdog } from "../runtime/channel-health-watchdog.js";
 import { ControlPlaneHealthService } from "../runtime/control-plane-health.js";
@@ -193,7 +194,6 @@ export async function createContainer(): Promise<ControllerContainer> {
   const templateWriter = new WorkspaceTemplateWriter(env);
   const scheduleWorkspaceWriter = new ScheduleWorkspaceWriter(env);
   const gatewayClient = new GatewayClient(env);
-  const sessionsRuntime = new SessionsRuntime(env);
   const runtimeState = createRuntimeState();
   // Construct openclawProcess before watchTrigger so the watch trigger can
   // delegate gateway restarts to OpenClawProcessManager.restart() instead of
@@ -202,6 +202,7 @@ export async function createContainer(): Promise<ControllerContainer> {
   const watchTrigger = new OpenClawWatchTrigger(env, openclawProcess);
   const wsClient = new OpenClawWsClient(env);
   const gatewayService = new OpenClawGatewayService(wsClient);
+  const sessionsRuntime = new SessionsRuntime(env, gatewayService);
   const approvalAuditService = new ApprovalAuditService(
     path.join(env.nexuHomeDir, "approval-audit-ledger.json"),
   );
@@ -507,15 +508,17 @@ export async function createContainer(): Promise<ControllerContainer> {
 
   const mediaGenerationService = new MediaGenerationService({
     // Any active bot can run the utility lane; prefer the default agent
-    // (first active bot, mirroring compileAgentList ordering).
+    // selected by the same resolver used by desktop sessions and config
+    // compilation. Utility work must stay on the user's configured default
+    // bot; choosing the first expert by slug can select a stale agent store.
     pickUtilityBotId: async () => {
       const config = await configStore.getConfig();
-      const bot = config.bots
-        .filter((candidate) => candidate.status === "active")
-        .sort((left, right) => left.slug.localeCompare(right.slug))[0];
+      const bot = resolveDefaultBotFromConfig(config);
       return bot?.id ?? null;
     },
     sendChat: (input) => gatewayService.sendToMainSession(input),
+    readGatewayHistory: (sessionKey, limit) =>
+      gatewayService.getStoredChatHistory(sessionKey, limit),
     readSessionEntry: (botId, sessionKey) =>
       readSubagentSessionEntry(env.openclawStateDir, botId, sessionKey),
     readAssistantReply: (sessionFile) => readLastAssistantReply(sessionFile),

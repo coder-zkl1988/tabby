@@ -324,9 +324,12 @@ export interface XhsOpsProfileApplyTaskInput {
   platformAccountId: string;
   nickname?: string | null;
   bio?: string | null;
+  occupation?: string | null;
   /** 已推送到手机「Tabby」相册的文件名（不含路径） */
   avatarFilename?: string | null;
   coverFilename?: string | null;
+  /** This apply operation's isolated gallery album. */
+  mediaAlbum?: string | null;
   gender?: "男" | "女" | "不展示" | null;
   birthday?: string | null;
   region?: string | null;
@@ -365,12 +368,17 @@ export function buildProfileApplyTask(
       `${n++}) 简介：点「简介」，**只执行一次 TYPE**，整体替换为下面这段（原样输入，不改写、不追加）：\n${input.bio.trim()}`,
     );
   }
+  if (input.occupation?.trim()) {
+    steps.push(
+      `${n++}) 职业：点「职业」进入「选择你的身份」，先在左侧选择与目标人设匹配的一级分类，再在右侧选择完全匹配的二级职业「${input.occupation.trim()}」；只能选择这个精确项，找不到就记 failed，不得用相近职业代替；保存后回到编辑主页核对职业已显示。`,
+    );
+  }
   if (input.avatarFilename) {
     steps.push(
       // The picker exposes no filename: its grid cells carry no text and no
       // content-desc, so the file name we pushed is unusable as a selector.
       // What IS visible is album, recency and the picture itself.
-      `${n++}) 头像：点编辑主页顶部的圆形头像 → 进入头像预览页后点「上传新头像」（**不要**点「制作 AI 头像」或「获取头像挂件」）→ 相册选择器打开后先点顶部的相册名（默认是「全部」）→ 在下拉里选「Tabby」相册 → 目标是**最近推送的那张人物半身照**（方形/竖构图，画面是一个人，有自然环境背景）；相册按时间倒序，目标就在最前面几张里。`,
+      `${n++}) 头像：点编辑主页顶部的圆形头像 → 进入头像预览页后点「上传新头像」（**不要**点「制作 AI 头像」或「获取头像挂件」）→ 相册选择器打开后先点顶部的相册名（默认是「全部」）→ 在下拉里选「${input.mediaAlbum ?? "Tabby"}」相册 → 目标是刚推送的那张人物半身照（方形/竖构图，画面是一个人，有自然环境背景）。`,
     );
     steps.push(
       `${n++}) 选中后进入裁剪预览：**必须确认画面确实是人物半身照**，不是风景、不是卡通、不是截图；不对就返回重选，不得将就。确认后点完成/保存。`,
@@ -378,7 +386,7 @@ export function buildProfileApplyTask(
   }
   if (input.coverFilename) {
     steps.push(
-      `${n++}) 背景图：只点「背景图」字段（不要点头像）→ 相册选择器里同样先切到「Tabby」相册 → 目标是**最近推送的那张横构图风景照**（画面是城市/自然风景，远处有一个人的背影），与上一步的人物半身照是不同的两张 → 确认画面后保存。`,
+      `${n++}) 背景图：只点「背景图」字段（不要点头像）→ 相册选择器里先切到「${input.mediaAlbum ?? "Tabby"}」相册 → 只从这个相册选择刚推送的横构图风景照（画面是城市/自然风景，远处有一个人的背影），不要选择人物半身照或其他相册图片 → 确认画面后保存。`,
     );
   }
   if (input.gender) {
@@ -412,9 +420,9 @@ export function buildProfileApplyTask(
     // invisible to the app, so every later "pick the right image" step is
     // guesswork. Full access is what makes the album usable at all.
     "相册权限：系统询问照片访问时选「允许访问所有照片」。若相册选择器显示「未找到图片文件」或一张图都没有，说明当前是「仅选择部分照片」权限，此时不要硬选，把头像/背景图记为 failed 并在 note 里写「相册权限受限」。",
-    "禁止改动小红书号、实名认证、职业、学校等未列出的字段；出现登录页/账号异常/验证码 → 停止并记为 failed。",
+    "禁止改动小红书号、实名认证、学校等未列出的字段；出现登录页/账号异常/验证码 → 停止并记为 failed。",
     "隐私：key_process 与汇报里不要复述名字、简介的具体内容，只记「已修改/失败/跳过」。",
-    '结束：回到「我」页核对已改字段确实更新，按通用规则 HOME 回桌面后 COMPLETE。COMPLETE 的 return 先写 2–4 行人读汇报，最后一行必须是 PROFILE_JSON: 加一行紧凑 JSON：{"nickname":"done|failed|skipped","bio":"done|failed|skipped","avatar":"done|failed|skipped","cover":"done|failed|skipped","gender":"done|failed|skipped","birthday":"done|failed|skipped","region":"done|failed|skipped","note":"一句话"}，未要求修改的字段写 skipped。不得在回执复述小红书号或生日。',
+    '结束：回到「我」页核对已改字段确实更新，按通用规则 HOME 回桌面后 COMPLETE。COMPLETE 的 return 先写 2–4 行人读汇报，最后一行必须是 PROFILE_JSON: 加一行紧凑 JSON：{"nickname":"done|failed|skipped","bio":"done|failed|skipped","occupation":"done|failed|skipped","avatar":"done|failed|skipped","cover":"done|failed|skipped","gender":"done|failed|skipped","birthday":"done|failed|skipped","region":"done|failed|skipped","note":"一句话"}，未要求修改的字段写 skipped。不得在回执复述小红书号或生日。',
   ].join("\n");
 }
 
@@ -422,6 +430,7 @@ export type XhsOpsProfileFieldOutcome = "done" | "failed" | "skipped";
 export interface XhsOpsProfileJson {
   nickname: XhsOpsProfileFieldOutcome;
   bio: XhsOpsProfileFieldOutcome;
+  occupation?: XhsOpsProfileFieldOutcome;
   avatar: XhsOpsProfileFieldOutcome;
   cover: XhsOpsProfileFieldOutcome;
   gender: XhsOpsProfileFieldOutcome;
@@ -453,6 +462,9 @@ export function parseProfileJson(
   return {
     nickname: outcome(payload.nickname),
     bio: outcome(payload.bio),
+    ...(payload.occupation !== undefined
+      ? { occupation: outcome(payload.occupation) }
+      : {}),
     avatar: outcome(payload.avatar),
     cover: outcome(payload.cover),
     gender: outcome(payload.gender),
@@ -469,6 +481,10 @@ const profileVerificationFieldsSchema = z
   .object({
     nickname: z.boolean(),
     bio: z.boolean(),
+    // Older phone skills did not include occupation in the verification
+    // receipt. The caller requires it explicitly when the current task asked
+    // the phone to write occupation.
+    occupation: z.boolean().optional(),
     avatar: z.boolean(),
     cover: z.boolean(),
     gender: z.boolean(),
@@ -539,14 +555,14 @@ export const XHS_PROFILE_READBACK_MARKER = "PROFILE_READBACK_JSON:";
 export function buildProfileReadbackTask(): string {
   return [
     "【小红书资料回读】本任务只读取，不修改、不保存、不登录、不退出、不切换账号，也不执行浏览互动。",
-    "AWAKE 小红书 → 底部「我」→ 编辑资料，逐项读取当前已有内容：名字、简介、性别、生日、地区。",
+    "AWAKE 小红书 → 底部「我」→ 编辑资料，逐项读取当前已有内容：名字、简介、职业、性别、生日、地区。",
     XHS_ME_TAB_UNFOLD_HINT,
     "字段为空或显示为占位提示（如「介绍一下自己」「选择生日」「编辑性别」）时，该字段返回空字符串，不要把占位文案当成内容。",
     "隐私：不得读取或回传小红书号、手机号、实名信息；不要进入任何需要验证的页面。",
     '未登录、停在登录页或找不到编辑资料页时，返回 status:"unavailable" 并结束，不要尝试登录。',
     // Same reason as the identity task: the completion screenshot is part of
     // what the operator reviews, so do not go HOME first.
-    `**必须停留在编辑资料页上直接 COMPLETE，不要 HOME、不要 BACK**。return 只能是一行 ${XHS_PROFILE_READBACK_MARKER}{"v":1,"status":"read|unavailable","nickname":"…","bio":"…","gender":"…","birthday":"…","region":"…"}，生日用 YYYY-MM-DD，读不到的字段用空字符串，不得附带其他字段。`,
+    `**必须停留在编辑资料页上直接 COMPLETE，不要 HOME、不要 BACK**。return 只能是一行 ${XHS_PROFILE_READBACK_MARKER}{"v":1,"status":"read|unavailable","nickname":"…","bio":"…","occupation":"…","gender":"…","birthday":"…","region":"…"}，生日用 YYYY-MM-DD，读不到的字段用空字符串，不得附带其他字段。`,
   ].join("\n");
 }
 
@@ -584,9 +600,9 @@ export function buildProfileVerificationTask(
     "【小红书资料只读验收】本任务只读取并核对资料，不修改、保存、登录、退出、切换账号或执行浏览互动。",
     `AWAKE 小红书 → “我” → 编辑主页，先逐字核对“小红书号”与目标「${input.platformAccountId.trim()}」完全一致；不一致时 accountMatched=false 并结束。不得在过程或回执复述号码。`,
     XHS_ME_TAB_UNFOLD_HINT,
-    `逐项读取并核对目标：昵称「${input.nickname?.trim() ?? ""}」；简介「${input.bio?.trim() ?? ""}」；头像为刚应用的 ${input.avatarFilename ?? "目标图片"}；背景图为刚应用的 ${input.coverFilename ?? "目标图片"}；性别「${input.gender ?? ""}」；生日「${input.birthday?.trim() ?? ""}」；地区「${input.region?.trim() ?? ""}」。`,
+    `逐项读取并核对目标：昵称「${input.nickname?.trim() ?? ""}」；简介「${input.bio?.trim() ?? ""}」；职业「${input.occupation?.trim() ?? ""}」；头像为刚应用的 ${input.avatarFilename ?? "目标图片"}；背景图为刚应用的 ${input.coverFilename ?? "目标图片"}；性别「${input.gender ?? ""}」；生日「${input.birthday?.trim() ?? ""}」；地区「${input.region?.trim() ?? ""}」。`,
     "文字和选择项必须与目标精确一致；头像、背景图必须在编辑页和主页均显示为刚应用的目标图。无法进入字段、看不清、结果不确定均记 false，不得猜测 true。",
-    `核对后 HOME 回桌面并 COMPLETE。return 只能是一行 ${PROFILE_VERIFICATION_JSON_MARKER}{"v":1,"status":"verified|failed","accountMatched":true|false,"fields":{"nickname":true|false,"bio":true|false,"avatar":true|false,"cover":true|false,"gender":true|false,"birthday":true|false,"region":true|false}}。只有账号匹配且七项全部核对一致时 status=verified；不得增加字段或附带资料原文。`,
+    `核对后 HOME 回桌面并 COMPLETE。return 只能是一行 ${PROFILE_VERIFICATION_JSON_MARKER}{"v":1,"status":"verified|failed","accountMatched":true|false,"fields":{"nickname":true|false,"bio":true|false,"occupation":true|false,"avatar":true|false,"cover":true|false,"gender":true|false,"birthday":true|false,"region":true|false}}。只有账号匹配且八项全部核对一致时 status=verified；不得增加字段或附带资料原文。`,
   ].join("\n");
 }
 
@@ -595,6 +611,7 @@ const profileReadbackSchema = z.object({
   status: z.enum(["read", "unavailable"]),
   nickname: z.string().catch(""),
   bio: z.string().catch(""),
+  occupation: z.string().catch("").optional(),
   gender: z.string().catch(""),
   birthday: z.string().catch(""),
   region: z.string().catch(""),
@@ -627,6 +644,7 @@ export function parseProfileReadbackJson(
 
 export function parseProfileVerificationJson(
   message: string | null | undefined,
+  options: { requireOccupation?: boolean } = {},
 ): XhsOpsProfileVerification | null {
   if (!message) return null;
   const lines = message
@@ -649,6 +667,9 @@ export function parseProfileVerificationJson(
     );
     const parsed = profileVerificationSchema.safeParse(value);
     if (!parsed.success) return null;
+    if (options.requireOccupation && parsed.data.fields.occupation !== true) {
+      return null;
+    }
     const allFieldsMatch = Object.values(parsed.data.fields).every(Boolean);
     if (
       (parsed.data.status === "verified") !==

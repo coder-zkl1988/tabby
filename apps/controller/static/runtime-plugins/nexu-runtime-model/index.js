@@ -63,17 +63,15 @@ function loadAgentsWithOwnModel() {
       return cachedAgentsWithOwnModel;
     }
     const parsed = JSON.parse(raw);
-    const list = parsed?.agents?.list;
+    const entries = parsed?.agents?.entries;
     const ids = new Set();
-    if (Array.isArray(list)) {
-      for (const agent of list) {
-        const primary = agent?.model?.primary;
-        if (
-          typeof agent?.id === "string" &&
-          typeof primary === "string" &&
-          primary.trim().length > 0
-        ) {
-          ids.add(agent.id);
+    if (entries && typeof entries === "object" && !Array.isArray(entries)) {
+      for (const [agentId, agent] of Object.entries(entries)) {
+        const primary = typeof agent?.model === "string"
+          ? agent.model
+          : agent?.model?.primary;
+        if (typeof primary === "string" && primary.trim().length > 0) {
+          ids.add(agentId);
         }
       }
     }
@@ -191,7 +189,7 @@ const plugin = {
       // that pins its own model in openclaw.json has already made a more
       // specific choice, and overriding it here silently defeated the
       // per-bot binding: the bot ran on the global model while every
-      // surface — the picker, the bot record, agents.list — showed the one
+      // surface — the picker, the bot record, agents.entries — showed the one
       // the user had chosen.
       if (agentPinsOwnModel(ctx)) {
         return;

@@ -82,6 +82,44 @@ async function seed() {
 }
 
 describe("KOC stage dependencies", () => {
+  it("lets an existing phone account skip new-persona review and enter optimization", async () => {
+    const { store, project } = await seed();
+    const account = await store.createAccount({
+      projectId: project.id,
+      entryMode: "existing",
+      label: "已有球友号",
+      positioning: "优化已有账号的下班打球内容",
+      platformAccountId: "existing-xhs",
+      deviceId: "existing-phone",
+    });
+    const drafted = await store.updateAccount(account.id, {
+      profileDraft: {
+        ...account.profileDraft,
+        nickname: "已有球友号",
+        bio: "北京下班打球记录",
+        gender: "男",
+        birthday: "1997-01-01",
+        region: "北京",
+        interestTags: ["羽毛球"],
+        avatarCandidates: [image],
+        coverCandidates: [image],
+        avatarPath: image,
+        coverPath: image,
+      },
+    });
+    const confirmed = await store.confirmProfileDraft(account.id);
+    if (!confirmed) throw new Error("missing existing account fixture");
+    expect(confirmed?.entryMode).toBe("existing");
+    expect(confirmed?.personaReviewedAt).toBeNull();
+    expect(drafted?.profileDraft.reviewedAt).toBeNull();
+    expect(xhsOpsAccountNurtureIssues(confirmed, project)).toEqual(
+      expect.arrayContaining(["请先完成手机账号配置及资料生效核验"]),
+    );
+    expect(xhsOpsAccountNurtureIssues(confirmed, project)).not.toContain(
+      "人设或目标画像已变化，请重新核对并确认人设",
+    );
+  });
+
   it("rejects stale account saves and material confirmations without changing newer content", async () => {
     const { store, account } = await seed();
     const edited = await store.updateAccount(account.id, {

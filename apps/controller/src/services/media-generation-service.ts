@@ -42,6 +42,15 @@ export type MediaGenerationServiceDeps = {
     sessionKey: string,
   ) => Promise<{ status?: string; sessionFile?: string } | null>;
   readAssistantReply: (sessionFile: string) => Promise<string | null>;
+  /**
+   * Read the utility lane through OpenClaw's gateway. OpenClaw 2026.9 stores
+   * sessions in SQLite, so the legacy sessions.json/session JSONL reader may
+   * have no entry even after the gateway has persisted the completed turn.
+   */
+  readGatewayHistory?: (
+    sessionKey: string,
+    limit?: number,
+  ) => Promise<{ messages?: unknown[]; status?: string } | null>;
   /** OpenClaw state dir — generated files must live under <stateDir>/media. */
   openclawStateDir: string;
   genId: () => string;
@@ -61,6 +70,107 @@ export type MediaGenerationServiceOptions = {
 };
 
 type MediaKind = "image" | "video" | "audio";
+
+type GatewayAssistantReply = {
+  status: "running" | "done" | "failed";
+  text: string | null;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function textFromContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  return content
+    .map((part) => {
+      const record = asRecord(part);
+      if (!record) return "";
+      return (record.type === "text" || record.type === "output_text") &&
+        typeof record.text === "string"
+        ? record.text
+        : "";
+    })
+    .join("");
+}
+
+function assistantMessageStatus(
+  message: Record<string, unknown>,
+): "running" | "done" | "failed" {
+  const stopReason =
+    typeof message.stopReason === "string" ? message.stopReason : undefined;
+  if (
+    message.failed === true ||
+    message.aborted === true ||
+    message.status === "failed" ||
+    stopReason === "error" ||
+    stopReason === "aborted" ||
+    stopReason === "failed"
+  ) {
+    return "failed";
+  }
+  const hasToolCall =
+    Array.isArray(message.content) &&
+    message.content.some((part) => {
+      const type = asRecord(part)?.type;
+      return (
+        type === "toolCall" ||
+        type === "tool_call" ||
+        type === "toolUse" ||
+        type === "tool_use"
+      );
+    });
+  if (
+    hasToolCall ||
+    message.status === "running" ||
+    stopReason === "toolUse" ||
+    stopReason === "tool_calls"
+  ) {
+    return "running";
+  }
+  return "done";
+}
+
+/**
+ * Extract the latest assistant text from the public chat.history shape.
+ *
+ * OpenClaw can expose a tool-call assistant message before the final text
+ * message. Returning `running` for tool-only content keeps the caller from
+ * treating an intermediate turn as a completed media result.
+ */
+export function extractLatestGatewayAssistantReply(
+  history: { messages?: unknown[]; status?: string } | null | undefined,
+): GatewayAssistantReply {
+  if (history?.status === "failed") {
+    return { status: "failed", text: null };
+  }
+  const messages = history?.messages;
+  if (!Array.isArray(messages)) {
+    return { status: "running", text: null };
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = asRecord(messages[index]);
+    if (!message || message.role !== "assistant") continue;
+    const status = assistantMessageStatus(message);
+    if (status === "failed") return { status, text: null };
+    if (status === "running") return { status, text: null };
+    const text = textFromContent(message.content).trim();
+    if (text) return { status: "done", text };
+    // Never fall back to an older assistant message: it may be preamble from
+    // before a tool call rather than the final utility result.
+    return { status: "running", text: null };
+  }
+  return { status: "running", text: null };
+}
 
 const IMAGE_PATH_SRC =
   "(\\/[^\\r\\n\"'`]+\\/media\\/[^\\r\\n\"'`]+\\.(?:png|jpe?g|webp|gif))";
@@ -930,6 +1040,37 @@ export class MediaGenerationService {
   ): Promise<string> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
+      // OpenClaw 2026.9 owns the SQLite session store. Prefer its public
+      // history API so a completed utility turn is visible even when the
+      // legacy sessions.json/JSONL files are absent or stale.
+      if (this.deps.readGatewayHistory) {
+        try {
+          const gatewayReply = extractLatestGatewayAssistantReply(
+            await this.deps.readGatewayHistory(sessionKey, 200),
+          );
+          if (gatewayReply.status === "failed") {
+            throw new ImageGenerationFailedError("generation session failed");
+          }
+          if (gatewayReply.status === "done") {
+            const reply = gatewayReply.text ?? "";
+            if (allowEmptyReply || reply.trim()) {
+              return reply.trim();
+            }
+          }
+        } catch (error) {
+          if (error instanceof ImageGenerationFailedError) throw error;
+          logger.debug(
+            {
+              error: error instanceof Error ? error.message : String(error),
+            },
+            "media generation: gateway history unavailable, using legacy reader",
+          );
+        }
+      }
+
+      // Keep the pre-9.4 reader as a fallback for old runtimes and tests. It
+      // also remains the only source of the explicit done/failed session
+      // status when a gateway history response is unavailable.
       const entry = await this.deps.readSessionEntry(botId, sessionKey);
       if (entry?.status === "done") {
         const reply = entry.sessionFile

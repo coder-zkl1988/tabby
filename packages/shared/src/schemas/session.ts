@@ -125,7 +125,15 @@ export const sessionRecoveryBranchResponseSchema = z.object({
   checkpoint: sessionCheckpointSchema,
 });
 
+const sessionEditorFields = {
+  editorText: z.string().optional(),
+  editorAttachments: z
+    .array(z.object({ mimeType: z.string(), data: z.string() }))
+    .optional(),
+};
+
 export const sessionMessageBranchResponseSchema = z.object({
+  ...sessionEditorFields,
   id: z.string(),
   botId: z.string(),
   sessionKey: z.string(),
@@ -134,6 +142,7 @@ export const sessionMessageBranchResponseSchema = z.object({
 });
 
 export const sessionMessageRollbackResponseSchema = z.object({
+  ...sessionEditorFields,
   ok: z.literal(true),
   id: z.string(),
   sessionKey: z.string(),

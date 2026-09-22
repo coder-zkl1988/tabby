@@ -67,6 +67,12 @@ function decodeBase64(value: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 /**
  * Pull audio + transcript out of a `talk.event` envelope.
  *
@@ -79,37 +85,59 @@ export function extractTalkAudio(payload: unknown): {
   transcript?: { text: string; role: "user" | "assistant"; final: boolean };
 } {
   if (typeof payload !== "object" || payload === null) return {};
-  const record = payload as Record<string, unknown>;
-  const event = (record.talkEvent ?? record) as Record<string, unknown>;
-  const inner = (event.payload ?? event) as Record<string, unknown>;
+  const record = asRecord(payload);
+  const event = asRecord(record.talkEvent ?? record);
+  const inner = asRecord(event.payload ?? event);
 
   const type = typeof event.type === "string" ? event.type : "";
   // `delta` carries base64 audio on audio events but plain *text* on transcript
   // events. Probing it blind fed sentences to `atob`, which throws on the first
   // space; `audio` is unambiguous, `delta` is only trusted otherwise.
-  const audioBase64 = (
-    /transcript|text/i.test(type)
-      ? [inner.audio, event.audio]
-      : [inner.audio, inner.delta, event.audio]
-  ).find(
+  // OpenClaw 9.4 keeps the PCM on the outer relay envelope; its nested
+  // `output.audio.delta` event only contains byte-length metadata.
+  const audioBase64 = [
+    inner.audioBase64,
+    event.audioBase64,
+    record.audioBase64,
+    inner.audio,
+    event.audio,
+    record.audio,
+    ...(/transcript|text/i.test(type) ? [] : [inner.delta]),
+  ].find(
     (value): value is string => typeof value === "string" && value.length > 0,
   );
-  const turnId = [inner.turnId, event.turnId].find(
+  const turnId = [inner.turnId, event.turnId, record.turnId].find(
     (value): value is string => typeof value === "string",
   );
 
-  const text = [inner.transcript, inner.text].find(
+  const text = [
+    inner.transcript,
+    inner.text,
+    event.transcript,
+    event.text,
+    record.transcript,
+    record.text,
+  ].find(
     (value): value is string => typeof value === "string" && value.length > 0,
+  );
+  const role = [inner.role, event.role, record.role].find(
+    (value): value is "user" | "assistant" =>
+      value === "user" || value === "assistant",
+  );
+  const final = [event.final, inner.final, record.final].find(
+    (value): value is boolean => typeof value === "boolean",
   );
   const transcript =
     text === undefined
       ? undefined
       : {
           text,
-          role: /input|user/i.test(type)
-            ? ("user" as const)
-            : ("assistant" as const),
-          final: !/delta|partial/i.test(type),
+          role:
+            role ??
+            (/input|user/i.test(type)
+              ? ("user" as const)
+              : ("assistant" as const)),
+          final: final ?? !/delta|partial/i.test(type),
         };
 
   return { audioBase64, turnId, transcript };
@@ -122,6 +150,7 @@ export class TalkVoiceSession {
   private worklet: AudioWorkletNode | null = null;
   private playbackCursor = 0;
   private scheduled = new Set<AudioBufferSourceNode>();
+  private playbackMarks = new Map<string, Set<AudioBufferSourceNode>>();
   private currentTurnId: string | undefined;
   private outputRate = DEFAULT_SAMPLE_RATE_HZ;
   private disposed = false;
@@ -168,12 +197,15 @@ export class TalkVoiceSession {
       if (!this.disposed) this.fail("voice stream failed");
     };
     socket.onclose = () => {
-      if (!this.disposed) this.callbacks.onStatus?.("idle");
+      if (!this.disposed) void this.stop();
     };
     await new Promise<void>((resolve, reject) => {
       socket.onopen = () => resolve();
       socket.addEventListener("error", () =>
         reject(new Error("voice stream failed to open")),
+      );
+      socket.addEventListener("close", () =>
+        reject(new Error("voice stream closed before opening")),
       );
     });
     if (this.disposed) return;
@@ -196,11 +228,34 @@ export class TalkVoiceSession {
   }
 
   private handleDownstream(data: unknown): void {
-    if (typeof data !== "string") return;
+    if (this.disposed || typeof data !== "string") return;
     let payload: unknown;
     try {
       payload = JSON.parse(data);
     } catch {
+      return;
+    }
+    const record = asRecord(payload);
+    if (record.type === "error") {
+      this.fail(
+        typeof record.message === "string"
+          ? record.message
+          : "voice session failed",
+      );
+      return;
+    }
+    if (record.type === "close") {
+      void this.stop();
+      return;
+    }
+    if (record.type === "clear") {
+      this.clearPlayback();
+      this.callbacks.onStatus?.("listening");
+      return;
+    }
+    if (record.type === "mark" && typeof record.markName === "string") {
+      this.playbackMarks.set(record.markName, new Set(this.scheduled));
+      this.flushPlaybackMarks();
       return;
     }
     const { audioBase64, turnId, transcript } = extractTalkAudio(payload);
@@ -237,6 +292,8 @@ export class TalkVoiceSession {
     this.scheduled.add(source);
     source.onended = () => {
       this.scheduled.delete(source);
+      for (const sources of this.playbackMarks.values()) sources.delete(source);
+      this.flushPlaybackMarks();
       if (this.scheduled.size === 0 && !this.disposed) {
         this.callbacks.onStatus?.("listening");
       }
@@ -246,6 +303,25 @@ export class TalkVoiceSession {
 
   /** Stop the assistant mid-sentence and drop whatever is already queued. */
   interrupt(): void {
+    this.clearPlayback();
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(
+        JSON.stringify({ type: "cancel", turnId: this.currentTurnId }),
+      );
+    }
+  }
+
+  private flushPlaybackMarks(): void {
+    for (const [markName, sources] of this.playbackMarks) {
+      if (sources.size > 0) continue;
+      this.playbackMarks.delete(markName);
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        this.socket.send(JSON.stringify({ type: "acknowledgeMark", markName }));
+      }
+    }
+  }
+
+  private clearPlayback(): void {
     for (const source of this.scheduled) {
       try {
         source.stop();
@@ -255,16 +331,13 @@ export class TalkVoiceSession {
     }
     this.scheduled.clear();
     this.playbackCursor = 0;
-    if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(
-        JSON.stringify({ type: "cancel", turnId: this.currentTurnId }),
-      );
-    }
+    for (const sources of this.playbackMarks.values()) sources.clear();
+    this.flushPlaybackMarks();
   }
 
   private fail(message: string): void {
     this.callbacks.onError?.(message);
-    this.callbacks.onStatus?.("error");
+    void this.stop().finally(() => this.callbacks.onStatus?.("error"));
   }
 
   async stop(): Promise<void> {

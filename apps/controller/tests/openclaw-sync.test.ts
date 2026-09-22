@@ -133,7 +133,7 @@ describe("OpenClawSyncService", () => {
     const config = JSON.parse(
       await readFile(env.openclawConfigPath, "utf8"),
     ) as ReturnType<typeof compileOpenClawConfig>;
-    expect(config.agents.list).toHaveLength(1);
+    expect(Object.keys(config.agents.entries)).toHaveLength(1);
     expect(config.channels.slack?.accounts["slack-A123-T123"]?.botToken).toBe(
       "xoxb-test",
     );
@@ -174,18 +174,21 @@ describe("OpenClawSyncService", () => {
       skillDb,
     );
 
-    await configStore.createBot({ name: "Assistant", slug: "assistant" });
+    const bot = await configStore.createBot({
+      name: "Assistant",
+      slug: "assistant",
+    });
     await syncService.syncAllImmediate();
 
     const config = JSON.parse(
       await readFile(env.openclawConfigPath, "utf8"),
     ) as ReturnType<typeof compileOpenClawConfig>;
 
-    expect(config.agents.list).toHaveLength(1);
-    expect(config.agents.list[0].skills).toEqual(
+    expect(Object.keys(config.agents.entries)).toHaveLength(1);
+    expect(config.agents.entries[bot.id].skills).toEqual(
       expect.arrayContaining(["web-search", "image-gen"]),
     );
-    expect(config.agents.list[0].skills).toHaveLength(2);
+    expect(config.agents.entries[bot.id].skills).toHaveLength(2);
   });
 
   function createSyncService(options: {

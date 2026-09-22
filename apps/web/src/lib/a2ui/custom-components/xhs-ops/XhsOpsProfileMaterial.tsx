@@ -4,6 +4,7 @@ import type { CustomComponentProps } from "../registry";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import { ProjectPicker, useProjectResolution } from "./xhs-ops-project-picker";
 import {
+  XHS_OCCUPATION_GROUPS,
   XHS_PROFILE_CANDIDATES,
   XHS_PROFILE_FIELD_LABEL,
   type XhsOpsAccount,
@@ -40,7 +41,7 @@ import {
 /**
  * Step 3b (P2-1): 账号基础资料与素材。昵称/简介由服务端文本生成，头像/背景各
  * 生成 3 张备选，运营点选并补齐性别、生日、地区和兴趣标签。手机操作先核对
- * 目标账号，再应用七项资料并独立只读验收。上报 `xhs_ops_profile_applied`。
+ * 目标账号，再应用八项资料并独立只读验收。上报 `xhs_ops_profile_applied`。
  */
 export function XhsOpsProfileMaterial({
   comp,
@@ -57,7 +58,7 @@ export function XhsOpsProfileMaterial({
     <CardShell
       testId="profile-material"
       title="账号资料与素材"
-      subtitle="确认目标账号与八项资料；手机应用七项并完成只读生效核验后才能开始养号"
+      subtitle="确认目标账号与资料（含职业/身份）；手机应用八项并完成只读生效核验后才能开始养号"
     >
       <ErrorLine message={resolution.error} />
       {!projectId ? (
@@ -70,7 +71,9 @@ export function XhsOpsProfileMaterial({
       {projectId ? (
         <XhsOpsProfileMaterialContent
           projectId={projectId}
-          accountIds={onlyAccountId ? [onlyAccountId] : undefined}
+          // `accountId` identifies the account whose operation just completed;
+          // it must not hide the other confirmed accounts in this project.
+          initialAccountId={onlyAccountId}
           onAction={onAction}
         />
       ) : null}
@@ -81,11 +84,13 @@ export function XhsOpsProfileMaterial({
 export function XhsOpsProfileMaterialContent({
   projectId,
   accountIds,
+  initialAccountId,
   onAction,
   onAccountChange,
 }: {
   projectId: string;
   accountIds?: string[];
+  initialAccountId?: string | null;
   onAction?: CustomComponentProps["onAction"];
   onAccountChange?: (account: XhsOpsAccount) => void;
 }) {
@@ -136,6 +141,7 @@ export function XhsOpsProfileMaterialContent({
       ) : null}
       <AccountTabs
         accounts={accounts ?? []}
+        initialAccountId={initialAccountId}
         renderAccount={(account) => (
           <ProfileMaterialRow
             account={account}
@@ -158,12 +164,16 @@ export function XhsOpsProfileMaterialContent({
  */
 function AccountTabs({
   accounts,
+  initialAccountId,
   renderAccount,
 }: {
   accounts: XhsOpsAccount[];
+  initialAccountId?: string | null;
   renderAccount: (account: XhsOpsAccount) => ReactNode;
 }) {
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(
+    initialAccountId ?? null,
+  );
   const active =
     accounts.find((a) => a.id === activeId)?.id ?? accounts[0]?.id ?? null;
 
@@ -307,7 +317,11 @@ function ProfileMaterialRow({
       // Pre-select what actually changes, so a blank phone still applies in one
       // click while an already-tuned one starts from "only the real diffs".
       setApplyFields(
-        new Set(result.fields.filter((f) => f.differs).map((f) => f.field)),
+        new Set(
+          result.fields
+            .filter((f) => f.differs && f.field !== "avatar")
+            .map((f) => f.field),
+        ),
       );
     } catch (err) {
       setReadback(null);
@@ -390,6 +404,7 @@ function ProfileMaterialRow({
               ...editable,
               nickname: generated.nickname,
               bio: generated.bio,
+              occupation: generated.occupation,
               gender: generated.gender,
               region: generated.region,
               interestTags: generated.interestTags,
@@ -455,7 +470,7 @@ function ProfileMaterialRow({
       accountId: confirmed.id,
       label: confirmed.label,
       agentInstruction:
-        "八项账号资料与素材已由用户校验确认，可以执行手机安装登录、资料应用与只读生效核验；尚未解锁养号。",
+        "九项账号资料与素材已由用户校验确认，可以执行手机安装登录、资料应用与只读生效核验；尚未解锁养号。",
     });
   };
 
@@ -465,7 +480,11 @@ function ProfileMaterialRow({
       return;
     }
     if (!ready) {
-      setError("请先完成八项资料与素材并人工校验确认");
+      setError("请先完成资料与素材并人工校验确认");
+      return;
+    }
+    if (!draft.occupation.trim()) {
+      setError("请先生成或选择职业/身份");
       return;
     }
     if (readback && applyFields.size === 0) {
@@ -486,13 +505,24 @@ function ProfileMaterialRow({
       }),
     );
     if (!saved) return;
+    const fields = readback
+      ? [...applyFields]
+      : account.entryMode === "existing"
+        ? (
+            [
+              "nickname",
+              "bio",
+              "occupation",
+              "gender",
+              "birthday",
+              "region",
+            ] as const
+          ).filter((field) => Boolean(draft[field]?.trim()))
+        : undefined;
     const applied = await run("apply", () =>
       // Only send a list once the operator has actually seen a diff; without a
       // readback there is nothing to choose from and the old behaviour stands.
-      xhsOpsApi.applyProfileDraft(
-        account.id,
-        readback ? [...applyFields] : undefined,
-      ),
+      xhsOpsApi.applyProfileDraft(account.id, fields),
     );
     if (applied) {
       const d = normalizeProfileDraft(applied.profileDraft);
@@ -503,7 +533,7 @@ function ProfileMaterialRow({
         result: d.applyResult,
         agentInstruction:
           d.applyStatus === "applied" && d.verifiedAt
-            ? "目标账号身份与七项资料已在手机上完成独立只读核验，可以进入养号计划。"
+            ? "目标账号身份与八项资料已在手机上完成独立只读核验，可以进入养号计划。"
             : "资料应用或独立只读核验未完成（见 result）；只提示用户检查后重新执行，不得声称资料已生效或已解锁养号。",
       });
     }
@@ -514,7 +544,10 @@ function ProfileMaterialRow({
       <div className="flex items-center justify-between gap-2">
         <SectionTitle>{account.label}</SectionTitle>
         <span className="text-[12px] text-text-secondary">
-          {account.deviceName ?? account.deviceId ?? "未绑定设备"}
+          <span>
+            {account.entryMode === "existing" ? "已有账号" : "新建账号"} ·
+          </span>{" "}
+          <span>{account.deviceName ?? account.deviceId ?? "未绑定设备"}</span>
         </span>
       </div>
 
@@ -568,6 +601,33 @@ function ProfileMaterialRow({
             disabled={disabled}
             onChange={(e) => editDraft({ bio: e.target.value })}
           />
+        </Field>
+        <Field label="职业/身份">
+          <select
+            className={inputClass}
+            value={draft.occupation}
+            disabled={disabled}
+            onChange={(e) => editDraft({ occupation: e.target.value })}
+          >
+            <option value="">请选择职业</option>
+            {draft.occupation &&
+            !XHS_OCCUPATION_GROUPS.some((group) =>
+              (group.options as readonly string[]).includes(draft.occupation),
+            ) ? (
+              <option value={draft.occupation}>
+                {draft.occupation}（历史值）
+              </option>
+            ) : null}
+            {XHS_OCCUPATION_GROUPS.map((group) => (
+              <optgroup key={group.category} label={group.category}>
+                {group.options.map((occupation) => (
+                  <option key={occupation} value={occupation}>
+                    {occupation}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </Field>
       </div>
       {identity ? (
@@ -649,9 +709,13 @@ function ProfileMaterialRow({
           onClick={() => void generate("text")}
           disabled={disabled}
         >
-          {busy === "text" ? "生成中…" : "生成昵称与简介"}
+          {busy === "text" ? "生成中…" : "生成昵称、简介与职业"}
         </SecondaryButton>
-        <HintLine>生成后仍需人工核对；不会自动修改手机公开资料。</HintLine>
+        <HintLine>
+          {account.entryMode === "existing"
+            ? "已有账号默认不把头像写入手机，避免触发平台修改次数限制；生成后仍需人工核对。"
+            : "生成后仍需人工核对；确认应用后才会修改手机公开资料。"}
+        </HintLine>
       </div>
 
       <MaterialChecklist draft={draft} missingFields={missingFields} />
@@ -776,7 +840,7 @@ function ProfileMaterialRow({
       ) : null}
       {ready ? (
         verified ? (
-          <HintLine>目标账号与七项资料已核验生效，可以进入养号计划。</HintLine>
+          <HintLine>目标账号与八项资料已核验生效，可以进入养号计划。</HintLine>
         ) : (
           <HintLine>
             资料已人工确认；完成手机应用与独立只读核验后才能进入养号。
@@ -959,6 +1023,16 @@ function MaterialChecklist({
   ];
   return (
     <div className="grid grid-cols-1 gap-1 rounded-md border border-border bg-surface-1 px-2.5 py-2 text-[12px] sm:grid-cols-2">
+      <span
+        className={
+          draft.occupation.trim()
+            ? "text-[var(--color-success-ink)]"
+            : "text-text-secondary"
+        }
+      >
+        {draft.occupation.trim() ? "已完成" : "待完成"} · 职业/身份（AI
+        生成或手动选择）
+      </span>
       {items.map((item) => {
         const complete = !missing.has(item.field);
         return (

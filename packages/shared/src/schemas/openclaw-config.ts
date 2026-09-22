@@ -53,9 +53,7 @@ const agentModelSchema = z.union([
 
 const agentSchema = z
   .object({
-    id: z.string(),
     name: z.string().optional(),
-    default: z.boolean().optional(),
     workspace: z.string().optional(),
     model: agentModelSchema.optional(),
     skills: z.array(z.string()).optional(),
@@ -85,104 +83,12 @@ const compactionSchema = z
     reserveTokens: z.number().optional(),
     keepRecentTokens: z.number().optional(),
     reserveTokensFloor: z.number().optional(),
-    maxHistoryShare: z.number().optional(),
     recentTurnsPreserve: z.number().min(0).max(12).optional(),
     identifierPolicy: z.enum(["strict", "off", "custom"]).optional(),
     identifierInstructions: z.string().optional(),
     qualityGuard: compactionQualityGuardSchema.optional(),
     postCompactionSections: z.array(z.string()).optional(),
     memoryFlush: compactionMemoryFlushSchema.optional(),
-  })
-  .passthrough();
-
-const memorySearchRemoteSchema = z
-  .object({
-    baseUrl: z.string().optional(),
-    apiKey: z.union([z.string(), providerSecretRefSchema]).optional(),
-    headers: z.record(z.string(), z.string()).optional(),
-    nonBatchConcurrency: z.number().int().positive().optional(),
-    batch: z
-      .object({
-        enabled: z.boolean().optional(),
-        wait: z.boolean().optional(),
-        concurrency: z.number().int().positive().optional(),
-        pollIntervalMs: z.number().int().positive().optional(),
-        timeoutMinutes: z.number().positive().optional(),
-      })
-      .optional(),
-  })
-  .passthrough();
-
-const memorySearchSyncSchema = z
-  .object({
-    onSessionStart: z.boolean().optional(),
-    onSearch: z.boolean().optional(),
-    watch: z.boolean().optional(),
-    watchDebounceMs: z.number().int().nonnegative().optional(),
-    intervalMinutes: z.number().optional(),
-    embeddingBatchTimeoutSeconds: z.number().positive().optional(),
-    sessions: z
-      .object({
-        deltaBytes: z.number().int().nonnegative().optional(),
-        deltaMessages: z.number().int().nonnegative().optional(),
-        postCompactionForce: z.boolean().optional(),
-      })
-      .optional(),
-  })
-  .passthrough();
-
-const memorySearchStoreSchema = z
-  .object({
-    driver: z.enum(["sqlite"]).optional(),
-    fts: z
-      .object({ tokenizer: z.enum(["unicode61", "trigram"]).optional() })
-      .optional(),
-    vector: z
-      .object({
-        enabled: z.boolean().optional(),
-        extensionPath: z.string().optional(),
-      })
-      .optional(),
-    cache: z
-      .object({
-        enabled: z.boolean().optional(),
-        maxEntries: z.number().int().positive().optional(),
-      })
-      .optional(),
-  })
-  .passthrough();
-
-const memorySearchChunkingSchema = z
-  .object({
-    tokens: z.number().optional(),
-    overlap: z.number().optional(),
-  })
-  .passthrough();
-
-const memorySearchQuerySchema = z
-  .object({
-    maxResults: z.number().optional(),
-    minScore: z.number().optional(),
-    hybrid: z
-      .object({
-        enabled: z.boolean().optional(),
-        vectorWeight: z.number().optional(),
-        textWeight: z.number().optional(),
-        candidateMultiplier: z.number().optional(),
-        mmr: z
-          .object({
-            enabled: z.boolean().optional(),
-            lambda: z.number().optional(),
-          })
-          .optional(),
-        temporalDecay: z
-          .object({
-            enabled: z.boolean().optional(),
-            halfLifeDays: z.number().optional(),
-          })
-          .optional(),
-      })
-      .optional(),
   })
   .passthrough();
 
@@ -197,22 +103,40 @@ const memorySearchSchema = z
     provider: z.string().min(1).optional(),
     fallback: z.string().min(1).optional(),
     model: z.string().optional(),
-    remote: memorySearchRemoteSchema.optional(),
-    local: z
+    remote: z
       .object({
-        modelPath: z.string().optional(),
-        modelCacheDir: z.string().optional(),
-        contextSize: z
-          .union([z.number().int().positive(), z.literal("auto")])
+        baseUrl: z.string().optional(),
+        apiKey: z.union([z.string(), providerSecretRefSchema]).optional(),
+        headers: z.record(z.string(), z.string()).optional(),
+        batch: z.object({ enabled: z.boolean().optional() }).optional(),
+      })
+      .strict()
+      .optional(),
+    local: z.object({ modelPath: z.string().optional() }).strict().optional(),
+    store: z
+      .object({
+        fts: z
+          .object({ tokenizer: z.enum(["unicode61", "trigram"]).optional() })
+          .optional(),
+        vector: z
+          .object({
+            enabled: z.boolean().optional(),
+            extensionPath: z.string().optional(),
+          })
           .optional(),
       })
+      .strict()
       .optional(),
-    sync: memorySearchSyncSchema.optional(),
-    store: memorySearchStoreSchema.optional(),
-    chunking: memorySearchChunkingSchema.optional(),
-    query: memorySearchQuerySchema.optional(),
+    query: z
+      .object({
+        maxResults: z.number().int().positive().optional(),
+        minScore: z.number().min(0).max(1).optional(),
+      })
+      .strict()
+      .optional(),
+    cache: z.object({ enabled: z.boolean().optional() }).optional(),
   })
-  .passthrough();
+  .strict();
 
 const humanDelaySchema = z
   .object({
@@ -249,6 +173,7 @@ const blockStreamingCoalesceSchema = z
   .passthrough();
 
 const agentsConfigSchema = z.object({
+  ownership: z.literal("explicit").optional(),
   defaults: z
     .object({
       // Same shape as a per-agent override: plain z.object() strips unknown
@@ -259,7 +184,9 @@ const agentsConfigSchema = z.object({
       // titles). Falls back to the primary model when unset.
       utilityModel: z.string().optional(),
       compaction: compactionSchema.optional(),
-      memorySearch: memorySearchSchema.optional(),
+      systemAgent: z.object({ agentId: z.string() }).optional(),
+      sessionStore: z.object({ agentId: z.string() }).optional(),
+      heartbeat: z.object({ agentId: z.string() }).passthrough().optional(),
       // Thinking and verbosity
       thinkingDefault: z
         .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"])
@@ -285,7 +212,7 @@ const agentsConfigSchema = z.object({
     })
     .passthrough()
     .optional(),
-  list: z.array(agentSchema),
+  entries: z.record(z.string(), agentSchema),
 });
 
 const slackAccountSchema = z
@@ -552,14 +479,12 @@ const commandsConfigSchema = z
     native: z.enum(["auto", "off"]).optional(),
     nativeSkills: z.enum(["auto", "off"]).optional(),
     restart: z.boolean().optional(),
-    ownerDisplay: z.enum(["raw", "friendly"]).optional(),
   })
   .passthrough();
 
 const skillsLoadSchema = z
   .object({
     watch: z.boolean().optional(),
-    watchDebounceMs: z.number().optional(),
     extraDirs: z.array(z.string()).optional(),
   })
   .passthrough();
@@ -660,10 +585,6 @@ const diagnosticsConfigSchema = z
   .object({
     enabled: z.boolean().optional(),
     otel: diagnosticsOtelSchema.optional(),
-    /** No-progress age before the stalled-session watchdog warns (default 2m). */
-    stuckSessionWarnMs: z.number().int().positive().optional(),
-    /** No-progress age before it aborts the run (default: 3x the warn value). */
-    stuckSessionAbortMs: z.number().int().positive().optional(),
   })
   .passthrough();
 
@@ -673,7 +594,6 @@ const messagesConfigSchema = z
     ackReactionScope: z
       .enum(["off", "none", "all", "direct", "group-all", "group-mentions"])
       .optional(),
-    removeAckAfterReply: z.boolean().optional(),
   })
   .passthrough();
 
@@ -716,6 +636,8 @@ export const openclawConfigSchema = z.object({
   tools: toolsConfigSchema.optional(),
   skills: skillsConfigSchema.optional(),
   agents: agentsConfigSchema,
+  memory: z.object({ search: memorySearchSchema.optional() }).optional(),
+  talk: z.object({ agentId: z.string() }).passthrough().optional(),
   channels: channelsConfigSchema,
   bindings: z.array(bindingSchema),
   commands: commandsConfigSchema.optional(),

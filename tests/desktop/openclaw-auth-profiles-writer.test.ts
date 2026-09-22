@@ -90,13 +90,12 @@ describe("OpenClawAuthProfilesWriter", () => {
     seedAgentDatabase(workspace);
     await writer.writeForAgents({
       agents: {
-        list: [
-          {
-            id: "bot_1",
+        entries: {
+          bot_1: {
             name: "Bot One",
             workspace,
           },
-        ],
+        },
       },
       models: {
         mode: "merge",
@@ -144,13 +143,12 @@ describe("OpenClawAuthProfilesWriter", () => {
     await writer.writeForAgents(
       {
         agents: {
-          list: [
-            {
-              id: "bot_1",
+          entries: {
+            bot_1: {
               name: "Bot One",
               workspace,
             },
-          ],
+          },
         },
       } as never,
       {
@@ -221,18 +219,16 @@ describe("OpenClawAuthProfilesWriter", () => {
     await writer.writeForAgents(
       {
         agents: {
-          list: [
-            {
-              id: "bot_1",
+          entries: {
+            bot_1: {
               name: "Bot One",
               workspace: existingWorkspace,
             },
-            {
-              id: "bot_2",
+            bot_2: {
               name: "Bot Two",
               workspace: newWorkspace,
             },
-          ],
+          },
         },
       } as never,
       {
@@ -285,13 +281,12 @@ describe("OpenClawAuthProfilesWriter", () => {
     await writer.writeForAgents(
       {
         agents: {
-          list: [
-            {
-              id: "bot_1",
+          entries: {
+            bot_1: {
               name: "Bot One",
               workspace,
             },
-          ],
+          },
         },
         models: {
           mode: "merge",

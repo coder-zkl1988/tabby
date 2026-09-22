@@ -26,6 +26,11 @@ import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
 import { ensureMediaCached, mediaCacheDir } from "../lib/media-cache.js";
 import { proxyFetch } from "../lib/proxy-fetch.js";
+import {
+  type SessionsGatewayReader,
+  gatewayHistoryTranscript,
+  sessionFromGatewayRow,
+} from "./gateway-session-reader.js";
 
 /**
  * Agent names that are built into OpenClaw and must not appear as Nexu bots.
@@ -685,6 +690,11 @@ export class SessionsRuntime {
 
   private _sessionsCache: SessionResponse[] | null = null;
   private _sessionsCacheMtime = 0;
+  private readonly gatewayHistoryStats = new Map<
+    string,
+    { messageCount: number; lastMessageAt: string | null; title?: string }
+  >();
+  private readonly gatewayUntitledSessionIds = new Set<string>();
   private static SESSIONS_CACHE_TTL_MS = 2000;
 
   /** Media paths queued for mirroring into the durable cache. */
@@ -692,7 +702,14 @@ export class SessionsRuntime {
   /** Media paths already mirrored (or attempted) — skip on later reads. */
   private readonly mediaCacheAttempted = new Set<string>();
 
-  constructor(private readonly env: ControllerEnv) {}
+  constructor(
+    private readonly env: ControllerEnv,
+    private readonly gateway?: SessionsGatewayReader,
+  ) {}
+
+  usesGatewayPersistence(): boolean {
+    return this.gateway !== undefined;
+  }
 
   /** Root of OpenClaw's TTL-cleaned transient media directory. */
   private mediaRootDir(): string {
@@ -782,7 +799,9 @@ export class SessionsRuntime {
 
     // Run the full scan
     const agentsDir = path.join(this.env.openclawStateDir, "agents");
-    const sessions = await this._listSessionsUncached(agentsDir);
+    const sessions = this.gateway
+      ? await this.listGatewaySessions()
+      : await this._listSessionsUncached(agentsDir);
 
     // Update cache
     this._sessionsCache = sessions;
@@ -807,8 +826,168 @@ export class SessionsRuntime {
     this._sessionsCacheMtime = 0;
   }
 
+  private async listGatewaySessions(): Promise<SessionResponse[]> {
+    if (!this.gateway) return [];
+    try {
+      const response = await this.gateway.listStoredSessions();
+      const sessions: SessionResponse[] = [];
+      for (const row of response.sessions ?? []) {
+        const session = sessionFromGatewayRow(row);
+        if (!session) continue;
+        const hasExplicitLabel =
+          typeof row === "object" &&
+          row !== null &&
+          "label" in row &&
+          typeof row.label === "string" &&
+          row.label.trim().length > 0;
+        if (!hasExplicitLabel && session.title === "New conversation") {
+          this.gatewayUntitledSessionIds.add(session.id);
+        } else {
+          this.gatewayUntitledSessionIds.delete(session.id);
+        }
+        const filePath = path.join(
+          this.env.openclawStateDir,
+          "agents",
+          session.botId,
+          "sessions",
+          path.basename(session.id),
+        );
+        const extra = await this.readSessionMetadata(filePath);
+        sessions.push({
+          ...session,
+          ...(this.gatewayHistoryStats.get(session.id) ?? {}),
+          title:
+            extra.title ??
+            (this.gatewayUntitledSessionIds.has(session.id)
+              ? (this.gatewayHistoryStats.get(session.id)?.title ??
+                session.title)
+              : session.title),
+          channelType: extra.channelType ?? session.channelType,
+          channelId: extra.channelId ?? session.channelId,
+          status: extra.status ?? session.status,
+          createdAt: extra.createdAt ?? session.createdAt,
+          updatedAt: extra.updatedAt ?? session.updatedAt,
+          metadata: { ...(extra.metadata ?? {}), source: "openclaw-gateway" },
+        });
+      }
+      const compatSessions = await this._listSessionsUncached(
+        path.join(this.env.openclawStateDir, "agents"),
+        true,
+      );
+      const gatewayKeys = new Set(
+        sessions.map((session) => `${session.botId}:${session.sessionKey}`),
+      );
+      sessions.push(
+        ...compatSessions.filter(
+          (session) =>
+            !gatewayKeys.has(`${session.botId}:${session.sessionKey}`),
+        ),
+      );
+      return sessions.sort((left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt),
+      );
+    } catch (error) {
+      throwSessionsRuntimeUnavailable("read-gateway-sessions", error);
+    }
+  }
+
+  private async readGatewayMessages(
+    sessionKey: string,
+    limit: number,
+    channelType?: string | null,
+    sessionId?: string,
+  ): Promise<ChatMessage[]> {
+    if (!this.gateway) return [];
+    try {
+      let result = sessionId
+        ? await this.gateway.getStoredChatHistory(sessionKey, limit, sessionId)
+        : await this.gateway.getStoredChatHistory(sessionKey, limit);
+      let rawMessages = result.messages ?? [];
+      let totalMessages = result.totalMessages;
+      let messages = await this.parseTranscriptMessages(
+        gatewayHistoryTranscript(rawMessages),
+        limit,
+        channelType,
+      );
+      let offset = 0;
+      let pagesRead = 1;
+      // Gateway pages count raw rows, while Nexu hides system/tool-only
+      // messages. Read older pages until the requested visible tail is full.
+      while (messages.length < limit && result.hasMore) {
+        const nextOffset = result.nextOffset;
+        if (
+          typeof nextOffset !== "number" ||
+          !Number.isSafeInteger(nextOffset) ||
+          nextOffset <= offset ||
+          pagesRead >= 200
+        ) {
+          throw new Error("OpenClaw history pagination did not advance");
+        }
+        offset = nextOffset;
+        result = await this.gateway.getStoredChatHistory(
+          sessionKey,
+          limit,
+          sessionId,
+          offset,
+        );
+        pagesRead += 1;
+        rawMessages = [...(result.messages ?? []), ...rawMessages];
+        if (typeof result.totalMessages === "number") {
+          totalMessages = result.totalMessages;
+        }
+        messages = await this.parseTranscriptMessages(
+          gatewayHistoryTranscript(rawMessages),
+          limit,
+          channelType,
+        );
+      }
+      const cachedSession = this._sessionsCache?.find(
+        (session) =>
+          session.sessionKey === sessionKey &&
+          (!sessionId || session.id === `${sessionId}.jsonl`),
+      );
+      let fallbackTitle: string | undefined;
+      if (
+        cachedSession &&
+        this.gatewayUntitledSessionIds.has(cachedSession.id)
+      ) {
+        let text = rawMessageText(
+          messages.find((message) => message.role === "user")?.content,
+        );
+        for (const pattern of INJECTED_DIRECTIVE_PATTERNS)
+          text = text.replace(pattern, "");
+        const excerpt = text.replace(/\s+/g, " ").trim();
+        if (excerpt)
+          fallbackTitle =
+            excerpt.length > 60 ? `${excerpt.slice(0, 59)}…` : excerpt;
+      }
+      const stats = {
+        messageCount:
+          typeof totalMessages === "number"
+            ? totalMessages
+            : Math.max(
+                messages.length,
+                cachedSession
+                  ? (this.gatewayHistoryStats.get(cachedSession.id)
+                      ?.messageCount ?? 0)
+                  : 0,
+              ),
+        lastMessageAt: messages.at(-1)?.createdAt ?? null,
+        ...(fallbackTitle ? { title: fallbackTitle } : {}),
+      };
+      if (cachedSession) {
+        this.gatewayHistoryStats.set(cachedSession.id, stats);
+        Object.assign(cachedSession, stats);
+      }
+      return messages;
+    } catch (error) {
+      throwSessionsRuntimeUnavailable("read-gateway-history", error);
+    }
+  }
+
   private async _listSessionsUncached(
     agentsDir: string,
+    compatOnly = false,
   ): Promise<SessionResponse[]> {
     const qqbotKnownUsers = await this.readQqbotKnownUsers();
 
@@ -899,10 +1078,21 @@ export class SessionsRuntime {
           if (!file.isFile() || !file.name.endsWith(".jsonl")) {
             continue;
           }
+          // These transcripts are written by Nexu's DingTalk compatibility
+          // proxy, not OpenClaw. Keep only that owned JSONL surface alongside
+          // the gateway index; importing old runtime JSONL would duplicate
+          // migrated or compacted SQLite conversations.
+          if (compatOnly && !/^compat-[A-Za-z0-9_-]+\.jsonl$/.test(file.name)) {
+            continue;
+          }
 
           // Skip orphaned compacted sessions — they are not in sessions.json
           // and their history is merged transparently by getFullMainChatHistory.
-          if (activeFileNames.size > 0 && !activeFileNames.has(file.name)) {
+          if (
+            !compatOnly &&
+            activeFileNames.size > 0 &&
+            !activeFileNames.has(file.name)
+          ) {
             continue;
           }
 
@@ -922,6 +1112,7 @@ export class SessionsRuntime {
           const filePath = path.join(sessionsDir, file.name);
           const metadata = await stat(filePath);
           let extra = await this.readSessionMetadata(filePath);
+          if (compatOnly && extra.channelType !== "dingtalk") continue;
           const sessionKey =
             fileNameToIndexKey.get(file.name) ??
             file.name.replace(/\.jsonl$/, "");
@@ -1106,7 +1297,10 @@ export class SessionsRuntime {
             status: extra.status ?? "active",
             messageCount: messages.length,
             lastMessageAt: lastMsg?.createdAt ?? metadata.mtime.toISOString(),
-            metadata: this.buildPublicMetadata(filePath, extra.metadata),
+            metadata: {
+              ...this.buildPublicMetadata(filePath, extra.metadata),
+              ...(compatOnly ? { source: "nexu-compat" } : {}),
+            },
             createdAt: extra.createdAt ?? metadata.birthtime.toISOString(),
             updatedAt: extra.updatedAt ?? metadata.mtime.toISOString(),
             category: indexEntry?.category ?? null,
@@ -1239,6 +1433,40 @@ export class SessionsRuntime {
     if (!session) {
       return null;
     }
+    if (this.gateway && session.metadata?.source !== "nexu-compat") {
+      if (input.title !== undefined) {
+        await this.gateway.sessionsPatch({
+          key: session.sessionKey,
+          agentId: session.botId,
+          label: input.title,
+        });
+      }
+      const filePath = path.join(
+        this.env.openclawStateDir,
+        "agents",
+        session.botId,
+        "sessions",
+        path.basename(session.id),
+      );
+      const existing = await this.readSessionMetadata(filePath);
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await this.writeSessionMetadata(filePath, {
+        ...existing,
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.messageCount !== undefined
+          ? { messageCount: input.messageCount }
+          : {}),
+        ...(input.lastMessageAt !== undefined
+          ? { lastMessageAt: input.lastMessageAt }
+          : {}),
+        createdAt: existing.createdAt ?? session.createdAt,
+        updatedAt: new Date().toISOString(),
+      });
+      this.invalidateSessionsCache();
+      return this.getSession(id);
+    }
     const filePath = await this.resolveSessionFilePath(
       session.botId,
       session.sessionKey,
@@ -1268,6 +1496,16 @@ export class SessionsRuntime {
     if (!session) {
       return null;
     }
+    if (this.gateway && session.metadata?.source !== "nexu-compat") {
+      await this.gateway.sessionsReset({
+        key: session.sessionKey,
+        agentId: session.botId,
+        reason: "reset",
+      });
+      this.gatewayHistoryStats.delete(session.id);
+      this.invalidateSessionsCache();
+      return this.getSessionBySessionKey(session.botId, session.sessionKey);
+    }
     const filePath = await this.resolveSessionFilePath(
       session.botId,
       session.sessionKey,
@@ -1289,6 +1527,15 @@ export class SessionsRuntime {
     const session = await this.getSession(id);
     if (!session) {
       return false;
+    }
+    if (this.gateway && session.metadata?.source !== "nexu-compat") {
+      await this.gateway.sessionsDelete({
+        key: session.sessionKey,
+        agentId: session.botId,
+      });
+      this.gatewayHistoryStats.delete(session.id);
+      this.invalidateSessionsCache();
+      return true;
     }
 
     // Resolve the actual file path — OpenClaw stores sessions as
@@ -1323,6 +1570,16 @@ export class SessionsRuntime {
     const session = await this.getSession(id);
     if (!session) {
       return { messages: [], sessionKey: null };
+    }
+    if (this.gateway && session.metadata?.source !== "nexu-compat") {
+      return {
+        messages: await this.readGatewayMessages(
+          session.sessionKey,
+          limit ?? 200,
+          session.channelType,
+        ),
+        sessionKey: session.sessionKey,
+      };
     }
     const filePath = await this.resolveSessionFilePath(
       session.botId,
@@ -1411,6 +1668,19 @@ export class SessionsRuntime {
     sessionKey: string,
     limit?: number,
   ): Promise<{ messages: ChatMessage[]; sessionKey: string | null }> {
+    if (this.gateway && !/^compat-[A-Za-z0-9_-]+$/.test(sessionKey)) {
+      const session = await this.getSessionBySessionKey(botId, sessionKey);
+      return session
+        ? {
+            messages: await this.readGatewayMessages(
+              sessionKey,
+              limit ?? 200,
+              session.channelType,
+            ),
+            sessionKey,
+          }
+        : { messages: [], sessionKey: null };
+    }
     const session = await this.getSessionByKey(botId, sessionKey);
     if (!session) {
       return { messages: [], sessionKey: null };
@@ -1444,7 +1714,17 @@ export class SessionsRuntime {
     botId: string,
     runSessionId: string,
     limit?: number,
+    sessionKey?: string,
   ): Promise<ChatMessage[] | null> {
+    if (this.gateway) {
+      if (!sessionKey || !sessionKey.startsWith(`agent:${botId}:`)) return null;
+      return this.readGatewayMessages(
+        sessionKey,
+        limit ?? 200,
+        null,
+        runSessionId,
+      );
+    }
     const sessionsDir = path.join(
       this.env.openclawStateDir,
       "agents",
@@ -1484,6 +1764,22 @@ export class SessionsRuntime {
     botId: string,
     limit = 500,
   ): Promise<{ messages: ChatMessage[]; sessionCount: number }> {
+    if (this.gateway) {
+      const session = await this.getSessionBySessionKey(
+        botId,
+        `agent:${botId}:main`,
+      );
+      return session
+        ? {
+            messages: await this.readGatewayMessages(
+              session.sessionKey,
+              limit,
+              session.channelType,
+            ),
+            sessionCount: 1,
+          }
+        : { messages: [], sessionCount: 0 };
+    }
     const sessionsDir = path.join(
       this.env.openclawStateDir,
       "agents",
@@ -1658,6 +1954,7 @@ export class SessionsRuntime {
       createdAt: existing.createdAt ?? nowIso,
       updatedAt: nowIso,
     });
+    this.invalidateSessionsCache();
   }
 
   private async readMessages(
@@ -1672,6 +1969,14 @@ export class SessionsRuntime {
       return [];
     }
 
+    return this.parseTranscriptMessages(raw, limit, channelType);
+  }
+
+  private async parseTranscriptMessages(
+    raw: string,
+    limit: number,
+    channelType?: string | null,
+  ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
     // Set when a heartbeat poll message was skipped and we're waiting to see
     // whether its direct reply is a trivial ack (also skipped) or a genuine
@@ -2422,6 +2727,16 @@ export class SessionsRuntime {
     botId: string,
     sessionKey: string,
   ): Promise<SessionResponse | null> {
+    if (this.gateway) {
+      // A cached empty list must not hide a just-accepted chat.send.
+      const sessions = await this.listSessions(true);
+      return (
+        sessions.find(
+          (session) =>
+            session.botId === botId && session.sessionKey === sessionKey,
+        ) ?? null
+      );
+    }
     const sessionsDir = path.join(
       this.env.openclawStateDir,
       "agents",

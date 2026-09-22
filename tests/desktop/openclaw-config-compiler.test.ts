@@ -1,4 +1,4 @@
-import { selectPreferredModel } from "@nexu/shared";
+import { type ModelProviderConfig, selectPreferredModel } from "@nexu/shared";
 import { describe, expect, it } from "vitest";
 import type { ControllerEnv } from "#controller/app/env";
 import {
@@ -138,18 +138,13 @@ describe("compileOpenClawConfig", () => {
     }
   });
 
-  it("puts the stalled-session thresholds where OpenClaw reads them", () => {
+  it("uses runtime-owned watchdog thresholds without retired config keys", () => {
     const compiled = compileOpenClawConfig(createBaseConfig(), createEnv());
 
-    // OpenClaw reads these from top-level `diagnostics`. They were once nested
-    // under agents.defaults.heartbeat, whose schema is strict and has no such
-    // key — the gateway refused to start at all, and nothing caught it because
-    // the value was still readable back out of the written JSON.
-    expect(compiled.diagnostics?.stuckSessionAbortMs).toBe(20 * 60_000);
-    expect(
-      (compiled.agents?.defaults as Record<string, unknown> | undefined)
-        ?.heartbeat,
-    ).toBeUndefined();
+    expect(compiled.diagnostics?.enabled).toBe(true);
+    expect(compiled.diagnostics).not.toHaveProperty("stuckSessionAbortMs");
+    expect(compiled.diagnostics).not.toHaveProperty("stuckSessionWarnMs");
+    expect(compiled.agents.defaults?.heartbeat).toEqual({ agentId: "bot_1" });
   });
 
   it("does not emit Feishu/weixin plugin entries or channel accounts before first connect", () => {
@@ -445,12 +440,6 @@ describe("compileOpenClawConfig", () => {
     });
   });
 
-  /**
-   * The StepFun realtime plugin is configured entirely from the Tabby cloud
-   * connection — the user never handles a provider key. Pin the derivation:
-   * the failure mode is silent, since a wrong URL or a missing entry only makes
-   * the voice button disappear with no error surfaced anywhere.
-   */
   describe("stepfun realtime plugin", () => {
     function cloudWith(models: Array<{ id: string; name: string }>) {
       return {
@@ -464,6 +453,126 @@ describe("compileOpenClawConfig", () => {
         models,
       };
     }
+
+    function stepfunProvider(
+      overrides: Partial<ModelProviderConfig> = {},
+    ): ModelProviderConfig {
+      return {
+        enabled: true,
+        auth: "api-key",
+        apiKey: "direct-stepfun-key",
+        baseUrl: "https://api.stepfun.com/step_plan/v1/",
+        models: [
+          {
+            id: "stepaudio-2.5-realtime",
+            name: "StepAudio Realtime",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 0,
+            maxTokens: 0,
+          },
+        ],
+        ...overrides,
+      };
+    }
+
+    it.each(["api.stepfun.com", "api.stepfun.ai"])(
+      "prefers configured realtime BYOK on %s over the cloud alias",
+      (host) => {
+        const config = createBaseConfig();
+        config.desktop.cloud = cloudWith([
+          { id: "tabby-audio", name: "Tabby Audio" },
+        ]);
+        config.models.providers.stepfun = stepfunProvider({
+          baseUrl: `https://${host}/step_plan/v1/?ignored=true`,
+        });
+
+        const entry = compileOpenClawConfig(config, createEnv()).plugins
+          ?.entries?.["nexu-stepfun-realtime"];
+
+        expect(entry?.enabled).toBe(true);
+        expect(entry?.config).toEqual({
+          apiKey: "direct-stepfun-key",
+          url: `wss://${host}/v1/realtime`,
+          model: "stepaudio-2.5-realtime",
+        });
+      },
+    );
+
+    it("uses the configured realtime model without requiring cloud login", () => {
+      const config = createBaseConfig();
+      const provider = stepfunProvider();
+      provider.models[0].id = "stepaudio-4-realtime";
+      config.models.providers.stepfun = provider;
+
+      const entry = compileOpenClawConfig(config, createEnv()).plugins
+        ?.entries?.["nexu-stepfun-realtime"];
+
+      expect(entry?.config?.model).toBe("stepaudio-4-realtime");
+    });
+
+    it.each(["global", "cn"] as const)(
+      "keeps the realtime origin stable for the %s provider region",
+      (oauthRegion) => {
+        const config = createBaseConfig();
+        config.models.providers.stepfun = stepfunProvider({ oauthRegion });
+
+        const entry = compileOpenClawConfig(config, createEnv()).plugins
+          ?.entries?.["nexu-stepfun-realtime"];
+
+        expect(entry?.config?.url).toBe("wss://api.stepfun.com/v1/realtime");
+      },
+    );
+
+    const unavailableDirectProviders: Array<
+      [string, Partial<ModelProviderConfig>]
+    > = [
+      ["disabled", { enabled: false }],
+      ["missing key", { apiKey: undefined }],
+      ["blank key", { apiKey: " " }],
+      [
+        "SecretRef key",
+        {
+          apiKey: { source: "env", provider: "default", id: "STEPFUN_API_KEY" },
+        },
+      ],
+      ["no configured realtime model", { models: [] }],
+      ["custom proxy", { baseUrl: "https://proxy.example.com/v1" }],
+      ["custom StepFun port", { baseUrl: "https://api.stepfun.com:8443/v1" }],
+      ["untrusted hostname", { baseUrl: "https://api.stepfun.com.example/v1" }],
+      ["HTTP endpoint", { baseUrl: "http://api.stepfun.com/v1" }],
+      ["invalid URL", { baseUrl: "invalid-url" }],
+      [
+        "TTS model",
+        {
+          models: stepfunProvider().models.map((model) => ({
+            ...model,
+            id: "stepaudio-tts-realtime",
+          })),
+        },
+      ],
+    ];
+
+    it.each(unavailableDirectProviders)(
+      "retains the cloud fallback for a provider with %s",
+      (_reason, overrides) => {
+        const config = createBaseConfig();
+        config.desktop.cloud = cloudWith([
+          { id: "tabby-audio", name: "Tabby Audio" },
+        ]);
+        config.models.providers.stepfun = stepfunProvider(overrides);
+
+        const entry = compileOpenClawConfig(config, createEnv()).plugins
+          ?.entries?.["nexu-stepfun-realtime"];
+
+        expect(entry?.config).toEqual({
+          apiKey: "test-key",
+          url: "wss://nexu-link.powerformer.net/v1/realtime",
+          model: "tabby-audio",
+        });
+      },
+    );
 
     it("derives the ws endpoint and reuses the cloud credential", () => {
       const config = createBaseConfig();

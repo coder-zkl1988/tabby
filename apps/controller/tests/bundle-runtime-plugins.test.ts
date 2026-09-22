@@ -1,11 +1,99 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  patchLarkOpenClawCompatibility,
   planDependencyPlacements,
   resolveDependencyNodeModules,
 } from "../scripts/bundle-runtime-plugins.mjs";
+
+describe("patchLarkOpenClawCompatibility", () => {
+  it("replaces retired Lark SDK imports without rewriting other scoped imports", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "nexu-lark-sdk-"));
+    try {
+      const entry = path.join(root, "index.js");
+      const dispatcher = path.join(root, "src/card/reply-dispatcher.js");
+      const toolUse = path.join(root, "src/card/tool-use-config.js");
+      const streaming = path.join(
+        root,
+        "src/card/streaming-card-controller.js",
+      );
+      const agentConfig = path.join(root, "src/core/agent-config.js");
+      const version = path.join(root, "src/core/version.js");
+      const tokenStore = path.join(root, "src/core/token-store.js");
+      await mkdir(path.dirname(dispatcher), { recursive: true });
+      await mkdir(path.dirname(agentConfig), { recursive: true });
+      await writeFile(
+        entry,
+        'const sdk = require("openclaw/plugin-sdk");\nconst core = require("openclaw/plugin-sdk/core");\nsdk.emptyPluginConfigSchema();\n',
+      );
+      await writeFile(
+        dispatcher,
+        "const sdk = require('openclaw/plugin-sdk/channel-runtime');\nsdk.createReplyPrefixContext();\nsdk.createTypingCallbacks();\n",
+      );
+      await writeFile(
+        toolUse,
+        'const sdk = require("openclaw/plugin-sdk/config-runtime");\nconst defaultAgentId = (0, agent_runtime_1.resolveDefaultAgentId)(cfg);',
+      );
+      await writeFile(
+        streaming,
+        "const defaultAgentId = (0, agent_runtime_1.resolveDefaultAgentId)(this.deps.cfg);",
+      );
+      await writeFile(
+        agentConfig,
+        "exports.listConfiguredAgents = (cfg) => { const agents = cfg.agents; return agents?.list ?? []; };",
+      );
+      await writeFile(
+        version,
+        "exports.getDirectory = () => { const __filename = (0, node_url_1.fileURLToPath)(import.meta.url); const __dirname = (0, node_path_1.dirname)(__filename); return __dirname; };",
+      );
+      await writeFile(
+        tokenStore,
+        "exports.filename = typeof __filename !== 'undefined' ? __filename : import.meta.url;",
+      );
+
+      await patchLarkOpenClawCompatibility(root);
+      await patchLarkOpenClawCompatibility(root);
+
+      expect(await readFile(entry, "utf8")).toBe(
+        'const sdk = require("openclaw/plugin-sdk/plugin-entry");\nconst core = require("openclaw/plugin-sdk/core");\nsdk.emptyPluginConfigSchema();\n',
+      );
+      expect(await readFile(dispatcher, "utf8")).toBe(
+        "const sdk = require('openclaw/plugin-sdk/channel-reply-pipeline');\nsdk.createReplyPrefixContext();\nsdk.createTypingCallbacks();\n",
+      );
+      expect(await readFile(toolUse, "utf8")).toContain(
+        'require("openclaw/plugin-sdk/session-store-runtime")',
+      );
+      expect(await readFile(streaming, "utf8")).toContain(
+        "this.deps.cfg.agents?.defaults?.systemAgent?.agentId ??",
+      );
+      const agentHelpers = await import(agentConfig);
+      expect(
+        agentHelpers.listConfiguredAgents({
+          agents: {
+            entries: { bot: { name: "Assistant", skills: ["search"] } },
+          },
+        }),
+      ).toEqual([{ id: "bot", name: "Assistant", skills: ["search"] }]);
+      expect((await import(version)).getDirectory()).toBe(
+        await realpath(path.dirname(version)),
+      );
+      expect((await import(tokenStore)).filename).toBe(
+        await realpath(tokenStore),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("resolveDependencyNodeModules", () => {
   const tempRoots: string[] = [];

@@ -1,4 +1,5 @@
 import { ChatInput, ChatInputAttachButton } from "@/components/chat-input";
+import { TalkVoiceButton } from "@/components/talk-voice-button";
 import { useCommunitySkillStatus } from "@/hooks/use-community-catalog";
 import { useTeams } from "@/hooks/use-teams";
 import { subscribeExternalChatInput } from "@/lib/chat/external-chat-input";
@@ -109,6 +110,9 @@ export interface ChatInputAreaProps {
   focusToken?: string | null;
   /** Current session key for browser selections and annotated screenshots. */
   externalInputSessionKey?: string | null;
+  /** Conversation receiving realtime voice turns, including a new chat key. */
+  voiceSessionKey?: string | null;
+  onVoiceSessionEnded?: () => void | Promise<void>;
 }
 
 export type RunMessageMode = "auto" | "side-question" | "steer";
@@ -497,6 +501,8 @@ export function ChatInputArea({
   onSelectModel,
   focusToken = null,
   externalInputSessionKey = null,
+  voiceSessionKey = null,
+  onVoiceSessionEnded,
 }: ChatInputAreaProps) {
   const { t } = useTranslation();
   const [input, setInput] = useState("");
@@ -1264,6 +1270,14 @@ export function ChatInputArea({
                   )}
                 </div>
               ))}
+            {voiceSessionKey && (
+              <TalkVoiceButton
+                key={voiceSessionKey}
+                sessionKey={voiceSessionKey}
+                disabled={disabled || sending || submitPending || waitingReply}
+                onSessionEnded={onVoiceSessionEnded}
+              />
+            )}
           </>
         }
       />

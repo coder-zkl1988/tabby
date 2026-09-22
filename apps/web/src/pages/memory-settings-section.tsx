@@ -29,7 +29,6 @@ type MemoryPatch = {
   enabled?: boolean;
   sources?: Array<"memory" | "sessions">;
   extraPaths?: string[];
-  syncIntervalMinutes?: number;
   minScore?: number;
 };
 
@@ -45,7 +44,6 @@ export function MemorySettingsSection() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [extraPathsDraft, setExtraPathsDraft] = useState("");
-  const [syncIntervalDraft, setSyncIntervalDraft] = useState("5");
   const [minScoreDraft, setMinScoreDraft] = useState("0.2");
 
   const settingsQuery = useQuery({
@@ -74,7 +72,6 @@ export function MemorySettingsSection() {
   useEffect(() => {
     if (!settingsQuery.data) return;
     setExtraPathsDraft((settingsQuery.data.extraPaths ?? []).join("\n"));
-    setSyncIntervalDraft(String(settingsQuery.data.syncIntervalMinutes ?? 5));
     setMinScoreDraft(String(settingsQuery.data.minScore ?? 0.2));
   }, [settingsQuery.data]);
 
@@ -107,11 +104,6 @@ export function MemorySettingsSection() {
   });
 
   const saveScope = () => {
-    const interval = Number.parseInt(syncIntervalDraft, 10);
-    if (!Number.isInteger(interval) || interval < 1 || interval > 1440) {
-      toast.error(t("memory.intervalInvalid"));
-      return;
-    }
     const minScore = Number.parseFloat(minScoreDraft);
     if (!Number.isFinite(minScore) || minScore < 0 || minScore > 1) {
       toast.error(t("memory.minScoreInvalid"));
@@ -122,7 +114,6 @@ export function MemorySettingsSection() {
         .split("\n")
         .map((value) => value.trim())
         .filter((value) => value.length > 0),
-      syncIntervalMinutes: interval,
       minScore,
     });
   };
@@ -295,23 +286,10 @@ export function MemorySettingsSection() {
             aria-label={t("memory.scope")}
             onChange={(event) => setExtraPathsDraft(event.target.value)}
           />
+          <p className="text-[11px] text-text-tertiary">
+            {t("memory.autoSyncHint")}
+          </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <label
-              htmlFor="memory-sync-interval"
-              className="block w-full max-w-48 text-[11px] text-text-secondary"
-            >
-              {t("memory.syncInterval")}
-              <Input
-                id="memory-sync-interval"
-                className="mt-1"
-                type="number"
-                min={1}
-                max={1440}
-                value={syncIntervalDraft}
-                disabled={!memory.enabled}
-                onChange={(event) => setSyncIntervalDraft(event.target.value)}
-              />
-            </label>
             <label
               htmlFor="memory-min-score"
               className="block w-full max-w-48 text-[11px] text-text-secondary"

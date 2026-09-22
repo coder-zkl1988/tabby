@@ -134,7 +134,10 @@ function LocationProbe() {
   return <output data-testid="location-probe">{location.pathname}</output>;
 }
 
-function renderSessionsPage(options?: { busy?: boolean }): string {
+function renderSessionsPage(options?: {
+  busy?: boolean;
+  local?: boolean;
+}): string {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -147,7 +150,7 @@ function renderSessionsPage(options?: { busy?: boolean }): string {
     id: "sess-1",
     channelId: "channel-slack-1",
     title: "Alex DM",
-    channelType: "slack",
+    channelType: options?.local ? "web" : "slack",
     messageCount: 2,
     lastMessageAt: "2026-03-20T08:58:00.000Z",
     metadata: {
@@ -233,12 +236,79 @@ describe("SessionsPage", () => {
     expect(markup.indexOf("data-session-canvas-toggle")).toBeLessThan(
       markup.indexOf("data-session-operations-toggle"),
     );
-    expect(markup).toContain('aria-label="Branch from this message"');
-    expect(markup).toContain('aria-label="Roll back to this message"');
+    expect(markup).not.toContain('data-message-action="branch"');
+    expect(markup.match(/data-message-action="rollback"/g)).toHaveLength(1);
   });
 
+  it("offers branch and rollback only on local user messages", () => {
+    const markup = renderSessionsPage({ local: true });
+    expect(markup.match(/data-message-action="branch"/g)).toHaveLength(1);
+    expect(markup.match(/data-message-action="rollback"/g)).toHaveLength(1);
+    expect(markup).not.toMatch(
+      /data-message-action="branch"[^>]*\sdisabled=""/,
+    );
+    expect(markup).not.toMatch(
+      /data-message-action="rollback"[^>]*\sdisabled=""/,
+    );
+  });
+
+  it.each([
+    "[路由提示：请先匹配专家并调用会话工具。]\n\n[my note] keep this user text",
+    "[请使用「calendar」技能完成本次请求]\n[路由提示：本轮使用专家路由。]\n\n[my note] keep this user text",
+    "[my note] keep this user text",
+  ])(
+    "restores user drafts without injected routing or skill wrappers (%s)",
+    async (editorText) => {
+      Element.prototype.scrollIntoView = vi.fn();
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
+        },
+      });
+      queryClient.setQueryData(["session-meta", "restored"], {
+        id: "restored",
+        sessionKey: "agent:bot-1:main",
+        channelType: "web",
+        title: "Restored",
+        messageCount: 0,
+        metadata: {},
+      });
+      queryClient.setQueryData(["chat-history", "restored"], { messages: [] });
+      queryClient.setQueryData(["channels"], { channels: [] });
+      queryClient.setQueryData(["bots"], { bots: [] });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <A2UISidebarProvider>
+            <MemoryRouter
+              initialEntries={[
+                {
+                  pathname: "/workspace/sessions/restored",
+                  state: {
+                    messageDraft: { sessionId: "restored", editorText },
+                  },
+                },
+              ]}
+            >
+              <Routes>
+                <Route
+                  path="/workspace/sessions/:id"
+                  element={<SessionsPage />}
+                />
+              </Routes>
+            </MemoryRouter>
+          </A2UISidebarProvider>
+        </QueryClientProvider>,
+      );
+      await waitFor(() =>
+        expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+          "[my note] keep this user text",
+        ),
+      );
+    },
+  );
+
   it("keeps one natural composer available while the session is busy", () => {
-    const markup = renderSessionsPage({ busy: true });
+    const markup = renderSessionsPage({ busy: true, local: true });
 
     expect(markup).toContain(
       "Continue typing to guide the task or ask about progress",
@@ -261,8 +331,8 @@ describe("SessionsPage", () => {
     expect(markup).not.toContain('data-chat-action="send"');
     expect(markup).not.toContain("Stop and redirect");
     expect(markup).not.toContain("Side question");
-    expect(markup).toMatch(/data-message-action="branch"[^>]*disabled/);
-    expect(markup).toMatch(/data-message-action="rollback"[^>]*disabled/);
+    expect(markup).toMatch(/data-message-action="branch"[^>]*\sdisabled=""/);
+    expect(markup).toMatch(/data-message-action="rollback"[^>]*\sdisabled=""/);
   });
 
   it("branches from a message and navigates to the new session", async () => {

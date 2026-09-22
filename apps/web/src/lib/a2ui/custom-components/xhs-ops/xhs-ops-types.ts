@@ -3,6 +3,7 @@
  * uses the generated OpenAPI functions, so this file only owns UI helpers.
  */
 import {
+  XHS_OCCUPATION_GROUPS,
   XHS_PROFILE_CANDIDATES,
   XHS_PROFILE_FIELD_LABEL,
   xhsOpsProfileCandidatePlan,
@@ -61,6 +62,7 @@ import type {
 } from "@nexu/shared";
 
 export {
+  XHS_OCCUPATION_GROUPS,
   XHS_PROFILE_CANDIDATES,
   XHS_PROFILE_FIELD_LABEL,
   xhsOpsProfileCandidatePlan,
@@ -602,6 +604,7 @@ export function emptyProfileDraft(): XhsOpsProfileDraft {
   return {
     nickname: "",
     bio: "",
+    occupation: "",
     gender: "",
     birthday: "",
     region: "",
@@ -650,6 +653,7 @@ export function normalizeProfileDraft(value: unknown): XhsOpsProfileDraft {
   return {
     nickname: asString(v.nickname).slice(0, 20),
     bio: asString(v.bio).slice(0, 200),
+    occupation: asString(v.occupation).slice(0, 80),
     gender:
       v.gender === "男" || v.gender === "女" || v.gender === "不展示"
         ? v.gender

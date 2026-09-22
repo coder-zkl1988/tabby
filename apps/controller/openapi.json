@@ -11923,12 +11923,33 @@
         ],
         "responses": {
           "200": {
-            "description": "Fork the session and select this message as its active leaf",
+            "description": "Fork before a persisted user message and return its editable draft",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "editorText": {
+                      "type": "string"
+                    },
+                    "editorAttachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mimeType": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "mimeType",
+                          "data"
+                        ]
+                      }
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -12021,12 +12042,33 @@
         ],
         "responses": {
           "200": {
-            "description": "Select this message as the current session's active leaf",
+            "description": "Rewind before a persisted user message and return its editable draft",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "editorText": {
+                      "type": "string"
+                    },
+                    "editorAttachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mimeType": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "mimeType",
+                          "data"
+                        ]
+                      }
+                    },
                     "ok": {
                       "type": "boolean",
                       "enum": [
@@ -25893,6 +25935,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "album": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
                   "images": {
                     "type": "array",
                     "items": {
@@ -27436,6 +27483,14 @@
                           "projectId": {
                             "type": "string"
                           },
+                          "entryMode": {
+                            "type": "string",
+                            "enum": [
+                              "new",
+                              "existing"
+                            ],
+                            "default": "new"
+                          },
                           "label": {
                             "type": "string",
                             "minLength": 1,
@@ -27514,6 +27569,10 @@
                                 "default": ""
                               },
                               "bio": {
+                                "type": "string",
+                                "default": ""
+                              },
+                              "occupation": {
                                 "type": "string",
                                 "default": ""
                               },
@@ -28041,6 +28100,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -28119,6 +28186,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -28618,6 +28689,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -28696,6 +28775,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -29187,6 +29270,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -29265,6 +29356,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -29904,6 +29999,7 @@
                             "enum": [
                               "nickname",
                               "bio",
+                              "occupation",
                               "avatar",
                               "cover",
                               "gender",
@@ -30049,6 +30145,7 @@
                       "enum": [
                         "nickname",
                         "bio",
+                        "occupation",
                         "avatar",
                         "cover",
                         "gender",
@@ -30057,7 +30154,7 @@
                       ]
                     },
                     "minItems": 1,
-                    "maxItems": 7
+                    "maxItems": 8
                   }
                 }
               }
@@ -30080,6 +30177,14 @@
                         },
                         "projectId": {
                           "type": "string"
+                        },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
                         },
                         "label": {
                           "type": "string",
@@ -30159,6 +30264,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -34915,6 +35024,14 @@
                   "account": {
                     "type": "object",
                     "properties": {
+                      "entryMode": {
+                        "type": "string",
+                        "enum": [
+                          "new",
+                          "existing"
+                        ],
+                        "default": "new"
+                      },
                       "label": {
                         "type": "string",
                         "minLength": 1,
@@ -35224,6 +35341,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -35302,6 +35427,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -35795,6 +35924,14 @@
                           "projectId": {
                             "type": "string"
                           },
+                          "entryMode": {
+                            "type": "string",
+                            "enum": [
+                              "new",
+                              "existing"
+                            ],
+                            "default": "new"
+                          },
                           "label": {
                             "type": "string",
                             "minLength": 1,
@@ -35873,6 +36010,10 @@
                                 "default": ""
                               },
                               "bio": {
+                                "type": "string",
+                                "default": ""
+                              },
+                              "occupation": {
                                 "type": "string",
                                 "default": ""
                               },
@@ -36301,6 +36442,14 @@
                   "projectId": {
                     "type": "string"
                   },
+                  "entryMode": {
+                    "type": "string",
+                    "enum": [
+                      "new",
+                      "existing"
+                    ],
+                    "default": "new"
+                  },
                   "label": {
                     "type": "string",
                     "minLength": 1,
@@ -36369,6 +36518,10 @@
                         "default": ""
                       },
                       "bio": {
+                        "type": "string",
+                        "default": ""
+                      },
+                      "occupation": {
                         "type": "string",
                         "default": ""
                       },
@@ -36672,6 +36825,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -36750,6 +36911,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -37241,6 +37406,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -37319,6 +37492,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -37743,6 +37920,14 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "entryMode": {
+                    "type": "string",
+                    "enum": [
+                      "new",
+                      "existing"
+                    ],
+                    "default": "new"
+                  },
                   "label": {
                     "type": "string",
                     "minLength": 1,
@@ -37811,6 +37996,10 @@
                         "default": ""
                       },
                       "bio": {
+                        "type": "string",
+                        "default": ""
+                      },
+                      "occupation": {
                         "type": "string",
                         "default": ""
                       },
@@ -38113,6 +38302,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -38191,6 +38388,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },
@@ -38680,6 +38881,14 @@
                         "projectId": {
                           "type": "string"
                         },
+                        "entryMode": {
+                          "type": "string",
+                          "enum": [
+                            "new",
+                            "existing"
+                          ],
+                          "default": "new"
+                        },
                         "label": {
                           "type": "string",
                           "minLength": 1,
@@ -38758,6 +38967,10 @@
                               "default": ""
                             },
                             "bio": {
+                              "type": "string",
+                              "default": ""
+                            },
+                            "occupation": {
                               "type": "string",
                               "default": ""
                             },

@@ -124,7 +124,7 @@ export class OpenClawAuthProfilesWriter {
     );
 
     await Promise.all(
-      (config.agents?.list ?? []).map(async (agent) => {
+      Object.values(config.agents?.entries ?? {}).map(async (agent) => {
         if (
           typeof agent.workspace !== "string" ||
           agent.workspace.length === 0

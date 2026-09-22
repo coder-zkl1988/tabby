@@ -3731,9 +3731,14 @@ export type PostApiV1SessionsByIdMessagesByMessageIdBranchError = PostApiV1Sessi
 
 export type PostApiV1SessionsByIdMessagesByMessageIdBranchResponses = {
     /**
-     * Fork the session and select this message as its active leaf
+     * Fork before a persisted user message and return its editable draft
      */
     200: {
+        editorText?: string;
+        editorAttachments?: Array<{
+            mimeType: string;
+            data: string;
+        }>;
         id: string;
         botId: string;
         sessionKey: string;
@@ -3773,9 +3778,14 @@ export type PostApiV1SessionsByIdMessagesByMessageIdRollbackError = PostApiV1Ses
 
 export type PostApiV1SessionsByIdMessagesByMessageIdRollbackResponses = {
     /**
-     * Select this message as the current session's active leaf
+     * Rewind before a persisted user message and return its editable draft
      */
     200: {
+        editorText?: string;
+        editorAttachments?: Array<{
+            mimeType: string;
+            data: string;
+        }>;
         ok: true;
         id: string;
         sessionKey: string;
@@ -8264,6 +8274,7 @@ export type PostApiV1DevicesByDeviceIdTasksResponse = PostApiV1DevicesByDeviceId
 
 export type PostApiV1DevicesByDeviceIdMediaData = {
     body?: {
+        album?: string;
         images: Array<{
             filename: string;
             mimeType: string;
@@ -8750,6 +8761,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponses = {
         accounts: Array<{
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -8769,6 +8781,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -8893,6 +8906,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -8912,6 +8926,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -9034,6 +9049,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -9053,6 +9069,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -9173,6 +9190,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -9192,6 +9210,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -9367,7 +9386,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponses = {
         reason: string;
         screenshotUrl: string | null;
         fields: Array<{
-            field: 'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+            field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
             comparable: boolean;
             phone: string;
             draft: string;
@@ -9380,7 +9399,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReadbackResponse = Pos
 
 export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyData = {
     body?: {
-        fields?: Array<'nickname' | 'bio' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region'>;
+        fields?: Array<'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region'>;
     };
     path: {
         accountId: string;
@@ -9426,6 +9445,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -9445,6 +9465,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -10663,6 +10684,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceData = {
         fromAccountId: string;
         toAccountId?: string;
         account: {
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -10763,6 +10785,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponses = 
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -10782,6 +10805,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponses = 
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -10884,6 +10908,7 @@ export type GetApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
         accounts: Array<{
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -10903,6 +10928,7 @@ export type GetApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -10980,6 +11006,7 @@ export type GetApiV1XhsOpsProjectsByProjectIdAccountsResponse = GetApiV1XhsOpsPr
 export type PostApiV1XhsOpsProjectsByProjectIdAccountsData = {
     body?: {
         projectId?: string;
+        entryMode?: 'new' | 'existing';
         label: string;
         positioning?: string;
         persona?: {
@@ -10997,6 +11024,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsData = {
         profileDraft?: {
             nickname?: string;
             bio?: string;
+            occupation?: string;
             gender?: '' | '男' | '女' | '不展示';
             birthday?: string;
             region?: string;
@@ -11092,6 +11120,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -11111,6 +11140,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -11231,6 +11261,7 @@ export type DeleteApiV1XhsOpsAccountsByAccountIdResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -11250,6 +11281,7 @@ export type DeleteApiV1XhsOpsAccountsByAccountIdResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -11352,6 +11384,7 @@ export type GetApiV1XhsOpsAccountsByAccountIdResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -11371,6 +11404,7 @@ export type GetApiV1XhsOpsAccountsByAccountIdResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;
@@ -11447,6 +11481,7 @@ export type GetApiV1XhsOpsAccountsByAccountIdResponse = GetApiV1XhsOpsAccountsBy
 
 export type PatchApiV1XhsOpsAccountsByAccountIdData = {
     body?: {
+        entryMode?: 'new' | 'existing';
         label?: string;
         positioning?: string;
         persona?: {
@@ -11464,6 +11499,7 @@ export type PatchApiV1XhsOpsAccountsByAccountIdData = {
         profileDraft?: {
             nickname?: string;
             bio?: string;
+            occupation?: string;
             gender?: '' | '男' | '女' | '不展示';
             birthday?: string;
             region?: string;
@@ -11560,6 +11596,7 @@ export type PatchApiV1XhsOpsAccountsByAccountIdResponses = {
         account: {
             id: string;
             projectId: string;
+            entryMode?: 'new' | 'existing';
             label: string;
             positioning?: string;
             persona?: {
@@ -11579,6 +11616,7 @@ export type PatchApiV1XhsOpsAccountsByAccountIdResponses = {
             profileDraft?: {
                 nickname?: string;
                 bio?: string;
+                occupation?: string;
                 gender?: '' | '男' | '女' | '不展示';
                 birthday?: string;
                 region?: string;

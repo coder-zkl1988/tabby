@@ -31,6 +31,57 @@ describe("extractTalkAudio", () => {
     ).toMatchObject({ audioBase64: "R0hJ" });
   });
 
+  it("reads 9.4 relay audio outside its metadata-only talk event", () => {
+    expect(
+      extractTalkAudio({
+        relaySessionId: "voice-1",
+        type: "audio",
+        audioBase64: "QUJD",
+        talkEvent: {
+          type: "output.audio.delta",
+          turnId: "turn-1",
+          payload: { byteLength: 3 },
+        },
+      }),
+    ).toMatchObject({ audioBase64: "QUJD", turnId: "turn-1" });
+  });
+
+  it("uses the explicit user role from a finalized relay transcript", () => {
+    expect(
+      extractTalkAudio({
+        relaySessionId: "voice-1",
+        type: "transcript",
+        role: "user",
+        text: "你好",
+        final: true,
+        talkEvent: {
+          type: "transcript.done",
+          payload: { role: "user", text: "你好" },
+          final: true,
+        },
+      }).transcript,
+    ).toEqual({ text: "你好", role: "user", final: true });
+  });
+
+  it("does not commit a relay transcript whose explicit final flag is false", () => {
+    expect(
+      extractTalkAudio({
+        type: "transcript",
+        role: "user",
+        text: "尚未说完",
+        final: false,
+      }).transcript,
+    ).toEqual({ text: "尚未说完", role: "user", final: false });
+  });
+
+  it("ignores malformed nested event data", () => {
+    expect(extractTalkAudio({ talkEvent: { payload: null } })).toEqual({
+      audioBase64: undefined,
+      turnId: undefined,
+      transcript: undefined,
+    });
+  });
+
   it("ignores an empty audio string rather than queueing silence", () => {
     expect(extractTalkAudio({ type: "audio", audio: "" }).audioBase64).toBe(
       undefined,

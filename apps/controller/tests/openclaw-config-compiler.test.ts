@@ -161,6 +161,24 @@ function createConfig(overrides: Partial<NexuConfig> = {}): NexuConfig {
 }
 
 describe("compileOpenClawConfig", () => {
+  it("emits canonical OpenClaw 2026.9.4 paths without retired config keys", () => {
+    const result = compileOpenClawConfig(createConfig(), createEnv());
+
+    expect(result.agents).not.toHaveProperty("list");
+    expect(result.agents.entries["bot-1"]).not.toHaveProperty("id");
+    expect(result.agents.entries["bot-1"]).not.toHaveProperty("default");
+    expect(result.agents.defaults).not.toHaveProperty("memorySearch");
+    expect(result.agents.defaults?.compaction).not.toHaveProperty(
+      "maxHistoryShare",
+    );
+    expect(result.memory?.search).not.toHaveProperty("sync");
+    expect(result.diagnostics).not.toHaveProperty("stuckSessionAbortMs");
+    expect(result.messages).not.toHaveProperty("removeAckAfterReply");
+    expect(result.commands).not.toHaveProperty("ownerDisplay");
+    expect(result.skills?.load).not.toHaveProperty("watchDebounceMs");
+    expect(result.talk).toEqual({ agentId: "bot-1" });
+  });
+
   // A bot with no model of its own follows the global default. The compiler
   // expresses that by omitting the per-agent model so OpenClaw falls back to
   // agents.defaults — which is the whole reason per-bot binding can coexist
@@ -175,7 +193,7 @@ describe("compileOpenClawConfig", () => {
       createEnv(),
     );
 
-    expect(result.agents.list[0]?.model).toBeUndefined();
+    expect(result.agents.entries["bot-1"]?.model).toBeUndefined();
     expect(
       (result.agents.defaults as Record<string, unknown>).model,
     ).toMatchObject({ primary: expect.stringContaining("claude-sonnet-4") });
@@ -201,7 +219,7 @@ describe("compileOpenClawConfig", () => {
     );
 
     // The bot chose this model; the global default must not reach it.
-    expect(result.agents.list[0]?.model).toMatchObject({
+    expect(result.agents.entries["bot-1"]?.model).toMatchObject({
       primary: expect.stringContaining("gpt-4.1"),
     });
   });
@@ -266,7 +284,7 @@ describe("compileOpenClawConfig", () => {
     ).toBe(false);
   });
 
-  it("compiles memory scope, cross-session recall, and sync settings", () => {
+  it("compiles memory scope and cross-session recall under memory.search", () => {
     const result = compileOpenClawConfig(
       createConfig({
         memory: {
@@ -279,7 +297,7 @@ describe("compileOpenClawConfig", () => {
       createEnv(),
     );
 
-    expect(result.agents.defaults.memorySearch).toEqual({
+    expect(result.memory?.search).toEqual({
       enabled: true,
       sources: ["memory", "sessions"],
       experimental: { sessionMemory: true },
@@ -290,14 +308,13 @@ describe("compileOpenClawConfig", () => {
         fts: { tokenizer: "trigram" },
         vector: { enabled: false },
       },
-      sync: { intervalMinutes: 15 },
     });
   });
 
   it("keeps session transcript indexing disabled outside cross-session memory", () => {
     const result = compileOpenClawConfig(createConfig(), createEnv());
 
-    expect(result.agents.defaults.memorySearch).toMatchObject({
+    expect(result.memory?.search).toMatchObject({
       sources: ["memory"],
       experimental: { sessionMemory: false },
       provider: "none",
@@ -324,7 +341,7 @@ describe("compileOpenClawConfig", () => {
       createEnv(),
     );
 
-    expect(result.agents.defaults.memorySearch).toMatchObject({
+    expect(result.memory?.search).toMatchObject({
       provider: "link",
       model: "Qwen/Qwen3-Embedding-4B",
       fallback: "none",
@@ -344,7 +361,9 @@ describe("compileOpenClawConfig", () => {
     expect(result.tools?.deny).toBeUndefined();
     expect(result.plugins?.allow).toBeUndefined();
     expect(result.plugins?.deny).toBeUndefined();
-    expect(result.agents.list[0]?.tools?.alsoAllow).not.toContain("browser");
+    expect(result.agents.entries["bot-1"]?.tools?.alsoAllow).not.toContain(
+      "browser",
+    );
   });
 
   it("hands the tool call guard its write-fence roots", () => {
@@ -573,7 +592,7 @@ describe("compileOpenClawConfig", () => {
       createEnv(),
     );
 
-    expect(result.agents.list[0]?.tools?.alsoAllow).toEqual(
+    expect(result.agents.entries["bot-1"]?.tools?.alsoAllow).toEqual(
       expect.arrayContaining([...EMBEDDED_BROWSER_TOOLS]),
     );
     // OpenClaw silently blocks `agent_end` for non-bundled plugins without
@@ -597,7 +616,9 @@ describe("compileOpenClawConfig", () => {
     // Chrome. It has to be disabled explicitly.
     expect(result.plugins?.allow).toBeUndefined();
     expect(result.plugins?.entries?.browser).toEqual({ enabled: false });
-    expect(result.agents.list[0]?.tools?.alsoAllow).not.toContain("browser");
+    expect(result.agents.entries["bot-1"]?.tools?.alsoAllow).not.toContain(
+      "browser",
+    );
     expect(result.tools?.exec?.security).toBe("full");
     expect(result.tools?.deny).toBeUndefined();
   });
@@ -614,7 +635,9 @@ describe("compileOpenClawConfig", () => {
     );
 
     for (const tool of EMBEDDED_BROWSER_TOOLS) {
-      expect(result.agents.list[0]?.tools?.alsoAllow).not.toContain(tool);
+      expect(result.agents.entries["bot-1"]?.tools?.alsoAllow).not.toContain(
+        tool,
+      );
     }
   });
 
@@ -638,8 +661,10 @@ describe("compileOpenClawConfig", () => {
     // Disabled explicitly, not merely unconfigured — the bundled plugin is on
     // by default, so omitting it leaves the user's real Chrome reachable.
     expect(result.plugins?.entries?.browser).toEqual({ enabled: false });
-    expect(result.agents.list[0]?.tools?.alsoAllow).not.toContain("browser");
-    expect(result.agents.list[0]?.tools?.alsoAllow).not.toContain(
+    expect(result.agents.entries["bot-1"]?.tools?.alsoAllow).not.toContain(
+      "browser",
+    );
+    expect(result.agents.entries["bot-1"]?.tools?.alsoAllow).not.toContain(
       "cua-driver__click",
     );
     expect(result.tools?.exec?.security).toBe("full");
@@ -786,7 +811,7 @@ describe("compileOpenClawConfig", () => {
     expect(result.mcp).toBeUndefined();
   });
 
-  it("marks the desktop defaultBotId agent as the default agent", () => {
+  it("pins ambient operations to the desktop defaultBotId agent", () => {
     const now = new Date().toISOString();
     const botBase = {
       poolId: null,
@@ -808,13 +833,16 @@ describe("compileOpenClawConfig", () => {
       createEnv(),
     );
 
-    const defaultFlags = Object.fromEntries(
-      result.agents.list.map((agent) => [agent.id, agent.default]),
-    );
-    expect(defaultFlags).toEqual({ "bot-a": false, "bot-z": true });
+    expect(Object.keys(result.agents.entries)).toEqual(["bot-a", "bot-z"]);
+    expect(result.agents.ownership).toBe("explicit");
+    expect(result.agents.defaults).toMatchObject({
+      systemAgent: { agentId: "bot-z" },
+      heartbeat: { agentId: "bot-z" },
+      sessionStore: { agentId: "bot-z" },
+    });
   });
 
-  it("marks the system bot as the default agent when no defaultBotId is set", () => {
+  it("pins ambient operations to the system bot when no defaultBotId is set", () => {
     const now = new Date().toISOString();
     const botBase = {
       poolId: null,
@@ -841,16 +869,18 @@ describe("compileOpenClawConfig", () => {
       createEnv(),
     );
 
-    const defaultFlags = Object.fromEntries(
-      result.agents.list.map((agent) => [agent.id, agent.default]),
-    );
-    expect(defaultFlags).toEqual({ "bot-a": false, "bot-sys": true });
+    expect(Object.keys(result.agents.entries)).toEqual(["bot-a", "bot-sys"]);
+    expect(result.agents.defaults).toMatchObject({
+      systemAgent: { agentId: "bot-sys" },
+      heartbeat: { agentId: "bot-sys" },
+      sessionStore: { agentId: "bot-sys" },
+    });
   });
 
   it("emits sub-agent delegation config on every agent (in-chat auto-routing)", () => {
     const result = compileOpenClawConfig(createConfig(), createEnv());
-    expect(result.agents.list.length).toBeGreaterThan(0);
-    for (const agent of result.agents.list) {
+    expect(Object.keys(result.agents.entries).length).toBeGreaterThan(0);
+    for (const agent of Object.values(result.agents.entries)) {
       expect(agent.tools).toMatchObject({
         alsoAllow: expect.arrayContaining(["sessions_spawn", "sessions_yield"]),
       });
@@ -928,8 +958,7 @@ describe("compileOpenClawConfig", () => {
     expect(result.agents.defaults?.model).toEqual({
       primary: "byok_anthropic/claude-sonnet-4",
     });
-    expect(result.agents.list[0]).toMatchObject({
-      id: "bot-1",
+    expect(result.agents.entries["bot-1"]).toMatchObject({
       workspace: "/tmp/openclaw/agents/bot-1",
       model: { primary: "byok_anthropic/claude-sonnet-4" },
     });
@@ -1250,7 +1279,7 @@ describe("compileOpenClawConfig", () => {
     expect(result.agents.defaults?.model).toEqual({
       primary: "litellm/anthropic/claude-sonnet-4",
     });
-    expect(result.agents.list[0]?.model).toEqual({
+    expect(result.agents.entries["bot-1"]?.model).toEqual({
       primary: "litellm/anthropic/claude-sonnet-4",
     });
   });
@@ -1356,7 +1385,7 @@ describe("compileOpenClawConfig", () => {
     expect(result.agents.defaults?.model).toEqual({
       primary: "openai/gpt-5.4",
     });
-    expect(result.agents.list[0]?.model).toEqual({
+    expect(result.agents.entries["bot-1"]?.model).toEqual({
       primary: "openai/gpt-5.4",
     });
   });
@@ -1876,21 +1905,28 @@ describe("compileOpenClawConfig", () => {
         "git",
         "npm",
       ]);
-      expect(compiled.agents.list[0].skills).toEqual(["git", "npm"]);
+      expect(Object.values(compiled.agents.entries)[0].skills).toEqual([
+        "git",
+        "npm",
+      ]);
     });
 
     it("omits skills field when installedSlugs is empty (legacy fallback)", () => {
       const config = createConfig();
       const env = createEnv();
       const compiled = compileOpenClawConfig(config, env, undefined, []);
-      expect(compiled.agents.list[0]).not.toHaveProperty("skills");
+      expect(Object.values(compiled.agents.entries)[0]).not.toHaveProperty(
+        "skills",
+      );
     });
 
     it("omits skills field when installedSlugs is undefined", () => {
       const config = createConfig();
       const env = createEnv();
       const compiled = compileOpenClawConfig(config, env);
-      expect(compiled.agents.list[0]).not.toHaveProperty("skills");
+      expect(Object.values(compiled.agents.entries)[0]).not.toHaveProperty(
+        "skills",
+      );
     });
 
     it("assigns same skills to all active agents", () => {
@@ -1925,9 +1961,13 @@ describe("compileOpenClawConfig", () => {
       const compiled = compileOpenClawConfig(config, env, undefined, [
         "calendar",
       ]);
-      expect(compiled.agents.list).toHaveLength(2);
-      expect(compiled.agents.list[0].skills).toEqual(["calendar"]);
-      expect(compiled.agents.list[1].skills).toEqual(["calendar"]);
+      expect(Object.keys(compiled.agents.entries)).toHaveLength(2);
+      expect(Object.values(compiled.agents.entries)[0].skills).toEqual([
+        "calendar",
+      ]);
+      expect(Object.values(compiled.agents.entries)[1].skills).toEqual([
+        "calendar",
+      ]);
     });
   });
 
@@ -1971,13 +2011,13 @@ describe("compileOpenClawConfig", () => {
         wsMap,
       );
 
-      const botA = compiled.agents.list.find((a) => a.id === "bot-1");
+      const botA = compiled.agents.entries["bot-1"];
       expect(botA?.skills).toEqual(
         expect.arrayContaining(["shared-skill", "agent-tool"]),
       );
       expect(botA?.skills).toHaveLength(2);
 
-      const botB = compiled.agents.list.find((a) => a.id === "bot-2");
+      const botB = compiled.agents.entries["bot-2"];
       expect(botB?.skills).toEqual(["shared-skill"]);
     });
 
@@ -2006,7 +2046,7 @@ describe("compileOpenClawConfig", () => {
         new Map([["bot-a", ["workspace-z", "alpha", "workspace-a"]]]),
       );
 
-      expect(compiled.agents.list[0]?.skills).toEqual([
+      expect(Object.values(compiled.agents.entries)[0]?.skills).toEqual([
         "alpha",
         "shared-skill",
         "workspace-a",
@@ -2027,7 +2067,7 @@ describe("compileOpenClawConfig", () => {
         ["shared-skill"],
         wsMap,
       );
-      const agent = compiled.agents.list[0];
+      const agent = Object.values(compiled.agents.entries)[0];
       expect(agent.skills).toEqual(["shared-skill"]);
     });
 
@@ -2043,7 +2083,9 @@ describe("compileOpenClawConfig", () => {
         [],
         wsMap,
       );
-      expect(compiled.agents.list[0].skills).toEqual(["ws-only"]);
+      expect(Object.values(compiled.agents.entries)[0].skills).toEqual([
+        "ws-only",
+      ]);
     });
 
     it("omits skills when both shared and workspace are empty", () => {
@@ -2056,7 +2098,9 @@ describe("compileOpenClawConfig", () => {
         [],
         wsMap,
       );
-      expect(compiled.agents.list[0]).not.toHaveProperty("skills");
+      expect(Object.values(compiled.agents.entries)[0]).not.toHaveProperty(
+        "skills",
+      );
     });
   });
 
@@ -2120,7 +2164,7 @@ describe("compileOpenClawConfig", () => {
     expect(result.agents.defaults?.model).toEqual({
       primary: "openai-codex/gpt-5.4",
     });
-    expect(result.agents.list[0]?.model).toEqual({
+    expect(result.agents.entries["bot-1"]?.model).toEqual({
       primary: "openai-codex/gpt-5.4",
     });
   });

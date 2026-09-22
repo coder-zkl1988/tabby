@@ -8,9 +8,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   getApiV1Bots,
   getApiV1BotsDefault,
+  getApiV1ChatSession,
   patchApiV1BotsByBotId,
   postApiV1ChatLocalStart,
   putApiV1BotsDefault,
@@ -32,6 +34,7 @@ export function LocalChatPage() {
 
   const [selectedBot, setSelectedBot] = useState<BotItem | null>(null);
   const [waitingReply, setWaitingReply] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const contextKeyRef = useRef<string>("");
   const lastDeskpetTypingNotifyAtRef = useRef(0);
@@ -41,6 +44,23 @@ export function LocalChatPage() {
   // soon as a real session is established (see sendMessage below), so a
   // fresh key is generated the next time this page is visited.
   const sessionUuidRef = useRef<string>(crypto.randomUUID());
+  const voiceSessionKey = selectedBot
+    ? `agent:${selectedBot.id}:${sessionUuidRef.current}`
+    : null;
+
+  const handleVoiceSessionEnded = useCallback(async () => {
+    if (!selectedBot || !voiceSessionKey) return;
+    try {
+      const { data, error } = await getApiV1ChatSession({
+        query: { botId: selectedBot.id, sessionKey: voiceSessionKey },
+      });
+      if (error) throw error;
+      void queryClient.invalidateQueries({ queryKey: ["sidebar-sessions"] });
+      if (data?.session?.id) navigate(`/workspace/sessions/${data.session.id}`);
+    } catch {
+      toast.error(t("sessions.chat.talkFailed"));
+    }
+  }, [navigate, queryClient, selectedBot, t, voiceSessionKey]);
 
   // Fetch bots
   const { data: botsData, isLoading: botsLoading } = useQuery({
@@ -202,6 +222,7 @@ export function LocalChatPage() {
       const newSessionKey = `agent:${botId}:${sessionUuidRef.current}`;
 
       try {
+        setSendError(null);
         setWaitingReply(true);
         invokeDesktopHost("desktop:deskpet-activity", {
           mood: "working",
@@ -248,12 +269,7 @@ export function LocalChatPage() {
         });
 
         if (result.error) {
-          setWaitingReply(false);
-          invokeDesktopHost("desktop:deskpet-activity", {
-            mood: "error",
-            durationMs: DESKPET_ERROR_DURATION_MS,
-          });
-          return false;
+          throw result.error;
         }
 
         const responseData = result.data;
@@ -302,8 +318,16 @@ export function LocalChatPage() {
           },
         );
         return true;
-      } catch {
+      } catch (error) {
         setWaitingReply(false);
+        setSendError(
+          typeof error === "object" &&
+            error !== null &&
+            "message" in error &&
+            typeof error.message === "string"
+            ? error.message
+            : "",
+        );
         invokeDesktopHost("desktop:deskpet-activity", {
           mood: "error",
           durationMs: DESKPET_ERROR_DURATION_MS,
@@ -359,6 +383,8 @@ export function LocalChatPage() {
                   defaultBotId={defaultBotData?.id ?? null}
                   onSetDefaultBot={handleSetDefaultBot}
                   onSend={sendMessage}
+                  voiceSessionKey={voiceSessionKey}
+                  onVoiceSessionEnded={handleVoiceSessionEnded}
                   onTyping={handleDeskpetTyping}
                   sending={false}
                   waitingReply={waitingReply}
@@ -366,6 +392,17 @@ export function LocalChatPage() {
                   placeholder={placeholder}
                   showAddBot
                 />
+                {sendError !== null && (
+                  <div
+                    role="alert"
+                    className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                  >
+                    <p>{t("localChat.sendFailed")}</p>
+                    {sendError && (
+                      <p className="mt-1 break-words text-xs">{sendError}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

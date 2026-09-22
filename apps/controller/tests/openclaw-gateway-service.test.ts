@@ -5,7 +5,7 @@ import { OpenClawGatewayService } from "../src/services/openclaw-gateway-service
 function makeConfig(overrides: Partial<OpenClawConfig> = {}): OpenClawConfig {
   return {
     gateway: { port: 18789, mode: "local", bind: "127.0.0.1" },
-    agents: { list: [], defaults: {} },
+    agents: { entries: {}, defaults: {} },
     channels: {},
     bindings: [],
     plugins: { load: { paths: [] }, entries: {} },
@@ -16,6 +16,94 @@ function makeConfig(overrides: Partial<OpenClawConfig> = {}): OpenClawConfig {
 }
 
 describe("OpenClawGatewayService", () => {
+  it("sends captured voice frames using the 9.4 audioBase64 wire field", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const service = new OpenClawGatewayService({ request } as never);
+
+    await service.appendTalkAudio({ sessionId: "voice-1", audio: "QUJD" });
+
+    expect(request).toHaveBeenCalledWith("talk.session.appendAudio", {
+      sessionId: "voice-1",
+      audioBase64: "QUJD",
+    });
+  });
+
+  it("acknowledges completed voice playback marks", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const service = new OpenClawGatewayService({ request } as never);
+
+    await service.acknowledgeTalkPlayback({
+      sessionId: "voice-1",
+      markName: "output-1",
+    });
+
+    expect(request).toHaveBeenCalledWith("talk.session.acknowledgeMark", {
+      sessionId: "voice-1",
+      markName: "output-1",
+    });
+  });
+
+  it("reads every runtime session page, including archived sessions", async () => {
+    const first = { key: "agent:bot:one", sessionId: "one" };
+    const archived = { key: "agent:bot:two", sessionId: "two", archived: true };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        sessions: [first],
+        hasMore: true,
+        nextOffset: 1,
+      })
+      .mockResolvedValueOnce({ sessions: [archived], hasMore: false });
+    const service = new OpenClawGatewayService({ request } as never);
+    await expect(service.listStoredSessions()).resolves.toEqual({
+      sessions: [first, archived],
+    });
+    expect(request).toHaveBeenNthCalledWith(2, "sessions.list", {
+      limit: 200,
+      offset: 1,
+      includeDerivedTitles: true,
+      configuredAgentsOnly: true,
+      archived: "all",
+    });
+  });
+
+  it("rejects an invalid session page instead of silently losing history", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValue({ sessions: [], hasMore: true, nextOffset: 0 });
+    const service = new OpenClawGatewayService({ request } as never);
+    await expect(service.listStoredSessions()).rejects.toThrow(
+      "pagination did not advance",
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves transcript IDs and scopes historical reads to their session ID", async () => {
+    const messages = [
+      { role: "assistant", content: "reply", __openclaw: { id: "entry-1" } },
+    ];
+    const request = vi.fn().mockResolvedValue({ messages });
+    const service = new OpenClawGatewayService({ request } as never);
+    await expect(
+      service.getStoredChatHistory("agent:bot:one", 2000, "old-run"),
+    ).resolves.toEqual({ messages });
+    expect(request).toHaveBeenCalledWith("chat.history", {
+      sessionKey: "agent:bot:one",
+      limit: 1000,
+      sessionId: "old-run",
+    });
+  });
+
+  it("leaves SQLite session mutations with the gateway", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const service = new OpenClawGatewayService({ request } as never);
+    const target = { key: "agent:bot:one", agentId: "bot" };
+    await service.sessionsReset(target);
+    await service.sessionsDelete(target);
+    expect(request).toHaveBeenNthCalledWith(1, "sessions.reset", target);
+    expect(request).toHaveBeenNthCalledWith(2, "sessions.delete", target);
+  });
+
   it("treats semantically identical configs as unchanged despite key reorder", async () => {
     const service = new OpenClawGatewayService({
       isConnected: () => true,

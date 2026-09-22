@@ -364,8 +364,11 @@ export class OpenClawSyncService {
             defaults: rawCompiled.agents.defaults
               ? { ...rawCompiled.agents.defaults, model: undefined }
               : rawCompiled.agents.defaults,
-            list: (rawCompiled.agents.list ?? []).map((agent) =>
-              agent.model ? { ...agent, model: undefined } : agent,
+            entries: Object.fromEntries(
+              Object.entries(rawCompiled.agents.entries).map(([id, agent]) => [
+                id,
+                agent.model ? { ...agent, model: undefined } : agent,
+              ]),
             ),
           },
         };
@@ -481,7 +484,7 @@ export class OpenClawSyncService {
 
     // 4. Nudge OpenClaw's skills watcher + restart gateway ONLY when the
     // agent skill allowlist actually changed. OpenClaw hot-reloads model,
-    // channel, and plugin changes just fine — only agents.list skill
+    // channel, and plugin changes just fine — only agents.entries skill
     // changes are treated as kind "none" and require a full restart.
     // Gate on skill-list diff to avoid unnecessary restarts during
     // normal model/channel/provider updates.
@@ -561,7 +564,7 @@ export class OpenClawSyncService {
     compiled: ReturnType<typeof compileOpenClawConfig>,
   ): ReadonlySet<string> {
     const skills = new Set<string>();
-    for (const agent of compiled.agents.list ?? []) {
+    for (const agent of Object.values(compiled.agents.entries)) {
       for (const skill of agent.skills ?? []) {
         skills.add(skill);
       }

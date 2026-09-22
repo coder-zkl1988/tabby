@@ -1,5 +1,7 @@
 # Reliability
 
+For the desktop controller, a live OpenClaw health endpoint proves only process availability. Upgrade verification must validate the compiled configuration with the installed runtime, confirm configured agents are present, and exercise a local chat through reply and history read-back. OpenClaw 2026.9.4 rejects retired config keys and stores conversations in SQLite; the controller must use gateway session APIs rather than interpreting a missing legacy JSONL index as an empty history. Gateway read failures surface as unavailable so a disconnected runtime cannot silently erase the conversation list.
+
 ## Gateway pools
 
 - Each pool runs one OpenClaw Gateway process serving multiple bots (up to `maxBots`, default 50)

@@ -6,13 +6,16 @@ describe("openclawConfigSchema agent skills field", () => {
     const config = createMinimalConfig({
       agents: {
         defaults: { model: { primary: "test-model" } },
-        list: [{ id: "bot-1", name: "Bot", skills: ["git", "npm"] }],
+        entries: { "bot-1": { name: "Bot", skills: ["git", "npm"] } },
       },
     });
     const result = openclawConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.agents.list[0].skills).toEqual(["git", "npm"]);
+      expect(result.data.agents.entries["bot-1"].skills).toEqual([
+        "git",
+        "npm",
+      ]);
     }
   });
 
@@ -21,7 +24,7 @@ describe("openclawConfigSchema agent skills field", () => {
     const result = openclawConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.agents.list[0]).not.toHaveProperty("skills");
+      expect(result.data.agents.entries["bot-1"]).not.toHaveProperty("skills");
     }
   });
 
@@ -29,13 +32,13 @@ describe("openclawConfigSchema agent skills field", () => {
     const config = createMinimalConfig({
       agents: {
         defaults: { model: { primary: "test-model" } },
-        list: [{ id: "bot-1", name: "Bot", skills: [] }],
+        entries: { "bot-1": { name: "Bot", skills: [] } },
       },
     });
     const result = openclawConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.agents.list[0].skills).toEqual([]);
+      expect(result.data.agents.entries["bot-1"].skills).toEqual([]);
     }
   });
 });
@@ -86,33 +89,28 @@ describe("openclawConfigSchema local automation", () => {
 });
 
 describe("openclawConfigSchema memory search", () => {
-  it("accepts the OpenClaw 2026.7.1 FTS-only contract", () => {
+  it("accepts the OpenClaw 2026.9.4 FTS-only contract", () => {
     const result = openclawConfigSchema.safeParse(
       createMinimalConfig({
-        agents: {
-          defaults: {
-            model: { primary: "test-model" },
-            memorySearch: {
-              enabled: true,
-              sources: ["memory", "sessions"],
-              experimental: { sessionMemory: true },
-              provider: "none",
-              fallback: "none",
-              store: {
-                fts: { tokenizer: "trigram" },
-                vector: { enabled: false },
-              },
-              chunking: { tokens: 400, overlap: 80 },
+        memory: {
+          search: {
+            enabled: true,
+            sources: ["memory", "sessions"],
+            experimental: { sessionMemory: true },
+            provider: "none",
+            fallback: "none",
+            store: {
+              fts: { tokenizer: "trigram" },
+              vector: { enabled: false },
             },
           },
-          list: [{ id: "bot-1", name: "Bot" }],
         },
       }),
     );
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.agents.defaults?.memorySearch).toMatchObject({
+      expect(result.data.memory?.search).toMatchObject({
         provider: "none",
         experimental: { sessionMemory: true },
         store: {
@@ -126,24 +124,19 @@ describe("openclawConfigSchema memory search", () => {
   it("accepts custom embedding providers and secret references", () => {
     const result = openclawConfigSchema.safeParse(
       createMinimalConfig({
-        agents: {
-          defaults: {
-            model: { primary: "test-model" },
-            memorySearch: {
-              provider: "custom-embedding-adapter",
-              model: "embedding-v1",
-              remote: {
-                baseUrl: "https://embedding.example/v1",
-                apiKey: {
-                  source: "env",
-                  provider: "default",
-                  id: "EMBEDDING_API_KEY",
-                },
-                nonBatchConcurrency: 2,
+        memory: {
+          search: {
+            provider: "custom-embedding-adapter",
+            model: "embedding-v1",
+            remote: {
+              baseUrl: "https://embedding.example/v1",
+              apiKey: {
+                source: "env",
+                provider: "default",
+                id: "EMBEDDING_API_KEY",
               },
             },
           },
-          list: [{ id: "bot-1", name: "Bot" }],
         },
       }),
     );
@@ -165,7 +158,7 @@ function createMinimalConfig(overrides: Record<string, unknown> = {}) {
     },
     agents: {
       defaults: { model: { primary: "test-model" } },
-      list: [{ id: "bot-1", name: "Bot" }],
+      entries: { "bot-1": { name: "Bot" } },
     },
     channels: {},
     bindings: [],

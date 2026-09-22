@@ -8,7 +8,6 @@ import {
 import { InlineA2UIHost } from "@/components/inline-a2ui-host";
 import { PlatformIcon } from "@/components/platform-icons";
 import { SessionOperationsPanel } from "@/components/session-operations-panel";
-import { TalkVoiceButton } from "@/components/talk-voice-button";
 import { ChatMarkdown } from "@/components/ui/chat-markdown";
 import type { A2UIMessage } from "@/lib/a2ui";
 import { surfacePinKey } from "@/lib/a2ui/a2ui-pin-store";
@@ -70,6 +69,7 @@ import {
   buildTranscriptItems,
   stripRenderedAssistantText,
 } from "@/lib/chat/chat-transcript-groups";
+import { publishExternalChatInput } from "@/lib/chat/external-chat-input";
 import {
   type MessageFileKind,
   classifyMessageFile,
@@ -1251,15 +1251,15 @@ function ChatBubble({
           <div className="flex items-center gap-1 pl-1">
             {time && <div className="text-[10px] text-text-muted">{time}</div>}
             {isBot && hasText && <SpeakButton text={text} />}
-            {onBranch && (
+            {msg.role === "user" && onBranch && (
               <button
                 type="button"
                 data-message-action="branch"
                 aria-label={t("sessions.chat.branchFromMessage", {
-                  defaultValue: "Branch from this message",
+                  defaultValue: "Branch before this message",
                 })}
                 title={t("sessions.chat.branchFromMessage", {
-                  defaultValue: "Branch from this message",
+                  defaultValue: "Branch before this message",
                 })}
                 disabled={actionsDisabled}
                 onClick={() => onBranch(msg.id)}
@@ -1272,15 +1272,15 @@ function ChatBubble({
                 )}
               </button>
             )}
-            {onRollback && (
+            {msg.role === "user" && onRollback && (
               <button
                 type="button"
                 data-message-action="rollback"
                 aria-label={t("sessions.chat.rollbackToMessage", {
-                  defaultValue: "Roll back to this message",
+                  defaultValue: "Roll back before this message",
                 })}
                 title={t("sessions.chat.rollbackToMessage", {
-                  defaultValue: "Roll back to this message",
+                  defaultValue: "Roll back before this message",
                 })}
                 disabled={actionsDisabled}
                 onClick={() => onRollback(msg.id)}
@@ -1953,8 +1953,32 @@ export function SessionsPage() {
       pendingReplyText,
       runId: pendingRunId,
     });
+    // This navigation handoff is consumed once. Keeping it in browser history
+    // would restart a completed run's waiting state whenever the page reloads.
+    const {
+      deskpetPendingReplyText: _pendingReply,
+      deskpetPendingRunId: _pendingRun,
+      deskpetPendingSessionKey: _pendingSession,
+      ...nextState
+    } = state ?? {};
+    const nextSearch = new URLSearchParams(searchParams);
+    nextSearch.delete("deskpetSessionKey");
+    nextSearch.delete("deskpetRunId");
+    nextSearch.delete("deskpetStartedAt");
+    navigate(
+      { pathname: location.pathname, search: nextSearch.toString() },
+      { replace: true, state: nextState },
+    );
     void queryClient.invalidateQueries({ queryKey: ["chat-history", id] });
-  }, [id, location.state, markDeskpetReplyWaiting, queryClient, searchParams]);
+  }, [
+    id,
+    location.pathname,
+    location.state,
+    markDeskpetReplyWaiting,
+    navigate,
+    queryClient,
+    searchParams,
+  ]);
 
   useEffect(() => {
     return onDesktopHostCommand((command) => {
@@ -2522,6 +2546,44 @@ export function SessionsPage() {
     type: "branch" | "rollback";
   } | null>(null);
 
+  const restoredMessageDraftRef = useRef<string | null>(null);
+  useEffect(() => {
+    const state = location.state as {
+      messageDraft?: {
+        sessionId: string;
+        editorText?: string;
+        editorAttachments?: { mimeType: string; data: string }[];
+      };
+    } | null;
+    const draft = state?.messageDraft;
+    if (
+      !draft ||
+      draft.sessionId !== id ||
+      !session?.sessionKey ||
+      restoredMessageDraftRef.current === location.key
+    )
+      return;
+    restoredMessageDraftRef.current = location.key;
+    const editorDraftText = draft.editorText
+      ? extractMessage({ role: "user", content: draft.editorText }).text
+      : "";
+    if (editorDraftText)
+      publishExternalChatInput(session.sessionKey, { text: editorDraftText });
+    for (const [index, attachment] of (
+      draft.editorAttachments ?? []
+    ).entries()) {
+      publishExternalChatInput(session.sessionKey, {
+        attachment: {
+          type: attachment.mimeType.startsWith("image/") ? "image" : "file",
+          mimeType: attachment.mimeType,
+          content: attachment.data,
+          previewUrl: `data:${attachment.mimeType};base64,${attachment.data}`,
+          filename: `restored-attachment-${index + 1}`,
+        },
+      });
+    }
+  }, [id, location.key, location.state, session?.sessionKey]);
+
   const handleBranchFromMessage = useCallback(
     async (messageId: string) => {
       if (!id || replyInProgress || messageHistoryAction) return;
@@ -2558,7 +2620,15 @@ export function SessionsPage() {
             defaultValue: "Message branch created",
           }),
         );
-        navigate(`/workspace/sessions/${data.id}`);
+        navigate(`/workspace/sessions/${data.id}`, {
+          state: {
+            messageDraft: {
+              sessionId: data.id,
+              editorText: data.editorText,
+              editorAttachments: data.editorAttachments,
+            },
+          },
+        });
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -2581,7 +2651,7 @@ export function SessionsPage() {
         !window.confirm(
           t("sessions.chat.rollbackConfirm", {
             defaultValue:
-              "Roll back this conversation to the selected message? Later messages remain in history and can be reached from another branch.",
+              "Roll back before this message and restore its text and attachments for editing?",
           }),
         )
       ) {
@@ -2590,13 +2660,13 @@ export function SessionsPage() {
 
       setMessageHistoryAction({ messageId, type: "rollback" });
       try {
-        const { error } =
+        const { data, error } =
           await postApiV1SessionsByIdMessagesByMessageIdRollback({
             path: { id, messageId },
           });
-        if (error) {
+        if (error || !data?.id) {
           throw new Error(
-            (error as { message?: string }).message ??
+            (error as { message?: string } | undefined)?.message ??
               t("sessions.chat.rollbackFailed", {
                 defaultValue: "Unable to roll back conversation",
               }),
@@ -2610,6 +2680,16 @@ export function SessionsPage() {
           queryClient.invalidateQueries({ queryKey: ["sidebar-sessions"] }),
           queryClient.invalidateQueries({ queryKey: ["sessions-recent"] }),
         ]);
+        navigate(`/workspace/sessions/${data.id}`, {
+          replace: true,
+          state: {
+            messageDraft: {
+              sessionId: data.id,
+              editorText: data.editorText,
+              editorAttachments: data.editorAttachments,
+            },
+          },
+        });
         toast.success(
           t("sessions.chat.rollbackComplete", {
             defaultValue: "Conversation rolled back",
@@ -2627,7 +2707,7 @@ export function SessionsPage() {
         setMessageHistoryAction(null);
       }
     },
-    [id, messageHistoryAction, queryClient, replyInProgress, t],
+    [id, messageHistoryAction, navigate, queryClient, replyInProgress, t],
   );
 
   useEffect(() => {
@@ -3117,7 +3197,10 @@ export function SessionsPage() {
 
   const platform = (session?.channelType ?? "web") as Platform;
   const platformCfg = getPlatformConfig(platform);
-  const messageCount = session?.messageCount ?? messages?.length ?? 0;
+  const messageCount = Math.max(
+    session?.messageCount ?? 0,
+    messages?.length ?? 0,
+  );
   const lastActive = session?.lastMessageAt ?? session?.updatedAt ?? null;
   const sessionMetadata =
     (session?.metadata as Record<string, unknown> | null | undefined) ?? null;
@@ -3464,7 +3547,12 @@ export function SessionsPage() {
                       onOpenSidebar={openSidebar}
                       onPinA2UI={pinInlineA2UI}
                       onOpenLink={handleOpenChatLink}
-                      onBranch={handleBranchFromMessage}
+                      onBranch={
+                        session?.channelType === "webchat" ||
+                        session?.channelType === "web"
+                          ? handleBranchFromMessage
+                          : undefined
+                      }
                       onRollback={handleRollbackToMessage}
                       messageAction={
                         messageHistoryAction?.messageId === item.entry.msg.id
@@ -3539,9 +3627,6 @@ export function SessionsPage() {
             />
           )}
           <AgentQuestionPanel sessionKey={session?.sessionKey ?? undefined} />
-          <div className="mb-2 flex justify-end">
-            <TalkVoiceButton sessionKey={session?.sessionKey ?? undefined} />
-          </div>
           {pendingRunMessageChoice && replyInProgress && (
             <RunMessageChoicePanel
               message={pendingRunMessageChoice}
@@ -3552,6 +3637,7 @@ export function SessionsPage() {
             />
           )}
           <ChatInputArea
+            key={id}
             bots={bots}
             selectedBot={selectedBot}
             onSelectBot={() => {}}
@@ -3572,6 +3658,7 @@ export function SessionsPage() {
             showBotSelector={false}
             focusToken={deskpetReplyFocusToken}
             externalInputSessionKey={session?.sessionKey ?? null}
+            voiceSessionKey={session?.sessionKey ?? null}
           />
         </div>
       </div>

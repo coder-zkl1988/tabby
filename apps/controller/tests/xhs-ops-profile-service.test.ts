@@ -15,6 +15,7 @@ import {
 } from "../src/services/xhs-ops-preparation.js";
 import {
   XhsOpsProfileService,
+  buildCoverPrompt,
   buildProfileTextPrompt,
   diffProfileFields,
   parseProfileText,
@@ -115,6 +116,7 @@ async function prepareReadyAccount(
     profileDraft: {
       nickname: "豆豆妈的周末",
       bio: "天秤座 INFJ｜北京产品经理｜喜欢亲子出游咖啡摄影",
+      occupation: "互联网产品经理",
       gender: "女",
       birthday: "1994-01-01",
       region: "北京",
@@ -147,7 +149,7 @@ function applyResult(): TaskResult {
     taskId: "profile-apply",
     success: true,
     message:
-      'PROFILE_JSON:{"nickname":"done","bio":"done","avatar":"done","cover":"done","gender":"done","birthday":"done","region":"done","note":"ok"}',
+      'PROFILE_JSON:{"nickname":"done","bio":"done","occupation":"done","avatar":"done","cover":"done","gender":"done","birthday":"done","region":"done","note":"ok"}',
   };
 }
 
@@ -156,7 +158,7 @@ function verificationResult(overrides: Partial<TaskResult> = {}): TaskResult {
     taskId: "profile-verification",
     success: true,
     message:
-      'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true}}',
+      'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"occupation":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true}}',
     finalScreenshot: "verified-screen.png",
     ...overrides,
   };
@@ -186,6 +188,23 @@ function deferred() {
 }
 
 describe("XhsOpsProfileService.generate", () => {
+  it("keeps generated profile covers scenic and excludes sports imagery", () => {
+    const prompt = buildCoverPrompt({
+      label: "塑形型球友日记",
+      positioning: "下班运动与业余球友日常",
+      persona: {
+        age: "32岁",
+        gender: "女",
+        region: "杭州滨江",
+        occupation: "课程策划",
+        lifeStatus: "职场人",
+      },
+    } as XhsOpsAccount);
+    expect(prompt).toContain("资料背景风景照");
+    expect(prompt).toContain("不要出现羽毛球场、球拍、运动员");
+    expect(prompt).toContain("不要把业务兴趣画成内容配图");
+  });
+
   it("keeps newer operator edits when a slow generation returns", async () => {
     const { account } = await seed();
     const svc = new XhsOpsProfileService({
@@ -230,7 +249,7 @@ describe("XhsOpsProfileService.generate", () => {
         generateText: async ({ prompt }) => {
           prompts.push(prompt);
           return {
-            text: '好的：{"nickname":"豆豆妈的周末","bio":"天秤座 INFJ｜海淀二娃妈｜周末专治不知道去哪"}',
+            text: '好的：{"nickname":"豆豆妈的周末","bio":"天秤座 INFJ｜海淀二娃妈｜周末专治不知道去哪","occupation":"互联网产品经理"}',
           };
         },
         generateImage: async ({ prompt, count, aspectRatio }) => {
@@ -247,6 +266,7 @@ describe("XhsOpsProfileService.generate", () => {
     const updated = await svc.generate(account.id, ["text", "avatar", "cover"]);
     expect(updated.profileDraft.nickname).toBe("豆豆妈的周末");
     expect(updated.profileDraft.bio).toContain("INFJ");
+    expect(updated.profileDraft.occupation).toBe("互联网产品经理");
     expect(updated.profileDraft.avatarCandidates).toHaveLength(3);
     expect(updated.profileDraft.coverCandidates).toHaveLength(3);
     expect(updated.profileDraft.generatedAt).toBe("2026-09-04T12:00:00.000Z");
@@ -494,6 +514,7 @@ describe("XhsOpsProfileService.generate", () => {
       {
         nickname: "新昵称",
         bio: "新简介",
+        occupation: "互联网运营",
         gender: "男",
         birthday: "1998-03-02",
         region: "上海",
@@ -503,6 +524,7 @@ describe("XhsOpsProfileService.generate", () => {
       {
         nickname: "旧昵称",
         bio: "",
+        occupation: "产品经理",
         gender: "男",
         birthday: "",
         region: "上海",
@@ -513,6 +535,11 @@ describe("XhsOpsProfileService.generate", () => {
     expect(byField.nickname).toMatchObject({ phone: "旧昵称", differs: true });
     // Phone empty -> filling a blank, still a change.
     expect(byField.bio).toMatchObject({ phone: "", differs: true });
+    expect(byField.occupation).toMatchObject({
+      phone: "产品经理",
+      draft: "互联网运营",
+      differs: true,
+    });
     // Identical -> nothing to do.
     expect(byField.gender?.differs).toBe(false);
     expect(byField.region?.differs).toBe(false);
@@ -876,6 +903,9 @@ describe("XhsOpsProfileService.apply", () => {
     const updated = await svc.apply(account.id);
     expect(pushed).not.toBeNull();
     const img = (pushed as unknown as DevicePushMediaBody).images[0];
+    expect((pushed as unknown as DevicePushMediaBody).album).toMatch(
+      /^Tabby\/[0-9a-f]{8}-[0-9a-f]{8}$/,
+    );
     expect(img?.filename).toMatch(/^tabby-avatar-[0-9a-f]{8}\.png$/);
     expect(img?.mimeType).toBe("image/png");
     expect(Buffer.from(img?.dataBase64 ?? "", "base64").toString()).toBe(
@@ -899,7 +929,7 @@ describe("XhsOpsProfileService.apply", () => {
     expect(updated.profileDraft.applyStatus).toBe("applied");
     expect(updated.profileDraft.appliedAt).toBe("2026-09-04T13:00:00.000Z");
     expect(updated.profileDraft.applyResult).toBe(
-      "七项资料与目标账号已完成只读核验",
+      "八项资料与目标账号已完成只读核验",
     );
     expect(updated.profileDraft.verifiedAccountId).toBe(
       account.platformAccountId,
@@ -1636,12 +1666,30 @@ describe("profile task builder", () => {
     expect(t).not.toContain("头像：点编辑主页");
     expect(t).toContain("PROFILE_JSON:");
   });
+  it("applies and verifies the exact occupation from the grouped picker", () => {
+    const t = buildProfileApplyTask({
+      label: "A",
+      platformAccountId: "target-xhs-id",
+      occupation: "互联网运营",
+    });
+    expect(t).toContain("选择你的身份");
+    expect(t).toContain("互联网运营");
+    expect(t).toContain('"occupation":"done|failed|skipped"');
+    const verification = buildProfileVerificationTask({
+      label: "A",
+      platformAccountId: "target-xhs-id",
+      occupation: "互联网运营",
+    });
+    expect(verification).toContain("职业「互联网运营」");
+    expect(verification).toContain('"occupation":true|false');
+  });
   it("picks images by album+recency+content, never by a filename the picker hides", () => {
     const t = buildProfileApplyTask({
       label: "A",
       platformAccountId: "target-xhs-id",
       avatarFilename: "tabby-avatar-1.jpg",
       coverFilename: "tabby-cover-1.jpg",
+      mediaAlbum: "Tabby/account-op",
     });
     // The picker's grid cells carry no text and no content-desc, so naming the
     // file was an instruction the model could not possibly follow.
@@ -1649,7 +1697,8 @@ describe("profile task builder", () => {
     expect(t).not.toContain("tabby-cover-1.jpg");
     expect(t).not.toContain("文件名");
     // What it can actually use.
-    expect(t).toContain("选「Tabby」相册");
+    expect(t).toContain("选「Tabby/account-op」相册");
+    expect(t).toContain("切到「Tabby/account-op」相册");
     expect(t).toContain("人物半身照");
     expect(t).toContain("横构图风景照");
     // The avatar sits behind a preview screen with a tempting wrong option.
