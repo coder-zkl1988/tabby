@@ -91,3 +91,11 @@
 {"t": "session", "ts": "2026-09-22T10:12:23Z", "session": "01a0c89a-212b-7a93-a3c2-90b021b572a1", "source": "startup", "git_head": "b783ba17a31f881ce8b67616c7780d4d01aff8a4", "client": "codex", "schema_version": 1}
 {"t": "prompt", "ts": "2026-09-22T10:12:24Z", "session": "01a0c89a-212b-7a93-a3c2-90b021b572a1", "client": "codex", "prompt_hash": "30bc2ac965", "schema_version": 1}
 {"t": "outcome", "ts": "2026-09-22T10:13:03Z", "session": "01a0c89a-212b-7a93-a3c2-90b021b572a1", "git_commit_landed": false, "test_status": "unknown", "source": "codex-stop", "client": "codex", "schema_version": 1}
+{"t": "outcome", "ts": "2026-09-22T11:14:32Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "git_commit_landed": true, "test_status": "pass", "source": "codex-stop", "client": "codex", "schema_version": 1}
+{"t": "session", "ts": "2026-09-23T02:19:24Z", "session": "01a0cc0f-7ce9-7481-9067-ee5299891e3d", "source": "startup", "git_head": "27f79ac4046cf97faee674acb034911d47512350", "client": "codex", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-23T02:19:25Z", "session": "01a0cc0f-7ce9-7481-9067-ee5299891e3d", "client": "codex", "prompt_hash": "b085fa0f2a", "schema_version": 1}
+{"t": "scan", "ts": "2026-09-23T02:20:01Z", "session": "01a0cc0f-7ce9-7481-9067-ee5299891e3d", "tool": "Bash", "path": "docs", "agent": "main", "client": "codex", "tool_use_id": "call_fK0yDV6qIU1cFMh2ycH71lZ0", "schema_version": 1}
+{"t": "outcome", "ts": "2026-09-23T02:22:29Z", "session": "01a0cc0f-7ce9-7481-9067-ee5299891e3d", "git_commit_landed": false, "test_status": "unknown", "source": "codex-stop", "client": "codex", "schema_version": 1}
+{"t": "session", "ts": "2026-09-23T03:21:54Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "source": "resume", "git_head": "27f79ac4046cf97faee674acb034911d47512350", "client": "codex", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-23T03:21:54Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "client": "codex", "prompt_hash": "25c594e58b", "schema_version": 1}
+{"t": "outcome", "ts": "2026-09-23T03:24:04Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "git_commit_landed": true, "test_status": "pass", "source": "codex-stop", "client": "codex", "schema_version": 1}
