@@ -4,6 +4,7 @@ import { invokeDesktopHost } from "@/lib/desktop-host";
 import {
   getPendingSessionBotName,
   getPendingSessionText,
+  getPendingSessionUserText,
   parsePendingSessionParams,
 } from "@/lib/local-chat-pending";
 import { waitForLocalChatSession } from "@/lib/local-chat-session";
@@ -59,6 +60,7 @@ export function PendingSessionPage() {
     [searchParams],
   );
   const pendingText = getPendingSessionText(location.state);
+  const pendingUserText = getPendingSessionUserText(location.state);
   const pendingBotName = getPendingSessionBotName(location.state);
   const [streamingText, setStreamingText] = useState("");
   const [status, setStatus] = useState<PendingStatus>("starting");
@@ -95,11 +97,12 @@ export function PendingSessionPage() {
                 deskpetPendingReplyText: latestStreamingTextRef.current,
                 deskpetPendingRunId: params.runId,
                 deskpetPendingSessionKey: params.sessionKey,
+                deskpetPendingUserText: pendingUserText,
               }
             : undefined,
       });
     },
-    [navigate, params, queryClient],
+    [navigate, params, pendingUserText, queryClient],
   );
 
   const resolveSessionOnce = useCallback(async () => {

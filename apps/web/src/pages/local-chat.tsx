@@ -295,6 +295,8 @@ export function LocalChatPage() {
               deskpetPendingRunId: runId,
               deskpetPendingSessionKey:
                 responseData?.sessionKey ?? newSessionKey,
+              // Echoed as an optimistic bubble until history indexing catches up.
+              deskpetPendingUserText: text.trim() ? text : "",
             },
           });
           return true;
@@ -314,7 +316,11 @@ export function LocalChatPage() {
             runId,
           }),
           {
-            state: { pendingText, pendingBotName: selectedBot.name },
+            state: {
+              pendingText,
+              pendingBotName: selectedBot.name,
+              pendingUserText: text.trim() ? text : "",
+            },
           },
         );
         return true;
