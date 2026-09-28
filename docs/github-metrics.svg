@@ -23,7 +23,7 @@
   <g transform="translate(303, 0)"><g>
       <rect width="289" height="76" rx="10" fill="white" stroke="#d0d7de" stroke-width="1"/>
       <text x="16" y="30" font-size="15" font-weight="700" fill="#8250df">2 Pull Requests Opened</text>
-      <text x="16" y="54" font-size="12.5" fill="#656d76">+2 (100.00%)</text>
+      <text x="16" y="54" font-size="12.5" fill="#656d76">+1 (100.00%)</text>
       <text x="273" y="54" text-anchor="end" font-size="12.5" font-weight="600" fill="#1a7f37">↑ past month</text>
     </g></g>
   <g transform="translate(606, 0)"><g>
@@ -82,5 +82,5 @@
 </g>
 
 <!-- Footer -->
-<text x="480" y="390" text-anchor="middle" font-size="10" fill="#8b949e">Updated 2026-09-27 · nexu-io/nexu</text>
+<text x="480" y="390" text-anchor="middle" font-size="10" fill="#8b949e">Updated 2026-09-28 · nexu-io/nexu</text>
 </svg>
