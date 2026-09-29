@@ -1921,6 +1921,7 @@ export function SessionsPage() {
       deskpetPendingReplyText?: unknown;
       deskpetPendingRunId?: unknown;
       deskpetPendingSessionKey?: unknown;
+      deskpetPendingUserText?: unknown;
     } | null;
     const pendingSessionKey =
       typeof state?.deskpetPendingSessionKey === "string"
@@ -1938,6 +1939,10 @@ export function SessionsPage() {
       typeof state?.deskpetPendingReplyText === "string"
         ? stripMediaMarkerLines(state.deskpetPendingReplyText).trim()
         : "";
+    const pendingUserText =
+      typeof state?.deskpetPendingUserText === "string"
+        ? state.deskpetPendingUserText
+        : "";
     const key = `${id ?? ""}:${pendingSessionKey}:${pendingRunId}:${pendingStartedAt}`;
 
     if (
@@ -1953,12 +1958,26 @@ export function SessionsPage() {
       pendingReplyText,
       runId: pendingRunId,
     });
+    // The sender left the composer before history indexing finished, so echo
+    // the text optimistically. Media-only sends carry no text and are skipped:
+    // an empty optimistic message has nothing to deduplicate against.
+    if (pendingUserText.trim().length > 0) {
+      setPendingMessages([
+        {
+          id: `handoff-${Date.now()}`,
+          text: pendingUserText,
+          timestamp: Date.now(),
+          attachments: [],
+        },
+      ]);
+    }
     // This navigation handoff is consumed once. Keeping it in browser history
     // would restart a completed run's waiting state whenever the page reloads.
     const {
       deskpetPendingReplyText: _pendingReply,
       deskpetPendingRunId: _pendingRun,
       deskpetPendingSessionKey: _pendingSession,
+      deskpetPendingUserText: _pendingUserText,
       ...nextState
     } = state ?? {};
     const nextSearch = new URLSearchParams(searchParams);
@@ -3165,6 +3184,10 @@ export function SessionsPage() {
     stripMediaMarkerLines(streamingText),
     renderedAssistantTextsSinceLatestUser,
   );
+  // A run in flight must reach the thread block even with an empty transcript:
+  // the "thinking" activity group lives inside it, and a brand-new session's
+  // first history fetch lands before the message is indexed.
+  const showEmptyPlaceholder = !replyInProgress && displayMessages.length === 0;
 
   const operationTools = enrichedMessages.flatMap(({ msg, extracted }) =>
     extracted.toolCalls.map((tool, index) => ({
@@ -3457,7 +3480,7 @@ export function SessionsPage() {
       <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
         {chatError ? (
           <ChatUnavailable />
-        ) : chatLoading ? null : displayMessages.length === 0 ? (
+        ) : chatLoading && !replyInProgress ? null : showEmptyPlaceholder ? (
           <ChatEmpty />
         ) : (
           <div data-chat-thread={id} className="px-4 pt-12 pb-8 sm:px-6">

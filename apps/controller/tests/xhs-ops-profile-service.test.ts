@@ -1733,7 +1733,7 @@ describe("profile task builder", () => {
     // Flinging overshoots a wheel; stepping without checking compounds it.
     expect(t).toContain("一次最多拖 3 格");
     expect(t).toContain("禁止快速甩动");
-    expect(t).toContain("禁止甩动式快滑");
+    expect(t).toContain("禁止使用「FLING」");
   });
 
   it("tells every task that reaches 编辑主页 how to unfold a collapsed 我 page", () => {
@@ -1764,20 +1764,25 @@ describe("profile task builder", () => {
     }
   });
 
-  it("walks the region list with full-screen slides, budgeted to actually arrive", () => {
+  it("sends the region list a fling, which is the only gesture that can reach its end", () => {
     const t = buildProfileApplyTask({
       label: "A",
       platformAccountId: "target-xhs-id",
       region: "上海",
     });
-    // FLING is the gesture this list wants, but the fleet's phones do not
-    // report it, and naming an action they lack gets the whole dispatch
-    // rejected. Until a build declaring it ships, the step is a SLIDE walk —
-    // and its cap has to exceed the twenty-odd screens the list really is,
-    // or the step is arithmetically unable to arrive.
-    expect(t).toContain("SLIDE point1:");
-    expect(t).not.toContain("FLING");
-    expect(t).toContain("28 个动作");
+    // A full-screen SLIDE moves exactly one screen, so the 200+ entry list
+    // needs twenty-odd of them and the run dies mid-list. FLING is back now
+    // that every xhs phone declares it (TabbyApp 1.0.23, 2026-09-23).
+    expect(t).toContain("FLING point1:");
+    expect(t).toContain("必须用「FLING」而不是「SLIDE」");
+    expect(t).toContain("12 个动作");
+  });
+
+  it("only names FLING because the policy allows it", () => {
+    // The two have to move together: naming FLING while the policy lacks it
+    // is the prompt contradicting the allowlist, and putting it in the policy
+    // while a phone lacks it rejected every xhs dispatch on 2026-09-20.
+    expect(XHS_TASK_POLICY.allowedActions).toContain("FLING");
   });
 
   it("never names an action the task policy would reject", () => {

@@ -1,5 +1,6 @@
-import type { Dirent } from "node:fs";
+import { constants, type Dirent } from "node:fs";
 import {
+  copyFile,
   cp,
   mkdir,
   readFile,
@@ -30,9 +31,22 @@ export interface PlatformBlockSyncReport {
   repaired: Array<{ botId: string; file: string }>;
   /** Doc has a broken marker pair — left untouched, since the boundary is unknowable. */
   unmarked: Array<{ botId: string; file: string }>;
-  /** Template is platform-managed but the bot has no such file yet. */
+  /** Doc was absent and has been written from the template. */
+  seeded: Array<{ botId: string; file: string }>;
+  /** Template is platform-managed but the bot still has no such file. */
   missing: Array<{ botId: string; file: string }>;
 }
+
+/**
+ * Platform docs the runtime has retired. Seeding one would put a file in every
+ * workspace that nothing ever reads: OpenClaw 2026.9.4 dropped TOOLS.md from
+ * WORKSPACE_BOOTSTRAP_FILENAMES, narrowed SUBAGENT_BOOTSTRAP_ALLOWLIST to
+ * AGENTS.md alone, and ships a migration folding TOOLS.md into AGENTS.md.
+ *
+ * Drop the entry — and the template — once its content has been folded into
+ * AGENTS.md. Until then these stay reported as missing rather than created.
+ */
+const RETIRED_TEMPLATE_DOCS = new Set(["TOOLS.md"]);
 
 /**
  * The text between the markers, or null when the document has no complete,
@@ -154,7 +168,11 @@ export class WorkspaceTemplateWriter {
    * only the marked span keeps both true at once.
    *
    * Deliberately conservative about what it will touch:
-   * - a workspace file that does not exist is left to {@link write}
+   * - a workspace file that does not exist is written from the template. There
+   *   is nothing of the agent's there to lose, and {@link write} alone cannot
+   *   close the gap: it runs once at creation, so a template added later, or a
+   *   doc the agent deleted, would otherwise never arrive. Docs the runtime has
+   *   retired ({@link RETIRED_TEMPLATE_DOCS}) stay absent and are reported
    * - a file with no marker at all predates this layout, and gets a block
    *   appended so it can be kept current from then on. Appending adds nothing
    *   the agent wrote and is idempotent: once the block exists, later syncs
@@ -171,6 +189,7 @@ export class WorkspaceTemplateWriter {
       unchanged: [],
       repaired: [],
       unmarked: [],
+      seeded: [],
       missing: [],
     };
     const templatesRoot = this.env.platformTemplatesDir;
@@ -204,7 +223,21 @@ export class WorkspaceTemplateWriter {
         );
         const current = await readFile(target, "utf8").catch(() => null);
         if (current == null) {
-          report.missing.push({ botId: bot.id, file: entry.name });
+          // Nothing of the agent's exists here to protect, so writing the
+          // template is the same safety argument as `repaired`. It is also the
+          // only way a doc ever reaches a bot created before that template
+          // existed — seeding runs once, at creation — and the only way a doc
+          // the agent deleted comes back. Platform docs are a contract, not an
+          // agent draft, so they are restored rather than left deleted.
+          if (RETIRED_TEMPLATE_DOCS.has(entry.name)) {
+            report.missing.push({ botId: bot.id, file: entry.name });
+            continue;
+          }
+          const outcome = await this.seedWorkspaceDoc(target, entry.sourcePath);
+          report[outcome].push({
+            botId: bot.id,
+            file: entry.name,
+          });
           continue;
         }
         const currentBlock = extractPlatformBlock(current);
@@ -240,6 +273,7 @@ export class WorkspaceTemplateWriter {
         unchanged: report.unchanged.length,
         repaired: report.repaired.length,
         unmarked: report.unmarked.length,
+        seeded: report.seeded.length,
         missing: report.missing.length,
       },
       "platform block sync complete",
@@ -272,6 +306,40 @@ export class WorkspaceTemplateWriter {
       return enDir;
     }
     return root;
+  }
+
+  /**
+   * Write one template into a workspace that lacks it, creating the agent
+   * directory when the bot has never been initialized. An exclusive copy
+   * preserves files created concurrently; other failures stay reportable
+   * without taking config sync down.
+   */
+  private async seedWorkspaceDoc(
+    targetPath: string,
+    sourcePath: string,
+  ): Promise<"seeded" | "unchanged" | "missing"> {
+    try {
+      await mkdir(path.dirname(targetPath), { recursive: true });
+      await copyFile(sourcePath, targetPath, constants.COPYFILE_EXCL);
+      logger.debug(
+        { targetPath, sourcePath, decision: "seeded-by-block-sync" },
+        "platform_template_file_decision",
+      );
+      return "seeded";
+    } catch (err) {
+      if (err instanceof Error && "code" in err && err.code === "EEXIST") {
+        return "unchanged";
+      }
+      logger.warn(
+        {
+          targetPath,
+          sourcePath,
+          error: err instanceof Error ? err.message : err,
+        },
+        "failed to seed missing platform doc",
+      );
+      return "missing";
+    }
   }
 
   /**

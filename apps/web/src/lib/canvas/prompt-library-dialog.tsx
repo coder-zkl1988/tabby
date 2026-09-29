@@ -3,7 +3,7 @@
  *
  * radix Dialog wired into CanvasDialogs as { kind: "prompt-library", nodeId }.
  * Search / category tags / tag filters / cover-image card grid / scroll-to-
- * load-more, backed by prompt-library-data (five public GitHub prompt
+ * load-more, backed by prompt-library-data (public GitHub prompt
  * collections, 1h cache). Picking a card writes the prompt into the target
  * node's draft (subscribable prompt-drafts) and closes the dialog — the open
  * PromptPanel updates immediately.
@@ -171,6 +171,16 @@ export function PromptLibraryDialog({ nodeId }: { nodeId: string }) {
               </FilterTag>
             ))}
           </FilterRow>
+          {category === "freestylefly-gpt-image-2" ? (
+            <a
+              href="/third-party-notices/freestylefly-awesome-gpt-image-2.txt"
+              target="_blank"
+              rel="noreferrer"
+              className="self-start text-[11px] text-text-tertiary hover:underline"
+            >
+              freestylefly · 来源与许可说明
+            </a>
+          ) : null}
           {meta.tags.length > 0 ? (
             <FilterRow label="标签">
               <FilterTag
@@ -371,6 +381,28 @@ function PromptCard({
           ) : null}
         </div>
       </button>
+      <div className="mx-3 mb-2 flex flex-wrap gap-x-2 text-[10px] text-text-tertiary">
+        <a
+          href={item.githubUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="hover:text-text-primary hover:underline"
+        >
+          查看案例来源
+        </a>
+        {item.sourceUrl ? (
+          <a
+            href={item.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-text-primary hover:underline"
+          >
+            {item.sourceLabel || "原作者"}
+          </a>
+        ) : item.sourceLabel ? (
+          <span>{item.sourceLabel}</span>
+        ) : null}
+      </div>
       <button
         type="button"
         onClick={onSelect}

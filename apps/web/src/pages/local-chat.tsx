@@ -289,12 +289,18 @@ export function LocalChatPage() {
         });
 
         const session = responseData?.session ?? null;
+        // File previews/tool hints change the stored text, so raw attachment
+        // captions cannot be deduplicated against history by exact text.
+        // Keep the run's waiting state, and let history render those uploads.
+        const optimisticUserText = atts.length === 0 && text.trim() ? text : "";
         if (session?.id) {
           navigate(`/workspace/sessions/${session.id}`, {
             state: {
               deskpetPendingRunId: runId,
               deskpetPendingSessionKey:
                 responseData?.sessionKey ?? newSessionKey,
+              // Echoed as an optimistic bubble until history indexing catches up.
+              deskpetPendingUserText: optimisticUserText,
             },
           });
           return true;
@@ -314,7 +320,11 @@ export function LocalChatPage() {
             runId,
           }),
           {
-            state: { pendingText, pendingBotName: selectedBot.name },
+            state: {
+              pendingText,
+              pendingBotName: selectedBot.name,
+              pendingUserText: optimisticUserText,
+            },
           },
         );
         return true;

@@ -74,16 +74,17 @@ export const XHS_TASK_POLICY: DeviceTaskPolicy = {
     "HOME",
     "SLIDE",
     "SCROLL",
-    // FLING belongs here on paper — it is the one gesture that keeps its
-    // inertia, and the 200+ entry region list cannot be crossed without it.
-    // It is out because the phones cannot honour it yet: TabbyApp 1.0.22 has
-    // no FLING at all, and the commit that added the gesture left it out of
-    // TaskPolicy.supportedActions, so the phone reports a vocabulary without
-    // it and tabby-control rejects the whole dispatch with
-    // UNKNOWN_PHONE_ACTION — which killed every xhs task, not just the ones
-    // touching 地区 (observed 2026-09-20). Put it back once a build carrying
-    // FLING in supportedActions is installed on the fleet, together with the
-    // region step in buildProfileApplyTask.
+    // Agent swipes are deliberately inertia-free so scroll distance equals
+    // finger displacement, which makes the 200+ entry region list a
+    // twenty-odd-swipe walk. FLING is the one gesture that keeps its inertia.
+    //
+    // It needs the phone to declare it. TabbyApp 1.0.22 did not, and naming
+    // it here then got every xhs dispatch rejected with UNKNOWN_PHONE_ACTION
+    // (2026-09-20). 1.0.23 declares it; restored once both xhs phones were
+    // confirmed on 1.0.23 and a no-dispatch probe of each phone's reported
+    // vocabulary came back with FLING in it (2026-09-23). Any phone that
+    // runs xhs tasks has to be on 1.0.23 or later.
+    "FLING",
     // The birthday sheet is a custom-drawn wheel with nothing clickable, so
     // the only way in is a press-and-drag. Leaving these out does not prevent
     // the gesture — it just kills the run with POLICY_ACTION_NOT_ALLOWED at
