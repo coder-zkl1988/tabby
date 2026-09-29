@@ -1,9 +1,20 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ControllerEnv } from "../../apps/controller/src/app/env.js";
 import { WorkspaceTemplateWriter } from "../../apps/controller/src/runtime/workspace-template-writer.js";
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const fs = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...fs, copyFile: vi.fn(fs.copyFile) };
+});
 
 const START = "<!-- NEXU-PLATFORM-START -->";
 const END = "<!-- NEXU-PLATFORM-END -->";
@@ -127,13 +138,82 @@ describe("platform block sync", () => {
     expect(await read("bot-1")).toBe(broken);
   });
 
-  it("reports a bot that has no such workspace doc instead of creating one", async () => {
+  it("writes a doc the bot never received, since seeding only runs at creation", async () => {
+    // A template added after a bot was created reached nobody: seeding runs
+    // once, and this sync used to only count the doc as missing. On one install
+    // that left AGENTS.md absent for 8 of 15 bots, permanently.
     await seedTemplate("New rule.");
     await mkdir(path.join(stateDir, "agents", "bot-1"), { recursive: true });
 
     const report = await sync();
 
-    expect(report.missing).toEqual([{ botId: "bot-1", file: "AGENTS.md" }]);
+    expect(report.seeded).toEqual([{ botId: "bot-1", file: "AGENTS.md" }]);
+    expect(report.missing).toEqual([]);
+    expect(await read("bot-1")).toBe(template("New rule."));
+  });
+
+  it("preserves a workspace doc created between the missing read and the copy", async () => {
+    await seedTemplate("New platform rule.");
+    vi.mocked(copyFile).mockImplementationOnce(async (source, target, mode) => {
+      await writeFile(target, "Concurrent agent notes.", "utf8");
+      const fs =
+        await vi.importActual<typeof import("node:fs/promises")>(
+          "node:fs/promises",
+        );
+      await fs.copyFile(source, target, mode);
+    });
+    const report = await sync();
+    expect(await read("bot-1")).toBe("Concurrent agent notes.");
+    expect(report.seeded).toEqual([]);
+    expect(report.unchanged).toEqual([{ botId: "bot-1", file: "AGENTS.md" }]);
+  });
+
+  it("restores a doc the agent deleted, and keeps it current afterwards", async () => {
+    // Platform docs are a contract, not an agent draft, so a deleted one comes
+    // back. Once restored it is an ordinary marked doc: the next sync updates
+    // the block in place rather than rewriting the file.
+    await seedTemplate("First rule.");
+    await mkdir(path.join(stateDir, "agents", "bot-1"), { recursive: true });
+
+    await sync();
+    expect(await read("bot-1")).toBe(template("First rule."));
+
+    await seedTemplate("Second rule.");
+    const second = await sync();
+
+    expect(second.seeded).toEqual([]);
+    expect(second.updated).toEqual([{ botId: "bot-1", file: "AGENTS.md" }]);
+    expect(await read("bot-1")).toContain("Second rule.");
+  });
+
+  it("creates the workspace directory for a bot that has none yet", async () => {
+    await seedTemplate("New rule.");
+
+    const report = await sync();
+
+    expect(report.seeded).toEqual([{ botId: "bot-1", file: "AGENTS.md" }]);
+    expect(await read("bot-1")).toBe(template("New rule."));
+  });
+
+  it("leaves a retired doc absent instead of seeding a file nothing reads", async () => {
+    // OpenClaw 2026.9.4 dropped TOOLS.md from its bootstrap filenames and from
+    // the sub-agent allowlist, and ships a migration folding it into AGENTS.md.
+    // Seeding it would put 17KB in every workspace for no reader.
+    await seedTemplate("New rule.");
+    await writeFile(
+      path.join(templatesDir, "en", "TOOLS.md"),
+      template("Tool rule."),
+      "utf8",
+    );
+    await mkdir(path.join(stateDir, "agents", "bot-1"), { recursive: true });
+
+    const report = await sync();
+
+    expect(report.missing).toEqual([{ botId: "bot-1", file: "TOOLS.md" }]);
+    expect(report.seeded).toEqual([{ botId: "bot-1", file: "AGENTS.md" }]);
+    await expect(
+      readFile(path.join(stateDir, "agents", "bot-1", "TOOLS.md"), "utf8"),
+    ).rejects.toThrow();
   });
 
   it("ignores template files that are not platform-managed", async () => {
