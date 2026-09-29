@@ -99,3 +99,20 @@
 {"t": "session", "ts": "2026-09-23T03:21:54Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "source": "resume", "git_head": "27f79ac4046cf97faee674acb034911d47512350", "client": "codex", "schema_version": 1}
 {"t": "prompt", "ts": "2026-09-23T03:21:54Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "client": "codex", "prompt_hash": "25c594e58b", "schema_version": 1}
 {"t": "outcome", "ts": "2026-09-23T03:24:04Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "git_commit_landed": true, "test_status": "pass", "source": "codex-stop", "client": "codex", "schema_version": 1}
+{"t": "session", "ts": "2026-09-29T06:50:50Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "source": "resume", "git_head": "c12b6be94e2c526a208f7f5ca62538cd743dfaf5", "client": "codex", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-29T06:50:50Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "client": "codex", "prompt_hash": "c3df7c76d7", "schema_version": 1}
+{"t": "session", "ts": "2026-09-29T06:51:06Z", "session": "01a0ebee-6289-73e0-b6fc-1c53f1137a09", "source": "startup", "git_head": "c12b6be94e2c526a208f7f5ca62538cd743dfaf5", "client": "codex", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-29T06:51:06Z", "session": "01a0ebee-6289-73e0-b6fc-1c53f1137a09", "client": "codex", "prompt_hash": "6e15e8e8e6", "schema_version": 1}
+{"t": "scan", "ts": "2026-09-29T06:51:24Z", "session": "01a0ebee-6289-73e0-b6fc-1c53f1137a09", "tool": "Bash", "path": "docs", "agent": "main", "client": "codex", "tool_use_id": "call_ecAZ65uPMlZn7St5zL5NW9kG", "schema_version": 1}
+{"t": "scan", "ts": "2026-09-29T06:51:42Z", "session": "01a0ebee-6289-73e0-b6fc-1c53f1137a09", "tool": "Bash", "path": "docs", "agent": "main", "client": "codex", "tool_use_id": "call_QFRPssCMVZu3n0BRSSefvfF7", "schema_version": 1}
+{"t": "outcome", "ts": "2026-09-29T06:51:54Z", "session": "01a0ebee-6289-73e0-b6fc-1c53f1137a09", "git_commit_landed": false, "test_status": "unknown", "source": "codex-stop", "client": "codex", "schema_version": 1}
+{"t": "outcome", "ts": "2026-09-29T06:52:08Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "git_commit_landed": true, "test_status": "pass", "source": "codex-stop", "client": "codex", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-29T06:52:29Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "client": "codex", "prompt_hash": "86435df5b9", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-29T06:53:14Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "client": "codex", "prompt_hash": "4ee38ba785", "schema_version": 1}
+{"t": "read", "ts": "2026-09-29T07:02:47Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "tool": "Bash", "path": "AGENTS.md", "agent": "main", "client": "codex", "tool_use_id": "exec-9fd039fc-f5ed-4cb2-a2c3-4b4775ff8443", "schema_version": 1}
+{"t": "outcome", "ts": "2026-09-29T07:09:45Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "git_commit_landed": true, "test_status": "pass", "source": "codex-stop", "client": "codex", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-29T07:50:00Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "client": "codex", "prompt_hash": "3ed1d74775", "schema_version": 1}
+{"t": "prompt", "ts": "2026-09-29T07:50:33Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "client": "codex", "prompt_hash": "b4b04e00c9", "schema_version": 1}
+{"t": "read", "ts": "2026-09-29T07:50:46Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "tool": "Bash", "path": "AGENTS.md", "agent": "main", "client": "codex", "tool_use_id": "exec-a221f18c-2728-40e6-887d-4a6b19a7cd30", "schema_version": 1}
+{"t": "commit", "ts": "2026-09-29T07:59:30Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "git_head": "b4a81dd25780251ed22eb63734e3ecba44ad0918", "client": "codex", "tool_use_id": "exec-4b681339-d456-4206-9b60-2de03c743504", "schema_version": 1}
+{"t": "commit", "ts": "2026-09-29T07:59:58Z", "session": "01a0bef6-ab91-7800-aa65-0b49d0c1e668", "git_head": "635c47bbfdce1bd14bec86639103965d962bc807", "client": "codex", "tool_use_id": "exec-f111abc6-8fe0-4f2a-bfe4-e2991cf08474", "schema_version": 1}
