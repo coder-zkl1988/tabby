@@ -12,7 +12,7 @@
  *  e. tag options derive from the un-tag-filtered scope (fetchPromptPage)
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ALL_PROMPTS_OPTION,
   type LibraryPrompt,
@@ -22,12 +22,19 @@ import {
   fetchPromptPage,
   headingTags,
   isBadgeImage,
+  loadAllSources,
   markdownImages,
   matchFirst,
+  parseFreestyleflyCases,
   promptCoverPath,
   splitAtHeading,
   splitTags,
 } from "../src/lib/canvas/prompt-library-data";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  __resetPromptDataForTests();
+});
 
 function makePrompt(overrides: Partial<LibraryPrompt>): LibraryPrompt {
   return {
@@ -157,10 +164,167 @@ describe("bundled snapshot fallback", () => {
       const page = await fetchPromptPage({ page: 1, pageSize: 5 });
       expect(page.total).toBeGreaterThan(50);
       expect(page.items).toHaveLength(5);
-      expect(page.categories.length).toBe(5);
+      expect(page.categories).toContain("freestylefly-gpt-image-2");
+      const source = await fetchPromptPage({
+        category: "freestylefly-gpt-image-2",
+      });
+      expect(source.total).toBe(541);
+      expect(source.items[0]?.title).toBeTruthy();
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("freestylefly prompt collection", () => {
+  it("retries after a fully offline refresh without caching fallback as fresh", async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error("offline"));
+    const setItem = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem });
+    await fetchPromptPage();
+    await vi.waitFor(async () => {
+      await fetchPromptPage();
+      expect(fetch.mock.calls.length).toBeGreaterThanOrEqual(12);
+    });
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("keeps tags contributed by duplicate prompts in the All view", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () =>
+        JSON.stringify({
+          fetchedAt: Date.now(),
+          items: [
+            makePrompt({ id: "a", tags: ["插画"] }),
+            makePrompt({ id: "b", tags: ["建筑"] }),
+          ],
+        }),
+      setItem: vi.fn(),
+    });
+    const page = await fetchPromptPage();
+    expect(page.total).toBe(1);
+    expect(page.tags).toEqual(["插画", "建筑"]);
+    expect((await fetchPromptPage({ tags: ["建筑"] })).items[0]?.id).toBe("b");
+  });
+
+  const row = {
+    id: 544,
+    title: "词汇学习卡",
+    prompt: "Create a vocabulary poster.\nKeep [FRUIT] as a placeholder.",
+    image: "/images/case544.jpg",
+    category: "Charts & Infographics",
+    styles: ["Realistic", "Poster"],
+    scenes: ["Education"],
+    sourceLabel: "@example",
+    sourceUrl: "https://example.com/original",
+  };
+
+  it("preserves full prompt text, original attribution and resolves repository images", () => {
+    const [prompt] = parseFreestyleflyCases({ cases: [row] });
+    expect(prompt).toMatchObject({
+      id: "freestylefly-gpt-image-2-0544",
+      prompt: row.prompt,
+      coverUrl:
+        "https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/data/images/case544.jpg",
+      githubUrl:
+        "https://github.com/freestylefly/awesome-gpt-image-2/blob/main/docs/gallery-part-2.md#case-544",
+      sourceLabel: "@example",
+      sourceUrl: row.sourceUrl,
+    });
+    expect(prompt?.tags).toContain("图表与信息图");
+    expect(prompt?.tags).toContain("education");
+  });
+
+  it("skips malformed cases and duplicate ids and rejects executable or traversing URLs", () => {
+    expect(parseFreestyleflyCases(null)).toEqual([]);
+    expect(parseFreestyleflyCases({ cases: {} })).toEqual([]);
+    const items = parseFreestyleflyCases({
+      cases: [
+        null,
+        {},
+        { ...row, prompt: 3 },
+        { ...row, id: -1 },
+        {
+          ...row,
+          sourceUrl: "javascript:alert(1)",
+          image: "/images/../private.png",
+        },
+        row,
+      ],
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]?.sourceUrl).toBeUndefined();
+    expect(items[0]?.coverUrl).toBe("");
+  });
+
+  it("deduplicates identical text in 全部 while preserving each source's complete collection", () => {
+    const prompts = [
+      makePrompt({
+        id: "new-1",
+        category: "freestylefly-gpt-image-2",
+        prompt: "Draw a cat",
+      }),
+      makePrompt({ id: "old-1", prompt: "Draw  a\ncat" }),
+      makePrompt({ id: "old-2", prompt: "Draw a dog" }),
+    ];
+    expect(
+      applyFilters(prompts, {
+        keyword: "",
+        category: ALL_PROMPTS_OPTION,
+        tags: [],
+      }).map((item) => item.id),
+    ).toEqual(["new-1", "old-2"]);
+    expect(
+      applyFilters(prompts, {
+        keyword: "",
+        category: "awesome-gpt-image",
+        tags: [],
+      }).map((item) => item.id),
+    ).toEqual(["old-1", "old-2"]);
+  });
+
+  it("keeps an unavailable collection in the snapshot when other sources refresh successfully", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("freestylefly/"))
+          return {
+            ok: true,
+            text: async () => JSON.stringify({ cases: [row] }),
+          };
+        throw new Error("source unavailable");
+      }),
+    );
+    const items = await loadAllSources();
+    expect(
+      items.filter((item) => item.category === "freestylefly-gpt-image-2"),
+    ).toHaveLength(1);
+    expect(
+      items.filter((item) => item.category === "awesome-gpt-image"),
+    ).toHaveLength(53);
+    expect(
+      await loadAllSources({
+        categories: ["awesome-gpt-image"],
+        fallbackToSnapshot: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not let an old fresh cache hide the newly bundled source", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) =>
+        key === "nexu:canvas:prompt-cache"
+          ? JSON.stringify({ fetchedAt: Date.now(), items: [makePrompt({})] })
+          : null,
+      setItem: vi.fn(),
+    });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    const page = await fetchPromptPage({
+      category: "freestylefly-gpt-image-2",
+    });
+    expect(page.total).toBe(541);
+    await loadAllSources();
   });
 });
 
