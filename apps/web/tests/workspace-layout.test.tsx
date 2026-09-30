@@ -841,4 +841,59 @@ describe("WorkspaceLayout", () => {
     expect(markup).toContain("<title>WhatsApp</title>");
     expect(markup).toContain("WhatsApp");
   });
+
+  it("files OpenClaw automation sessions under the collapsed scheduled section", () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
+    queryClient.setQueryData(
+      ["sidebar-sessions"],
+      [
+        {
+          id: "sess-chat",
+          title: "Design sync thread",
+          channelType: "web",
+          lastTime: "2026-03-20T08:57:00.000Z",
+          status: "active",
+          sessionKey: "agent:bot-1:12345678-1234-1234-1234-123456789abc",
+        },
+        {
+          id: "sess-automation",
+          title: "Automation: skill-collection-review-bot-1",
+          channelType: "web",
+          lastTime: "2026-03-20T08:58:00.000Z",
+          status: "active",
+          sessionKey: "agent:bot-1:cron:job-1",
+        },
+      ],
+    );
+    queryClient.setQueryData(["me"], {
+      email: "alice@example.com",
+      name: "Alice",
+    });
+
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/workspace/sessions/sess-chat"]}>
+          <Routes>
+            <Route element={<WorkspaceLayout />}>
+              <Route
+                path="/workspace/sessions/:id"
+                element={<div>Session body</div>}
+              />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(markup).toContain('data-sidebar-session-row="sess-chat"');
+    expect(markup).toContain("layout.scheduledTasks");
+    expect(markup).not.toContain('data-sidebar-session-row="sess-automation"');
+  });
 });

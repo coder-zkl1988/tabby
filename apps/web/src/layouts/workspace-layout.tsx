@@ -134,6 +134,19 @@ export type SidebarSessionFilter =
   | "failed"
   | "archived";
 
+/**
+ * Scheduled sessions live in two key namespaces: nexu schedules mint
+ * `agent:<bot>:schedule-<id>`, while OpenClaw's own automations (weekly
+ * skill-collection review, memory dreaming, agent-created cron jobs) run under
+ * `agent:<agent>:cron:<jobId>`. Keep in sync with `isScheduledSessionKey` in
+ * apps/controller/src/services/session-service.ts.
+ */
+export function isScheduledSessionKey(sessionKey: string): boolean {
+  return (
+    sessionKey.includes(":schedule-") || /^agent:[^:]+:cron:/i.test(sessionKey)
+  );
+}
+
 export function filterSidebarSessions(
   sessions: SidebarSession[],
   search: string,
@@ -148,7 +161,7 @@ export function filterSidebarSessions(
     ) {
       return false;
     }
-    const scheduled = session.sessionKey.includes(":schedule-");
+    const scheduled = isScheduledSessionKey(session.sessionKey);
     if (filter === "scheduled") return scheduled && !session.archived;
     if (filter === "conversations") return !scheduled && !session.archived;
     if (filter === "unread") return session.unread && !session.archived;
@@ -1450,10 +1463,10 @@ function WorkspaceLayoutContent() {
               {(() => {
                 // Split sessions into regular and scheduled
                 const regularSessions = visibleSessions.filter(
-                  (s) => !s.sessionKey.includes(":schedule-"),
+                  (s) => !isScheduledSessionKey(s.sessionKey),
                 );
                 const scheduledSessions = visibleSessions.filter((s) =>
-                  s.sessionKey.includes(":schedule-"),
+                  isScheduledSessionKey(s.sessionKey),
                 );
 
                 // Keep meaningful user organization visible, while leaving
