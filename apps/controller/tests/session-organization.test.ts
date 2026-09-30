@@ -116,6 +116,43 @@ describe("SessionService organization and recovery", () => {
     expect(runtime.listSessions).toHaveBeenCalledWith(false, "exclude");
   });
 
+  it("treats OpenClaw cron automations as scheduled alongside nexu schedules", async () => {
+    const sessions = [
+      session({ id: "chat.jsonl", sessionKey: "agent:bot-1:chat" }),
+      session({
+        id: "schedule.jsonl",
+        sessionKey: "agent:bot-1:schedule-daily",
+      }),
+      session({
+        id: "automation.jsonl",
+        sessionKey: "agent:bot-1:cron:job-1",
+      }),
+    ];
+    const service = new SessionService(
+      createRuntimeStub(sessions),
+      createGatewayStub(),
+    );
+
+    const scheduled = await service.listSessions({
+      limit: 20,
+      offset: 0,
+      kind: "scheduled",
+    });
+    const conversations = await service.listSessions({
+      limit: 20,
+      offset: 0,
+      kind: "conversations",
+    });
+
+    expect(scheduled.sessions.map((item) => item.id)).toEqual([
+      "schedule.jsonl",
+      "automation.jsonl",
+    ]);
+    expect(conversations.sessions.map((item) => item.id)).toEqual([
+      "chat.jsonl",
+    ]);
+  });
+
   it("passes clear-category, pin, and unread changes through sessions.patch", async () => {
     const runtime = createRuntimeStub([session()]);
     const gateway = createGatewayStub();

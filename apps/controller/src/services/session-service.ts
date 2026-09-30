@@ -53,6 +53,19 @@ function rethrowMessageMutationError(error: unknown): never {
   throw error;
 }
 
+/**
+ * Scheduled sessions live in two key namespaces: nexu schedules mint
+ * `agent:<bot>:schedule-<id>`, while OpenClaw's own automations (weekly
+ * skill-collection review, memory dreaming, agent-created cron jobs) run under
+ * `agent:<agent>:cron:<jobId>`. Keep in sync with `isScheduledSessionKey` in
+ * apps/web/src/layouts/workspace-layout.tsx.
+ */
+function isScheduledSessionKey(sessionKey: string): boolean {
+  return (
+    sessionKey.includes(":schedule-") || /^agent:[^:]+:cron:/i.test(sessionKey)
+  );
+}
+
 export class SessionService {
   constructor(
     private readonly sessionsRuntime: SessionsRuntime,
@@ -116,7 +129,7 @@ export class SessionService {
     }
     if (params.kind) {
       sessions = sessions.filter((session) => {
-        const scheduled = session.sessionKey.includes(":schedule-");
+        const scheduled = isScheduledSessionKey(session.sessionKey);
         return params.kind === "scheduled" ? scheduled : !scheduled;
       });
     }
