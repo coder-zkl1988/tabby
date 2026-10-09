@@ -133,7 +133,6 @@ const zhCN = {
   "layout.mobile.settings": "设置",
   "layout.mobile.settingsSubtitle": "管理 AI 模型服务商",
   "layout.conversations": "对话",
-  "layout.scheduledTasks": "定时任务",
   "layout.searchConversations": "搜索对话",
   "layout.noMatchingConversations": "没有匹配的对话",
   "layout.sessionsLoading": "正在加载对话…",

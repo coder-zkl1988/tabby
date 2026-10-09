@@ -185,18 +185,6 @@ export function sortSidebarSessions(
   });
 }
 
-export function isScheduledSessionSectionExpanded(input: {
-  collapsed: boolean;
-  filter: SidebarSessionFilter;
-  search: string;
-}): boolean {
-  return (
-    !input.collapsed ||
-    (input.filter !== "all" && input.filter !== "conversations") ||
-    input.search.trim().length > 0
-  );
-}
-
 // Cloud balance amounts arrive as integer US cents; show them as exact USD.
 export function formatUsdCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -324,6 +312,14 @@ function SidebarPlatformIcon({ platform }: { platform: string }) {
   return (
     <span className="flex justify-center items-center w-7 h-7 rounded-xl border border-border bg-surface-1 shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
       <PlatformIcon platform={platform} size={15} />
+    </span>
+  );
+}
+
+function SidebarScheduledIcon() {
+  return (
+    <span className="flex justify-center items-center w-7 h-7 rounded-xl border border-border bg-surface-1 shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      <Clock size={15} className="text-text-muted" />
     </span>
   );
 }
@@ -567,10 +563,11 @@ function WorkspaceLayoutContent() {
     "nav-item flex items-center w-full rounded-[var(--radius-6)] text-[13px] transition-colors cursor-pointer mt-0.5 py-2 whitespace-nowrap gap-2.5 px-3";
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
-  const [scheduledCollapsed, setScheduledCollapsed] = useState(true);
   const [sessionSearch, setSessionSearch] = useState("");
+  // Automation runs pile up fast and would bury the user's own threads, so
+  // the rail opens on ordinary conversations; 定时对话 / 全部 are one pick away.
   const [sessionFilter, setSessionFilter] =
-    useState<SidebarSessionFilter>("all");
+    useState<SidebarSessionFilter>("conversations");
   const {
     status: rewardsStatus,
     loading: rewardsStatusLoading,
@@ -1032,14 +1029,6 @@ function WorkspaceLayoutContent() {
   const visibleSessions = sortSidebarSessions(
     filterSidebarSessions(sessions, sessionSearch, sessionFilter),
   );
-  const scheduledSectionForcedOpen =
-    (sessionFilter !== "all" && sessionFilter !== "conversations") ||
-    sessionSearch.trim().length > 0;
-  const scheduledSectionExpanded = isScheduledSessionSectionExpanded({
-    collapsed: scheduledCollapsed,
-    filter: sessionFilter,
-    search: sessionSearch,
-  });
 
   const sessionMatch = location.pathname.match(/\/workspace\/sessions\/(.+)/);
   const selectedSessionId = sessionMatch?.[1] ?? null;
@@ -1461,18 +1450,12 @@ function WorkspaceLayoutContent() {
                 </div>
               )}
               {(() => {
-                // Split sessions into regular and scheduled
-                const regularSessions = visibleSessions.filter(
-                  (s) => !isScheduledSessionKey(s.sessionKey),
-                );
-                const scheduledSessions = visibleSessions.filter((s) =>
-                  isScheduledSessionKey(s.sessionKey),
-                );
-
+                // Scheduled sessions share the list with everything else; the
+                // filter above is the one place that separates them.
                 // Keep meaningful user organization visible, while leaving
                 // ordinary conversations as one unlabelled list.
                 const regularGroups = Object.entries(
-                  regularSessions.reduce(
+                  visibleSessions.reduce(
                     (acc, s) => {
                       const key = s.pinned
                         ? "pinned"
@@ -1513,12 +1496,18 @@ function WorkspaceLayoutContent() {
                         <div className="space-y-0.5">
                           {groupSessions.map((s) => {
                             const isActive = selectedSessionId === s.id;
+                            const scheduled = isScheduledSessionKey(
+                              s.sessionKey,
+                            );
                             return (
                               <div
                                 key={s.id}
                                 data-sidebar-session-row={s.id}
                                 data-session-channel-type={
                                   s.channelType ?? "web"
+                                }
+                                data-session-scheduled={
+                                  scheduled ? "true" : "false"
                                 }
                                 data-session-state={s.status || "idle"}
                                 data-session-run-state={s.runState}
@@ -1538,12 +1527,17 @@ function WorkspaceLayoutContent() {
                                   type="button"
                                   onClick={() => {
                                     if (s.archived) return;
-                                    const channel = normalizeChannel(
-                                      s.channelType,
-                                    );
-                                    track("workspace_channel_click", {
-                                      channel_type: s.channelType,
-                                    });
+                                    // Scheduled runs are not a channel the
+                                    // user picked, so keep them out of the
+                                    // channel metrics.
+                                    const channel = scheduled
+                                      ? null
+                                      : normalizeChannel(s.channelType);
+                                    if (!scheduled) {
+                                      track("workspace_channel_click", {
+                                        channel_type: s.channelType,
+                                      });
+                                    }
                                     track("workspace_sidebar_click", {
                                       target: "conversations",
                                       ...(channel ? { channel } : {}),
@@ -1558,9 +1552,13 @@ function WorkspaceLayoutContent() {
                                   }}
                                   className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                                 >
-                                  <SidebarPlatformIcon
-                                    platform={s.channelType ?? "web"}
-                                  />
+                                  {scheduled ? (
+                                    <SidebarScheduledIcon />
+                                  ) : (
+                                    <SidebarPlatformIcon
+                                      platform={s.channelType ?? "web"}
+                                    />
+                                  )}
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 min-w-0">
                                       <div
@@ -1602,9 +1600,11 @@ function WorkspaceLayoutContent() {
                                     </div>
                                     <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-text-muted truncate whitespace-nowrap">
                                       <span>
-                                        {getPlatformLabel(
-                                          s.channelType ?? "web",
-                                        )}
+                                        {scheduled
+                                          ? t("layout.sessionFilterScheduled")
+                                          : getPlatformLabel(
+                                              s.channelType ?? "web",
+                                            )}
                                       </span>
                                       <span className="text-border">·</span>
                                       <span>{formatTime(s.lastTime)}</span>
@@ -1793,141 +1793,6 @@ function WorkspaceLayoutContent() {
                         </div>
                       </div>
                     ))}
-
-                    {/* Scheduled tasks section */}
-                    {scheduledSessions.length > 0 && (
-                      <div>
-                        <button
-                          type="button"
-                          aria-expanded={scheduledSectionExpanded}
-                          disabled={scheduledSectionForcedOpen}
-                          onClick={() =>
-                            setScheduledCollapsed(!scheduledCollapsed)
-                          }
-                          className="flex w-full cursor-pointer items-center gap-2 px-1 py-1.5 text-[12px] text-text-muted transition-colors hover:text-text-primary disabled:cursor-default"
-                        >
-                          <ChevronRight
-                            size={12}
-                            className={cn(
-                              "transition-transform",
-                              scheduledSectionExpanded && "rotate-90",
-                            )}
-                          />
-                          <Clock size={12} />
-                          <span>{t("layout.scheduledTasks", "定时任务")}</span>
-                          <span className="ml-auto text-[10px] text-text-muted/60">
-                            {scheduledSessions.length}
-                          </span>
-                        </button>
-                        {scheduledSectionExpanded && (
-                          <div className="space-y-0.5 mt-1">
-                            {scheduledSessions.map((s) => {
-                              const isActive = selectedSessionId === s.id;
-                              return (
-                                <div
-                                  key={s.id}
-                                  data-sidebar-session-row={s.id}
-                                  data-session-channel-type={
-                                    s.channelType ?? "web"
-                                  }
-                                  data-session-state={s.status || "idle"}
-                                  data-session-run-state={s.runState}
-                                  className={cn(
-                                    "group flex items-center gap-2.5 w-full rounded-[10px] transition-colors cursor-pointer px-3 py-2 text-left",
-                                    isActive && "nav-item-active",
-                                    s.archived && "opacity-70",
-                                  )}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (s.archived) return;
-                                      track("workspace_sidebar_click", {
-                                        target: "conversations",
-                                      });
-                                      if (s.unread) {
-                                        organizationSessionMutation.mutate({
-                                          id: s.id,
-                                          unread: false,
-                                        });
-                                      }
-                                      navigate(`/workspace/sessions/${s.id}`);
-                                    }}
-                                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                                  >
-                                    <Clock
-                                      size={16}
-                                      className="shrink-0 text-text-muted"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div
-                                          className={cn(
-                                            "text-[12px] truncate whitespace-nowrap font-medium",
-                                            !isActive && "text-text-primary",
-                                          )}
-                                        >
-                                          {s.title}
-                                        </div>
-                                        {s.runState !== "idle" && (
-                                          <span
-                                            className={cn(
-                                              "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                                              s.runState === "running"
-                                                ? "bg-[var(--color-success-subtle)] text-[var(--color-success)]"
-                                                : "bg-[var(--color-danger-subtle)] text-danger",
-                                            )}
-                                          >
-                                            {t(
-                                              s.runState === "running"
-                                                ? "layout.sessionRunning"
-                                                : "layout.sessionFailed",
-                                            )}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-text-muted truncate whitespace-nowrap">
-                                        <span>{formatTime(s.lastTime)}</span>
-                                      </div>
-                                    </div>
-                                  </button>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {s.archived ? (
-                                      <button
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          archiveSessionMutation.mutate({
-                                            id: s.id,
-                                            archived: false,
-                                          });
-                                        }}
-                                        className="p-1 text-text-muted transition-colors hover:text-text-primary"
-                                        title={t("layout.restoreSession")}
-                                      >
-                                        <ArchiveRestore className="size-3.5" />
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          deleteSessionMutation.mutate(s.id);
-                                        }}
-                                        className="p-1 text-text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                                        title={t("layout.deleteSession")}
-                                      >
-                                        <Trash2 className="size-3.5" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </>
                 );
               })()}

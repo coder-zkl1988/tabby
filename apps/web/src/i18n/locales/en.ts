@@ -135,7 +135,6 @@ const en = {
   "layout.nav.automations": "Automations",
   "layout.nav.usage": "Usage",
   "layout.conversations": "Conversations",
-  "layout.scheduledTasks": "Scheduled Tasks",
   "layout.searchConversations": "Search conversations",
   "layout.noMatchingConversations": "No matching conversations",
   "layout.sessionsLoading": "Loading conversations...",

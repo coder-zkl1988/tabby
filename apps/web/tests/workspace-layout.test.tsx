@@ -7,7 +7,6 @@ import {
   deleteSidebarSession,
   filterSidebarSessions,
   getSidebarCreditBreakdown,
-  isScheduledSessionSectionExpanded,
   renameSidebarSession,
 } from "../src/layouts/workspace-layout";
 
@@ -324,30 +323,6 @@ describe("WorkspaceLayout", () => {
         (item) => item.id,
       ),
     ).toEqual(["scheduled-1"]);
-  });
-
-  it("keeps scheduled matches expanded while search or its filter is active", () => {
-    expect(
-      isScheduledSessionSectionExpanded({
-        collapsed: true,
-        filter: "all",
-        search: "release",
-      }),
-    ).toBe(true);
-    expect(
-      isScheduledSessionSectionExpanded({
-        collapsed: true,
-        filter: "scheduled",
-        search: "",
-      }),
-    ).toBe(true);
-    expect(
-      isScheduledSessionSectionExpanded({
-        collapsed: true,
-        filter: "all",
-        search: "",
-      }),
-    ).toBe(false);
   });
 
   it("does not render a sidebar collapse control in the desktop shell", () => {
@@ -842,7 +817,7 @@ describe("WorkspaceLayout", () => {
     expect(markup).toContain("WhatsApp");
   });
 
-  it("files OpenClaw automation sessions under the collapsed scheduled section", () => {
+  it("opens on ordinary conversations, with no separate scheduled group", () => {
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {
@@ -892,8 +867,13 @@ describe("WorkspaceLayout", () => {
       </QueryClientProvider>,
     );
 
-    expect(markup).toContain('data-sidebar-session-row="sess-chat"');
-    expect(markup).toContain("layout.scheduledTasks");
+    // Scheduled sessions are reached through the 定时对话 / 全部 filters, not a
+    // collapsible group; the rail opens on ordinary conversations so a burst
+    // of automation runs cannot bury the user's own threads (2026-10-09).
+    expect(markup).not.toContain("layout.scheduledTasks");
+    expect(markup).toMatch(
+      /data-sidebar-session-row="sess-chat"[^>]*data-session-scheduled="false"/,
+    );
     expect(markup).not.toContain('data-sidebar-session-row="sess-automation"');
   });
 });
