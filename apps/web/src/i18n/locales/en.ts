@@ -1104,6 +1104,7 @@ const en = {
   "sessions.chat.loading": "Loading messages...",
   "sessions.chat.replyLabel": "Reply",
   "sessions.chat.toolActivity": "Tool",
+  "sessions.chat.toolRepeated": "Ran {{count}} times in a row",
   "sessions.chat.toolCompleted": "Completed",
   "sessions.chat.stepsCompleted": "{{count}} steps completed",
   "sessions.chat.stepsRunning": "Running {{count}} steps",

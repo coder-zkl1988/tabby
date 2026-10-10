@@ -1018,6 +1018,7 @@ const zhCN = {
   "sessions.chat.loading": "加载消息中...",
   "sessions.chat.replyLabel": "回复",
   "sessions.chat.toolActivity": "工具",
+  "sessions.chat.toolRepeated": "连续执行了 {{count}} 次",
   "sessions.chat.toolCompleted": "已完成",
   "sessions.chat.stepsCompleted": "已完成 {{count}} 个步骤",
   "sessions.chat.stepsRunning": "正在执行 {{count}} 个步骤",

@@ -923,6 +923,77 @@ describe("SessionsPage", () => {
     expect(markup).toContain("Open in WhatsApp");
   });
 
+  it("folds back-to-back identical tool calls into one counted row", () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const poll = (
+      id: string,
+      jobId: string,
+      minute: number,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      id,
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "device_job_status",
+          arguments: { jobId, limit: 10, ...extra },
+        },
+      ],
+      timestamp: new Date(`2026-10-09T13:${minute}:00.000Z`).getTime(),
+      createdAt: `2026-10-09T13:${minute}:00.000Z`,
+    });
+
+    queryClient.setQueryData(["session-meta", "sess-poll"], {
+      id: "sess-poll",
+      title: "Phone job",
+      channelType: "web",
+      messageCount: 6,
+      lastMessageAt: "2026-10-09T13:15:00.000Z",
+      metadata: {},
+    });
+    queryClient.setQueryData(["chat-history", "sess-poll"], {
+      messages: [
+        {
+          id: "msg-user",
+          role: "user",
+          content: "跑一下手机任务",
+          timestamp: new Date("2026-10-09T13:10:00.000Z").getTime(),
+          createdAt: "2026-10-09T13:10:00.000Z",
+        },
+        poll("p1", "job_1", 11),
+        poll("p2", "job_1", 12),
+        // A flag the row does not show still renders the same row, so it folds.
+        poll("p3", "job_1", 13, { includeResults: true }),
+        poll("p4", "job_2", 14),
+        poll("p5", "job_1", 15),
+      ],
+    });
+
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <A2UISidebarProvider>
+          <MemoryRouter initialEntries={["/workspace/sessions/sess-poll"]}>
+            <Routes>
+              <Route
+                path="/workspace/sessions/:id"
+                element={<SessionsPage />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </A2UISidebarProvider>
+      </QueryClientProvider>,
+    );
+
+    // job_1 ×3, then job_2, then job_1 again: only adjacent repeats fold.
+    const rows = markup.match(/data-tool-card="device_job_status"/g) ?? [];
+    expect(rows).toHaveLength(3);
+    expect(markup.match(/data-tool-repeat-count="3"/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain('data-tool-repeat-count="1"');
+  });
+
   it("strips assistant reply markers and keeps tool-only activity visible", () => {
     const queryClient = new QueryClient({
       defaultOptions: {

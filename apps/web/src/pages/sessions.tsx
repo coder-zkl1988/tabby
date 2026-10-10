@@ -667,7 +667,22 @@ type ExecutionStep =
       id: string;
       kind: "tool";
       toolCall: ToolCallInfo;
+      /** Back-to-back calls that render the same row, folded into this one. */
+      repeat: number;
     };
+
+/**
+ * Same row on screen, not same payload: a poll that adds includeResults:true
+ * halfway through still shows only its job id, and splitting there gave two
+ * rows nobody could tell apart.
+ */
+function isSameToolCall(left: ToolCallInfo, right: ToolCallInfo): boolean {
+  return (
+    left.name === right.name &&
+    summarizeToolArguments(left.arguments) ===
+      summarizeToolArguments(right.arguments)
+  );
+}
 
 function buildExecutionSteps(
   entries: TranscriptEntry<ChatMessageData>[],
@@ -693,10 +708,21 @@ function buildExecutionSteps(
     }
 
     entry.extracted.toolCalls.forEach((toolCall, index) => {
+      // Polling repeats one call verbatim — Device Job Status on the same job
+      // id, dozens of times — and a row per poll floods the transcript.
+      const previous = steps[steps.length - 1];
+      if (
+        previous?.kind === "tool" &&
+        isSameToolCall(previous.toolCall, toolCall)
+      ) {
+        previous.repeat += 1;
+        return;
+      }
       steps.push({
         id: toolCall.id ?? `${entry.msg.id}:tool:${index}`,
         kind: "tool",
         toolCall,
+        repeat: 1,
       });
     });
   }
@@ -720,9 +746,11 @@ function ToolCallGlyph({ name }: { name: string }) {
 function ExecutionToolRow({
   toolCall,
   active,
+  repeat,
 }: {
   toolCall: ToolCallInfo;
   active: boolean;
+  repeat: number;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -799,6 +827,15 @@ function ExecutionToolRow({
             </span>
           )}
         </div>
+      )}
+      {repeat > 1 && (
+        <span
+          data-tool-repeat-count={repeat}
+          title={t("sessions.chat.toolRepeated", { count: repeat })}
+          className="mt-0.5 shrink-0 rounded-full bg-surface-2 px-1.5 font-mono text-[10px] leading-4 text-text-muted"
+        >
+          ×{repeat}
+        </span>
       )}
     </div>
   );
@@ -898,6 +935,7 @@ function ExecutionActivityGroup({
                 <ExecutionToolRow
                   key={step.id}
                   toolCall={step.toolCall}
+                  repeat={step.repeat}
                   active={active && index === lastToolStepIndex}
                 />
               );
