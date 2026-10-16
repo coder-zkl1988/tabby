@@ -1311,7 +1311,7 @@ describe("NexuConfigStore", () => {
     const challengeHtml = `<!DOCTYPE html><html lang="en-US"><head><title>Just a moment...</title></head><body>${"challenge ".repeat(500)}</body></html>`;
     const fetchMock = vi.fn(async (input: string | URL) => {
       expect(String(input)).toBe(
-        "https://tabbyapi.picaso.studio/api/auth/device-register",
+        "https://ai.happywork.today/api/auth/device-register",
       );
       return new Response(challengeHtml, {
         status: 403,
@@ -1336,7 +1336,7 @@ describe("NexuConfigStore", () => {
     let registeredDeviceId = "";
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       expect(String(input)).toBe(
-        "https://tabbyapi.picaso.studio/api/auth/device-register",
+        "https://ai.happywork.today/api/auth/device-register",
       );
       expect(init?.method).toBe("POST");
       const body = JSON.parse(String(init?.body)) as {
