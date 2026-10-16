@@ -119,7 +119,7 @@ type DesktopBalanceBreakdown = {
 const defaultCloudProfile: CloudProfileEntry = {
   name: "Default",
   cloudUrl: "https://tabby.picaso.studio",
-  linkUrl: "https://tabbyapi.picaso.studio",
+  linkUrl: "https://ai.happywork.today",
 };
 
 const rewardTaskTemplateById = new Map<RewardTaskId, RewardTask>(
