@@ -200,7 +200,7 @@ export const PromptPanel = memo(function PromptPanel({
   const [audioInstructions, setAudioInstructions] = useState<string>("");
 
   // Available models for the picker (shared ["models"] cache), narrowed to
-  // the node's modality (image → tabby-image-pro/tabby-image-flash, video →
+  // the node's modality (image → tabby-image, video →
   // tabby-video; audio has no dedicated backend yet → full list).
   const models = useCanvasModelOptions(
     node.type as "image" | "video" | "audio",

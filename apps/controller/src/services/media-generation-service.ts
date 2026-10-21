@@ -179,6 +179,12 @@ const VIDEO_PATH_SRC =
 const AUDIO_PATH_SRC =
   "(\\/[^\\r\\n\"'`]+\\/media\\/[^\\r\\n\"'`]+\\.(?:mp3|wav|m4a|ogg|flac))";
 
+const LEGACY_TABBY_IMAGE_MODELS: ReadonlySet<string> = new Set([
+  "tabby-image-pro",
+  "tabby-image-flash",
+  "tabby-image-free",
+]);
+
 function regexForKind(kind: MediaKind): RegExp {
   switch (kind) {
     case "image":
@@ -290,17 +296,15 @@ export class MediaGenerationService {
 
     const count = input.count ?? 1;
     const tabbyMediaRunner = this.deps.tabbyMediaRunner;
+    // The relay serves a single image model; saved canvas nodes and XHS
+    // settings may still carry the old paid/free tier ids.
     const tabbyImageModel =
-      input.model === "tabby-image"
-        ? "tabby-image-pro"
-        : input.model === "tabby-image-free"
-          ? "tabby-image-flash"
-          : input.model;
+      input.model !== undefined && LEGACY_TABBY_IMAGE_MODELS.has(input.model)
+        ? "tabby-image"
+        : input.model;
     const canUseBundledTabbyImage =
       tabbyMediaRunner !== undefined &&
-      (tabbyImageModel === undefined ||
-        tabbyImageModel === "tabby-image-pro" ||
-        tabbyImageModel === "tabby-image-flash") &&
+      (tabbyImageModel === undefined || tabbyImageModel === "tabby-image") &&
       (!input.referenceImages || input.referenceImages.length === 0) &&
       input.sourceImage === undefined &&
       input.maskDataUrl === undefined;
@@ -361,8 +365,8 @@ export class MediaGenerationService {
     }
 
     const imageHints: string[] = [];
-    if (input.model !== undefined) {
-      imageHints.push(`Preferred model: ${input.model}`);
+    if (tabbyImageModel !== undefined) {
+      imageHints.push(`Preferred model: ${tabbyImageModel}`);
     }
     if (input.quality !== undefined) {
       imageHints.push(`Quality: ${input.quality}`);
