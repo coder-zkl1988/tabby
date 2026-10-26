@@ -1277,14 +1277,14 @@ describe("NexuConfigStore", () => {
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
       expect(init?.headers).toEqual({ Authorization: "Bearer secret-api-key" });
-      if (url === "https://tabby.picaso.studio/api/v1/me") {
+      if (url === "https://tabby.happywork.today/api/v1/me") {
         return new Response(JSON.stringify({ id: "user-backfilled" }), {
           status: 200,
         });
       }
       // hydrateDesktopCloudModels also refreshes the account credit state used
       // to route tabby-image/tabby-video between the paid and free model.
-      expect(url).toBe("https://tabby.picaso.studio/api/v1/rewards/status");
+      expect(url).toBe("https://tabby.happywork.today/api/v1/rewards/status");
       return new Response(
         JSON.stringify({ tasks: [], progress: {}, cloudBalance: null }),
         { status: 200 },
@@ -1357,7 +1357,7 @@ describe("NexuConfigStore", () => {
     });
 
     expect(result).toEqual({
-      browserUrl: `https://tabby.picaso.studio/auth?desktop=1&device_id=${registeredDeviceId}&source=welcome_page`,
+      browserUrl: `https://tabby.happywork.today/auth?desktop=1&device_id=${registeredDeviceId}&source=welcome_page`,
       error: undefined,
     });
     expect((await store.getDesktopCloudStatus()).polling).toBe(true);

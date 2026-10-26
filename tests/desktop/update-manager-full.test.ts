@@ -75,7 +75,7 @@ vi.mock("../../apps/desktop/main/services/launchd-manager", () => ({
 }));
 
 vi.mock("../../apps/desktop/main/updater/component-updater", () => ({
-  R2_BASE_URL: "https://downloads.picaso.studio/updates",
+  R2_BASE_URL: "https://downloads.happywork.today/updates",
 }));
 
 // ---------------------------------------------------------------------------
@@ -813,7 +813,7 @@ describe("setSource", () => {
 
     expect(mockAutoUpdater.setFeedURL).toHaveBeenCalledWith({
       provider: "generic",
-      url: expect.stringContaining("downloads.picaso.studio/updates"),
+      url: expect.stringContaining("downloads.happywork.today/updates"),
     });
   });
 });
@@ -830,7 +830,7 @@ describe("configureFeedUrl (via constructor)", () => {
 
     expect(mockAutoUpdater.setFeedURL).toHaveBeenCalledWith({
       provider: "generic",
-      url: expect.stringContaining("downloads.picaso.studio/updates/stable/"),
+      url: expect.stringContaining("downloads.happywork.today/updates/stable/"),
     });
   });
 
@@ -995,7 +995,7 @@ describe("constructor", () => {
 
     expect(mockAutoUpdater.setFeedURL).toHaveBeenCalledWith({
       provider: "generic",
-      url: expect.stringContaining("downloads.picaso.studio/updates/stable/"),
+      url: expect.stringContaining("downloads.happywork.today/updates/stable/"),
     });
   });
 

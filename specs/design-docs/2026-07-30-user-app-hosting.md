@@ -216,6 +216,8 @@ GFW 的封锁是独立于备案的机制。Cloudflare 社区中「站点在大�
 
 ### 用独立域名承载用户应用（已落定）
 
+> **2026-10-26 更新：** `happywork.today` 已改作产品主域名——门户 `tabby.happywork.today`、下载 `downloads.happywork.today`、API `ai.happywork.today`。用户应用托管不再使用它，上线前需另选一个独立域名；下文的隔离理由仍然成立，只是被隔离的域名换了。
+
 **决策：用户应用使用 `happywork.today`，与品牌域名 `picaso.studio` 完全隔离。**
 
 于 2026-07-30 通过 Cloudflare Registrar 注册，NS 为 `marty.ns.cloudflare.com` / `dee.ns.cloudflare.com`，与 `picaso.studio` 同属一个 Cloudflare 账号——这是必要条件，broker 需用单一 API Token 管理该 zone。

@@ -322,7 +322,7 @@ export function DevicesPage() {
                 >
                   <div className="bg-white p-2 rounded-lg border border-border">
                     <QRCodeSVG
-                      value="https://downloads.picaso.studio/releases/app-release.apk"
+                      value="https://downloads.happywork.today/releases/app-release.apk"
                       size={160}
                       level="M"
                     />

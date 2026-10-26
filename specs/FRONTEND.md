@@ -40,7 +40,7 @@ After any API route/schema change: `pnpm generate-types` then `pnpm typecheck`.
 
 ### Skill Store data flow
 
-- `Explore` uses cursor pagination through the generated SDK. The controller proxies `https://tabby.picaso.studio/api/v1/skill-catalog`, which is the server-side ClawHub mirror.
+- `Explore` uses cursor pagination through the generated SDK. The controller proxies `https://tabby.happywork.today/api/v1/skill-catalog`, which is the server-side ClawHub mirror.
 - `Yours` and install progress use the lightweight local `/api/v1/skillhub/status` endpoint. They do not wait for the remote catalog.
 - While a queue item is active, React Query polls local status every three seconds; the full catalog is not re-downloaded for progress updates.
 - Catalog identity is `@ownerHandle/slug`. The owner and installed version are persisted in the local ledger so duplicate slugs from different publishers remain distinguishable.

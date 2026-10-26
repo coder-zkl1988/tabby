@@ -392,7 +392,7 @@ export function RewardsPage() {
           <p className="text-[13px] text-text-secondary">
             {t("rewards.desc")}{" "}
             <a
-              href={`https://tabby.picaso.studio/docs${i18n?.language?.startsWith("zh") ? "/zh" : ""}/guide/rewards`}
+              href={`https://tabby.happywork.today/docs${i18n?.language?.startsWith("zh") ? "/zh" : ""}/guide/rewards`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[var(--color-brand-primary)] hover:underline"

@@ -157,7 +157,7 @@ const VERSION_CHECK_URL =
   "https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/version.json";
 const CATALOG_DOWNLOAD_URL =
   "https://skillhub-1251783334.cos.ap-guangzhou.myqcloud.com/install/latest.tar.gz";
-const CATALOG_API_URL = "https://tabby.picaso.studio/api/v1/skill-catalog";
+const CATALOG_API_URL = "https://tabby.happywork.today/api/v1/skill-catalog";
 
 export type SkillUninstallRequest = {
   slug: string;

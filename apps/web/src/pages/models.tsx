@@ -1331,7 +1331,7 @@ function _GeneralSettings() {
             {[
               {
                 label: t("settings.about.docs"),
-                url: "https://tabby.picaso.studio/docs",
+                url: "https://tabby.happywork.today/docs",
               },
               {
                 label: t("settings.about.github"),

@@ -240,7 +240,9 @@ describe("RewardsPage", () => {
     });
 
     expect(markup).toContain("budget.viral.rules");
-    expect(markup).toContain("https://tabby.picaso.studio/docs/guide/rewards");
+    expect(markup).toContain(
+      "https://tabby.happywork.today/docs/guide/rewards",
+    );
   });
 
   it("uses the积分 copy and hides the redundant cloud balance summary card", () => {

@@ -17,7 +17,7 @@ import {
 } from "../../../lib/api/sdk.gen";
 
 const QQBOT_LOGIN_URL = "https://q.qq.com/qqbot/openclaw/login.html";
-const QQBOT_DOCS_URL = "https://tabby.picaso.studio/docs/guide/channels/qq";
+const QQBOT_DOCS_URL = "https://tabby.happywork.today/docs/guide/channels/qq";
 
 export interface QqbotSetupViewProps {
   onConnected: () => void;

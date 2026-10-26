@@ -227,7 +227,7 @@ jobs:
           app_update_yml="$app/Contents/Resources/app-update.yml"
           test -f "$app_update_yml"
           grep -Fxq "provider: generic" "$app_update_yml"
-          grep -Fxq "url: https://downloads.picaso.studio/updates/${CHANNEL}/${ARCH}" "$app_update_yml"
+          grep -Fxq "url: https://downloads.happywork.today/updates/${CHANNEL}/${ARCH}" "$app_update_yml"
           grep -Fxq "updaterCacheDirName: tabby-updater" "$app_update_yml"
           grep -q "url: tabby-${VERSION}-${ARCH}.zip" "apps/desktop/release/latest-mac.yml"
           if grep -q "url: tabby-${VERSION}-${ARCH}.dmg" "apps/desktop/release/latest-mac.yml"; then
@@ -470,7 +470,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           VERSION: ${{ needs.prepare-release.outputs.desktop_version }}
           CHANNEL: stable
-          BASE_URL: https://downloads.picaso.studio/updates/stable/win32/x64
+          BASE_URL: https://downloads.happywork.today/updates/stable/win32/x64
         run: |
           # WindowsUpdateDriver reads latest-win.json from R2_BASE_URL/stable/win32/x64;
           # the manifest's installer url is BASE_URL/<installer name>.

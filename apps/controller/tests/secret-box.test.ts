@@ -103,7 +103,7 @@ describe("NexuConfigStore secret persistence", () => {
       env.nexuConfigPath,
       `${JSON.stringify(
         {
-          $schema: "https://tabby.picaso.studio/config.json",
+          $schema: "https://tabby.happywork.today/config.json",
           schemaVersion: 6,
           app: {},
           bots: [],
