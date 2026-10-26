@@ -5,6 +5,10 @@ import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import { localDateString } from "./xhs-ops-dashboard-data";
 import { ProjectPicker, useProjectResolution } from "./xhs-ops-project-picker";
 import {
+  TAKEOVER_COMMENT_RUN_PAUSED_HINT,
+  takeoverCommentRunPaused,
+} from "./xhs-ops-takeover-model";
+import {
   COMMENT_MAX_CHARS,
   COMMENT_STATUS_LABEL,
   type XhsOpsAccount,
@@ -443,7 +447,14 @@ function QuotaStrip({
         `${label}：评论任务已${run.status === "planned" ? "排队（等同一手机上的任务结束）" : "开始执行"}，${run.plan.comments?.length ?? 0} 条；结果会回写到队列。`,
       );
     } catch (err) {
-      setError(describeXhsOpsError(err, "派发失败"));
+      // A paused takeover (code takeover_paused) is resumed on its takeover
+      // card, not here.
+      const paused = takeoverCommentRunPaused(err);
+      setError(
+        paused
+          ? `${paused.replace(/[。；;.\s]+$/, "")}。${TAKEOVER_COMMENT_RUN_PAUSED_HINT}`
+          : describeXhsOpsError(err, "派发失败"),
+      );
     } finally {
       setBusy(null);
     }

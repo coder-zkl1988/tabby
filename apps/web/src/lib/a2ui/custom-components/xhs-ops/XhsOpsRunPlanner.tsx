@@ -1,5 +1,6 @@
 import { Switch } from "@/components/ui/switch";
 import {
+  XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE,
   type XhsOpsPlanSkip,
   type XhsOpsProject,
   xhsOpsAccountNurtureIssues,
@@ -155,6 +156,16 @@ function chunkTitle(chunk: XhsOpsRunChunk): string {
   return chunk.mode === "home"
     ? "首页推荐流"
     : `搜索「${chunk.keyword ?? ""}」`;
+}
+
+/**
+ * 「已赞跳过 k 篇」 (§6.3, NU-04): notes an existing account had liked before
+ * were not liked again. The summary carries it only when it is above 0, and
+ * new accounts never get it.
+ */
+function alreadyLikedSkippedText(run: Pick<XhsOpsRun, "summary">) {
+  const skipped = run.summary?.alreadyLikedSkipped ?? 0;
+  return skipped > 0 ? `已赞跳过 ${skipped} 篇` : null;
 }
 
 function sumInteractions(chunks: XhsOpsRunChunk[]) {
@@ -608,6 +619,11 @@ function EmptyPlanHistory({ projectId }: { projectId: string }) {
                 {run.summary?.browsedTotal ?? 0}/
                 {run.summary?.plannedTotal ?? 0} 篇
               </span>
+              {alreadyLikedSkippedText(run) ? (
+                <span className="shrink-0 text-text-secondary">
+                  {alreadyLikedSkippedText(run)}
+                </span>
+              ) : null}
               <span className="min-w-0 flex-1 truncate text-text-secondary">
                 {run.error ?? run.notes ?? ""}
               </span>
@@ -640,7 +656,8 @@ function NurtureGate({
     .filter(({ issues }) =>
       issues.some(
         (issue) =>
-          issue.includes("八项账号资料") || issue.includes("手机账号配置"),
+          issue === XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE ||
+          issue.includes("手机账号配置"),
       ),
     )
     .map(({ account }) => account.id);
@@ -1687,6 +1704,11 @@ function RunPlanCard({
                   <span className="shrink-0 text-text-secondary">
                     异常 {r.summary?.anomalyCount ?? 0}
                   </span>
+                  {alreadyLikedSkippedText(r) ? (
+                    <span className="shrink-0 text-text-secondary">
+                      {alreadyLikedSkippedText(r)}
+                    </span>
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate text-text-secondary">
                     {r.notes}
                   </span>
@@ -1720,6 +1742,7 @@ function RunResult({
   const observations = run.chunks
     .filter((c) => c.observation?.trim())
     .map((c) => ({ chunk: chunkTitle(c), text: c.observation as string }));
+  const alreadyLiked = alreadyLikedSkippedText(run);
 
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-2">
@@ -1744,6 +1767,12 @@ function RunResult({
           value={String(summary?.anomalyCount ?? anomalies.length)}
         />
       </div>
+      {alreadyLiked ? (
+        <HintLine>
+          {alreadyLiked}
+          ：这个号以前赞过的笔记不再重复点赞，点赞数低于上限属正常。
+        </HintLine>
+      ) : null}
 
       {anomalies.length > 0 ? (
         <div className="flex flex-col gap-1">

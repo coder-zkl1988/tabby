@@ -12,6 +12,7 @@ import type { CustomComponentProps } from "../registry";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import {
   type TakeoverParamConflict,
+  isTakeoverRecovering,
   takeoverParamConflict,
 } from "./xhs-ops-takeover-model";
 import {
@@ -573,6 +574,8 @@ export function XhsOpsAccountPlanner({
       warnings: string[];
     }> = [];
     let failed = 0;
+    /** Failures that were only the controller's startup recovery (503). */
+    let recovering = 0;
 
     for (const row of rows) {
       const label = row.label.trim();
@@ -671,6 +674,7 @@ export function XhsOpsAccountPlanner({
             : { error: describeXhsOpsError(err, "保存失败") },
         );
         failed += 1;
+        if (isTakeoverRecovering(err)) recovering += 1;
       }
     }
 
@@ -679,8 +683,12 @@ export function XhsOpsAccountPlanner({
     }
     setSaving(false);
     if (failed > 0) {
+      // A row the startup recovery turned away (§2.6) has nothing to fix:
+      // its edits stay, and the same save goes through once it settled.
       setFormError(
-        `${failed} 个账号保存失败，请修正后再点「保存账号配置」（已保存的账号会按更新处理）`,
+        recovering === failed
+          ? `控制端刚重启，正在收口上次未完成的接管任务；${failed} 个账号还没保存，修改都还在，稍后再点「保存账号配置」重试`
+          : `${failed} 个账号保存失败，请修正后再点「保存账号配置」（已保存的账号会按更新处理）`,
       );
       return;
     }

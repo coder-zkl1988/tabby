@@ -9,8 +9,10 @@ import {
   XHS_OPS_PLAYBOOK_CATEGORY,
   XHS_PROFILE_FIELD_LABEL,
   XHS_TAKEOVER_CHANGE_BUDGET,
+  XHS_TAKEOVER_IMAGE_MAX_BYTES,
   type XhsOpsAccount,
   type XhsOpsAccountDiagnosis,
+  type XhsOpsAuditComparison,
   type XhsOpsAuditFlag,
   type XhsOpsAuditPartStatus,
   type XhsOpsChangeOrder,
@@ -31,7 +33,9 @@ import {
   type XhsOpsTakeoverStage,
   type XhsOpsToneGuide,
   xhsOpsAccountConflictResponseSchema,
+  xhsOpsCommentRunConflictResponseSchema,
   xhsOpsDevicePolicyModeIssue,
+  xhsOpsIsTakeoverImageField,
   xhsOpsPlaybookConfidenceSchema,
   xhsOpsProfileFieldLabels,
   xhsOpsTakeoverFieldBudgetState,
@@ -212,6 +216,24 @@ export const AUDIT_FLAG_LABEL: Record<XhsOpsAuditFlag, string> = {
   creatorUnavailable: "创作者数据不可用（新号或未开通属正常）",
   cancellationUnconfirmed: "手机任务停止未确认",
 };
+
+/**
+ * §7.1: notes that gained or lost 置顶 between two audits
+ * (compareXhsOpsAudits' pins) as one line, e.g. 「置顶变化：新置顶《A》；取消置顶
+ * 《B》」. null when nothing moved or either note grid was not read.
+ */
+export function takeoverPinChangesText(
+  pins: XhsOpsAuditComparison["pins"],
+): string | null {
+  if (!pins) return null;
+  const titles = (list: readonly string[]) =>
+    list.map((title) => `《${title}》`).join("、");
+  const parts = [
+    pins.pinned.length > 0 ? `新置顶${titles(pins.pinned)}` : null,
+    pins.unpinned.length > 0 ? `取消置顶${titles(pins.unpinned)}` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? `置顶变化：${parts.join("；")}` : null;
+}
 
 /** A count as the page printed it plus its parsed value: 「1.2万 → 约 12,000」. */
 export function countDisplay(count: XhsOpsCount | null | undefined): string {
@@ -644,12 +666,6 @@ export const TAKEOVER_FIELDS: readonly XhsOpsTakeoverProfileField[] = [
   "cover",
 ];
 
-export function isImageField(
-  field: XhsOpsProfileField,
-): field is "avatar" | "cover" {
-  return field === "avatar" || field === "cover";
-}
-
 function takeoverField(
   field: XhsOpsProfileField,
 ): XhsOpsTakeoverProfileField | null {
@@ -680,7 +696,7 @@ export function changeOrderAckText(
 
 export function rollbackCostText(field: XhsOpsProfileField): string {
   const label = XHS_PROFILE_FIELD_LABEL[field];
-  return isImageField(field)
+  return xhsOpsIsTakeoverImageField(field)
     ? `${label}无法恢复原图；回滚时需要你重新提供一张图`
     : `回滚同样消耗一次${label}修改次数`;
 }
@@ -743,32 +759,6 @@ export function orderTakeoverFields(
   });
 }
 
-const CHANGED_OUTCOMES: ReadonlySet<XhsOpsChangeOrderField["outcome"]> =
-  new Set(["done", "verified", "mismatch", "uncertain"]);
-
-/**
- * Fields a rollback order can take back (§5.2 step 7): only an executed,
- * non-rollback order; a text field needs a recorded before, a picture always
- * needs the user to upload one again.
- */
-export function rollbackFields(
-  order: XhsOpsChangeOrder,
-): XhsOpsTakeoverProfileField[] {
-  if (order.rollbackOfId !== null || !order.applyTaskId) return [];
-  if (
-    order.status !== "observing" &&
-    order.status !== "completed" &&
-    order.status !== "failed"
-  )
-    return [];
-  return order.fields.flatMap((entry) => {
-    const field = takeoverField(entry.field);
-    if (!field || !CHANGED_OUTCOMES.has(entry.outcome)) return [];
-    if (isImageField(field) || entry.before.trim()) return [field];
-    return [];
-  });
-}
-
 /** A phone step of the order runs in the background: the card polls it. */
 export function changeOrderInFlight(order: XhsOpsChangeOrder): boolean {
   return (
@@ -813,9 +803,6 @@ export const TAKEOVER_IMAGE_TYPES: readonly string[] = [
   "image/webp",
 ];
 
-/** The server's decoded-size cap (xhsOpsChangeOrderImageBodySchema). */
-export const TAKEOVER_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
-
 /** Client-side check before a picture is read and uploaded (§5.2 step 1). */
 export function takeoverImageProblem(file: {
   type: string;
@@ -823,7 +810,7 @@ export function takeoverImageProblem(file: {
 }): string | null {
   if (!TAKEOVER_IMAGE_TYPES.includes(file.type))
     return "只支持 png、jpeg 或 webp 图片";
-  if (file.size > TAKEOVER_IMAGE_MAX_BYTES) return "图片不能超过 10MB";
+  if (file.size > XHS_TAKEOVER_IMAGE_MAX_BYTES) return "图片不能超过 10MB";
   if (file.size === 0) return "图片内容为空";
   return null;
 }
@@ -879,6 +866,25 @@ export function takeoverParamConflict(
     message: parsed.data.message,
     issues: parsed.data.issues ?? [],
   };
+}
+
+/** What the comment review adds to the controller's pause message (§6.5). */
+export const TAKEOVER_COMMENT_RUN_PAUSED_HINT =
+  "评论没有派发：请先在这个账号的接管卡片上处理暂停并点「恢复」，恢复后再派发。";
+
+/**
+ * The controller's message when a comment run was refused because the
+ * account's takeover is paused — the 409 of xhsOpsCommentRunConflictResponseSchema
+ * with code "takeover_paused" — or null for any other error, a 409 without
+ * that code included. Reads the error body XhsOpsApiError keeps.
+ */
+export function takeoverCommentRunPaused(err: unknown): string | null {
+  if (errorStatus(err) !== 409) return null;
+  if (typeof err !== "object" || err === null || !("body" in err)) return null;
+  const parsed = xhsOpsCommentRunConflictResponseSchema.safeParse(err.body);
+  return parsed.success && parsed.data.code === "takeover_paused"
+    ? parsed.data.message
+    : null;
 }
 
 type Revisioned = { id: string; updatedAt: string };
