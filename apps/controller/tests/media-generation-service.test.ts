@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { restrictedTextSessionKey } from "../src/lib/restricted-text-session-key.js";
 import type { TabbyMediaRunner } from "../src/services/bundled-tabby-media-runner.js";
 import {
   ImageGenerationFailedError,
@@ -762,6 +763,47 @@ describe("MediaGenerationService", () => {
     expect(message).toContain("make it formal");
     expect(message).toContain("hey there");
     expect(message).toContain("Preferred model: gpt-x");
+  });
+
+  it("generateText on a restricted lane uses an automation-tier session key", async () => {
+    readAssistantReply.mockResolvedValue('{"f":[]}');
+    const result = await buildService().generateText({
+      prompt: "diagnose",
+      restrictedLane: "xhs-diagnosis",
+    });
+    expect(result).toEqual({ text: '{"f":[]}', botId: "bot-1" });
+    const call = sendChat.mock.calls[0]?.[0] as {
+      sessionKey: string;
+      message: string;
+    };
+    expect(call.sessionKey).toBe(
+      restrictedTextSessionKey("bot-1", "xhs-diagnosis", "gen-1"),
+    );
+    expect(call.sessionKey).toBe(
+      "agent:bot-1:schedule-textgen-xhs-diagnosis-gen-1",
+    );
+    expect(call.message).toContain("Do NOT call any tools");
+    expect(readSessionEntry).toHaveBeenCalledWith("bot-1", call.sessionKey);
+  });
+
+  it("generateText keeps the textgen lane and result shape without a lane", async () => {
+    readAssistantReply.mockResolvedValue("plain");
+    await expect(
+      buildService().generateText({ prompt: "x" }),
+    ).resolves.toStrictEqual({ text: "plain" });
+    const call = sendChat.mock.calls[0]?.[0] as {
+      sessionKey: string;
+      message: string;
+    };
+    expect(call.sessionKey).toBe("agent:bot-1:subagent:textgen-gen-1");
+    expect(call.message).not.toContain("Do NOT call any tools");
+  });
+
+  it("generateText rejects a lane that would break the session key", async () => {
+    await expect(
+      buildService().generateText({ prompt: "x", restrictedLane: "a:b" }),
+    ).rejects.toThrow(/invalid restricted text lane/);
+    expect(sendChat).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------

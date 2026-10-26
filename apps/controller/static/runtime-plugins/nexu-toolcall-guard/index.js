@@ -850,6 +850,16 @@ function isLocalInteractiveSession(ctx) {
 const AUTOMATION_SESSION_KEY_PATTERN =
   /^agent:[^:]+:(?:cron(?::|$)|schedule[-:])/i;
 
+// Restricted text-generation turns (apps/controller/src/lib/
+// restricted-text-session-key.ts): one-shot prompts that carry text read off a
+// customer's phone, such as the xhs-ops takeover diagnosis. The key also
+// matches AUTOMATION_SESSION_KEY_PATTERN, so it is checked first and gets its
+// own reason: no per-bot switch accepts that reason, so a bot that opted its
+// automations into host execution does not lift the block on device_*, exec
+// or sessions_send for these turns.
+const RESTRICTED_TEXT_SESSION_KEY_PATTERN = /^agent:[^:]+:schedule-textgen-/i;
+const RESTRICTED_TEXT_REASON = "restricted-text-origin";
+
 const HOST_EXECUTION_TIER = "host";
 const RESTRICTED_EXECUTION_TIER = "restricted";
 
@@ -967,6 +977,11 @@ function isAutomationReason(reason) {
 function isChannelReason(reason) {
   const base = reason?.startsWith("inherited:") ? reason.slice(10) : reason;
   return base === "channel-origin";
+}
+
+function isRestrictedTextReason(reason) {
+  const base = reason?.startsWith("inherited:") ? reason.slice(10) : reason;
+  return base === RESTRICTED_TEXT_REASON;
 }
 
 /** Reason this origin is restricted, or null when it is not. */
@@ -1094,6 +1109,16 @@ const HOST_COMMAND_TOOLS = new Set(["exec", "process", "code_execution"]);
  * `reason` is null for the host tier so callers can log a single shape.
  */
 function resolveExecutionTier(ctx) {
+  // A restricted text turn outranks every other signal: its reason is the one
+  // no per-bot setting lifts, so nothing observed about the run can loosen it.
+  if (RESTRICTED_TEXT_SESSION_KEY_PATTERN.test(ctx?.sessionKey ?? "")) {
+    return {
+      tier: RESTRICTED_EXECUTION_TIER,
+      reason: RESTRICTED_TEXT_REASON,
+      originAgentId: ctx?.agentId,
+    };
+  }
+
   // Observed provenance first. It can only ever restrict: a run we did not
   // observe falls through to the signals below rather than being refused, so a
   // guard that loads mid-run or an OpenClaw restart cannot strand the desktop
@@ -1156,6 +1181,9 @@ function inheritSubagentRestriction(event, ctx) {
   const requesterRunReason = restrictedOriginReason(requesterOrigin);
 
   const source =
+    (RESTRICTED_TEXT_SESSION_KEY_PATTERN.test(requesterSessionKey)
+      ? { reason: RESTRICTED_TEXT_REASON, agentId: event?.agentId }
+      : null) ??
     touchBounded(restrictedSessions, requesterSessionKey) ??
     (requesterRunReason
       ? { reason: requesterRunReason, agentId: requesterOrigin?.agentId }
@@ -1438,6 +1466,8 @@ function isHostExecutionAllowed(hostExecution, originAgentId, reason) {
   if (!originAgentId || !reason) return false;
   const setting = hostExecution?.[originAgentId];
   if (!setting) return false;
+  // Restricted text turns have no switch: no bot setting opens them.
+  if (isRestrictedTextReason(reason)) return false;
   if (isAutomationReason(reason)) return setting.automations === "host";
   if (isChannelReason(reason)) return setting.channels === "host";
   return false;
@@ -1685,8 +1715,9 @@ const plugin = {
           }
           return {
             block: true,
-            blockReason:
-              isAutomationReason(reason)
+            blockReason: isRestrictedTextReason(reason)
+              ? "Nexu 内部的文本生成会话是无人值守的运行，只能直接回复文本，不能在本机执行命令。"
+              : isAutomationReason(reason)
                 ? "定时任务、心跳和其他无人值守的运行不能在本机执行命令。请让用户在 Nexu 桌面主会话中手动执行这一步。"
                 : "外部渠道的消息不能在用户本机执行命令。请让用户在 Nexu 桌面主会话中完成需要本机执行的操作。",
           };

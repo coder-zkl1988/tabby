@@ -44,6 +44,21 @@ export const deviceInfoSchema = z.object({
   wifiSsid: z.string().optional(),
   isWifiConnected: z.boolean().optional(),
   isCharging: z.boolean().optional(),
+  /**
+   * Policy mode the phone APK was built with, reported from TASK_START on.
+   * Only "enforce" blocks anything; "audit" logs, "off" allows all. Absent
+   * until the device has run its first task.
+   */
+  devicePolicyMode: z.enum(["off", "audit", "enforce"]).optional(),
+  /**
+   * Phone skill bundle the phone reported at its last skill sync
+   * (tabby-control skill.hello / ack / nack), and how that sync stands against
+   * the bundle tabby-control ships. Absent until the phone synced once.
+   */
+  skillBundleVersion: z.number().int().optional(),
+  skillSyncStatus: z
+    .enum(["unknown", "syncing", "current", "error", "incompatible"])
+    .optional(),
 });
 
 export const deviceListResponseSchema = z.object({

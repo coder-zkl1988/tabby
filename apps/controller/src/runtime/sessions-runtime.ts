@@ -26,6 +26,7 @@ import type { ControllerEnv } from "../app/env.js";
 import { logger } from "../lib/logger.js";
 import { ensureMediaCached, mediaCacheDir } from "../lib/media-cache.js";
 import { proxyFetch } from "../lib/proxy-fetch.js";
+import { isRestrictedTextSessionKey } from "../lib/restricted-text-session-key.js";
 import {
   type SessionsGatewayReader,
   gatewayHistoryTranscript,
@@ -1045,10 +1046,12 @@ export class SessionsRuntime {
           activeFileNames.add(fileName);
           // ":openai:" sessions are gateway /v1/chat/completions turns run AS
           // the agent (e.g. the team planner's planning turn) — internal
-          // machinery, not user conversations, same as subagent lanes.
+          // machinery, not user conversations, same as subagent lanes. So are
+          // restricted text-generation turns (e.g. the takeover diagnosis).
           if (
             indexKey.includes(":subagent:") ||
-            indexKey.includes(":openai:")
+            indexKey.includes(":openai:") ||
+            isRestrictedTextSessionKey(indexKey)
           ) {
             subagentFileNames.add(fileName);
           }

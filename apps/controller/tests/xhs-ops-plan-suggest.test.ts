@@ -1,4 +1,12 @@
-import type { XhsOpsAccount, XhsOpsRun } from "@nexu/shared";
+import {
+  type XhsOpsAccount,
+  type XhsOpsRun,
+  xhsOpsInterestWordCount,
+  xhsOpsPlanBudgetIssues,
+  xhsOpsProfileDraftSchema,
+  xhsOpsSegmentBudgetIssues,
+  xhsOpsToneGuideSchema,
+} from "@nexu/shared";
 import { describe, expect, it } from "vitest";
 import {
   homeFeedFromRatio,
@@ -14,6 +22,7 @@ function account(overrides: Partial<XhsOpsAccount> = {}): XhsOpsAccount {
   return {
     id: "acct-1",
     projectId: "p1",
+    entryMode: "new",
     label: "豆豆妈的周末计划",
     positioning: "",
     persona: {
@@ -23,6 +32,11 @@ function account(overrides: Partial<XhsOpsAccount> = {}): XhsOpsAccount {
       occupation: "",
       lifeStatus: "",
     },
+    personaTags: { general: [], vertical: [] },
+    personaReviewedAt: null,
+    personaReviewNote: null,
+    platformAccountId: "",
+    profileDraft: xhsOpsProfileDraftSchema.parse({}),
     deviceId: "dev-1",
     deviceName: "dev",
     interestPool: {
@@ -34,7 +48,7 @@ function account(overrides: Partial<XhsOpsAccount> = {}): XhsOpsAccount {
       like: { enabled: true, dailyCap: 5, ratioPercent: 10 },
       collect: { enabled: false, dailyCap: 2, ratioPercent: 3 },
       follow: { enabled: false, dailyCap: 0, ratioPercent: 0 },
-      comment: { enabled: false },
+      comment: { enabled: false, dailyCap: 0 },
     },
     browseDefaults: {
       dwellSecMin: 10,
@@ -45,6 +59,8 @@ function account(overrides: Partial<XhsOpsAccount> = {}): XhsOpsAccount {
       dailyTargetPosts: 0,
       dailySegments: 1,
     },
+    takeover: null,
+    toneGuide: xhsOpsToneGuideSchema.parse({}),
     createdAt: "2026-09-04T00:00:00.000Z",
     updatedAt: "2026-09-04T00:00:00.000Z",
     ...overrides,
@@ -120,6 +136,8 @@ describe("suggestPlan (P1-4 当日计划确定性生成)", () => {
           searchRatioPercent: 100,
           postsPerKeyword: 5,
           homeFeedCount: 6,
+          dailyTargetPosts: 0,
+          dailySegments: 1,
         },
       }),
       [],
@@ -358,5 +376,113 @@ describe("suggestDailyPlans (P2-3 当日容量拆分，可选能力)", () => {
     expect(chunkMaxSteps(6, "home")).toBe(100);
     expect(chunkMaxSteps(12, "home")).toBe(100);
     expect(chunkMaxSteps(8, "search")).toBe(100);
+  });
+});
+
+describe("xhsOpsPlanBudgetIssues agrees with plan-suggest (takeover §2.5)", () => {
+  const browse = account().browseDefaults;
+  // Duplicates across layers and padded copies must not count twice.
+  const words = ["亲子酒店", "周末遛娃", "带娃攻略", "周边游", "亲子旅行"];
+  const extra = ["北京周边游", "咖啡", "摄影", "家居", "露营"];
+  function pool(size: number): XhsOpsAccount["interestPool"] {
+    const distinct = [...words, ...extra].slice(0, size);
+    return {
+      core: distinct.slice(0, 4),
+      extended: [...distinct.slice(4, 7), ...distinct.slice(0, 1)],
+      general: [...distinct.slice(7), ` ${distinct[0] ?? ""} `, ""],
+    };
+  }
+
+  function planError(acct: XhsOpsAccount): string | null {
+    try {
+      suggestDailyPlans(acct, [], "2026-09-05");
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  it("rejects exactly the configs plan-suggest rejects, with its first message", () => {
+    let rejected = 0;
+    for (const target of [
+      0, 1, 13, 25, 29, 31, 40, 45, 59, 61, 89, 90, 91, 119, 150,
+    ]) {
+      for (const segments of [1, 2, 3]) {
+        for (const ratio of [0, 33, 50, 60, 67, 70, 80, 95, 100]) {
+          for (const size of [0, 1, 2, 3, 5, 8, 10]) {
+            const acct = account({
+              interestPool: pool(size),
+              browseDefaults: {
+                ...browse,
+                dailyTargetPosts: target,
+                dailySegments: segments,
+                searchRatioPercent: ratio,
+              },
+            });
+            const error = planError(acct);
+            const issues = xhsOpsPlanBudgetIssues(
+              acct.browseDefaults,
+              xhsOpsInterestWordCount(acct.interestPool),
+            );
+            const label = `${target}/${segments}/${ratio}%/${size} words`;
+            expect(issues.length > 0, label).toBe(error !== null);
+            // plan-suggest stops at the first segment, which is the largest.
+            if (error !== null) {
+              rejected += 1;
+              expect(issues[0], label).toBe(error);
+            }
+          }
+        }
+      }
+    }
+    expect(rejected).toBeGreaterThan(0);
+  });
+
+  it("raises the shared segment check's own message as its 409 (§2.5)", () => {
+    const acct = account({
+      interestPool: { core: ["亲子酒店"], extended: [], general: [] },
+      browseDefaults: {
+        ...browse,
+        dailyTargetPosts: 41,
+        dailySegments: 2,
+        searchRatioPercent: 80,
+      },
+    });
+    // The first of the two segments takes the remainder: 21 posts, 17 of them searched.
+    const [issue] = xhsOpsSegmentBudgetIssues(21, 80, 1);
+    expect(issue).toBe(
+      "本段搜索目标 17 篇至少需要 3 个兴趣词，当前只有 1 个，请补充兴趣池或增加每日分段",
+    );
+    let thrown: unknown = null;
+    try {
+      suggestDailyPlans(acct, [], "2026-09-05");
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toMatchObject({ status: 409, message: issue });
+  });
+
+  it("counts the words plan-suggest can draw on", () => {
+    expect(xhsOpsInterestWordCount(pool(3))).toBe(3);
+    expect(xhsOpsInterestWordCount(pool(10))).toBe(8);
+  });
+
+  it("fails an odd target on its larger first segment even when the second would fit", () => {
+    // 25 / 2 at 0% search: segments of 13 and 12 home posts; only 12 fits.
+    const acct = account({
+      interestPool: pool(0),
+      browseDefaults: {
+        ...browse,
+        dailyTargetPosts: 25,
+        dailySegments: 2,
+        searchRatioPercent: 0,
+      },
+    });
+    expect(planError(acct)).toBe(
+      "本段首页目标 13 篇超过上限 12，请提高搜索占比或增加每日分段",
+    );
+    expect(xhsOpsPlanBudgetIssues(acct.browseDefaults, 0)).toEqual([
+      "本段首页目标 13 篇超过上限 12，请提高搜索占比或增加每日分段",
+    ]);
   });
 });

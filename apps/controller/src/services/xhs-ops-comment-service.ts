@@ -95,10 +95,16 @@ export function buildCommentPrompt(input: {
 }): string {
   const { project, account, post } = input;
   const persona = formatPersona(account.persona);
+  // 接管号调性指南的评论语气（takeover §6.5）：运营确认过的一句，压成一行；
+  // 下面的规则和发出前的硬规则过滤照旧。
+  const commentStyle = (account.toneGuide?.commentStyle ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   return [
     `为一个小红书 KOC 账号给下面这篇笔记写 ${XHS_COMMENT_CANDIDATES} 条候选评论。只输出一行紧凑 JSON：{"candidates":["…","…","…"]}，不要解释。`,
     `账号定位：${account.label}｜${account.positioning}`,
     persona ? `人设：${persona}` : "",
+    commentStyle ? `评论语气（账号调性指南）：${commentStyle}` : "",
     `笔记标题：${post.title}`,
     post.author ? `作者：${post.author}` : "",
     post.summary ? `正文摘要：${post.summary}` : "",

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ControllerEnv } from "../src/app/env.js";
+import { restrictedTextSessionKey } from "../src/lib/restricted-text-session-key.js";
 import type { SessionsGatewayReader } from "../src/runtime/gateway-session-reader.js";
 import {
   SessionsRuntime,
@@ -199,6 +200,11 @@ describe("SessionsRuntime with gateway-owned SQLite persistence", () => {
         { ...row, key: "agent:main:main" },
         { ...row, key: "agent:bot-1:subagent:child" },
         { ...row, key: "agent:bot-1:openai:utility" },
+        // A restricted text-generation turn (takeover diagnosis), not a schedule.
+        {
+          ...row,
+          key: restrictedTextSessionKey("bot-1", "xhs-diagnosis", "gen-1"),
+        },
         { ...row, origin: { provider: "heartbeat" } },
       ],
     });

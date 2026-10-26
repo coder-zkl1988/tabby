@@ -9,6 +9,8 @@ import {
   type XhsOpsInteractionConfig,
   type XhsOpsInteractionCounts,
   type XhsOpsInteractionRule,
+  type XhsOpsNurtureContext,
+  type XhsOpsPlanSkip,
   type XhsOpsPlanSuggestion,
   type XhsOpsPreparation,
   type XhsOpsPreparationCode,
@@ -18,16 +20,23 @@ import {
   type XhsOpsRunCreate,
   type XhsOpsRunPlan,
   type XhsOpsRunSummary,
+  type XhsOpsSafetyPause,
   type XhsOpsStoreData,
   xhsOpsAccountNurtureIssues,
+  xhsOpsTakeoverPausedMessage,
 } from "@nexu/shared";
 import { logger } from "../lib/logger.js";
-import { XhsOpsError, localDateString } from "../lib/xhs-ops-common.js";
+import {
+  XhsOpsError,
+  XhsOpsTakeoverPausedError,
+  localDateString,
+} from "../lib/xhs-ops-common.js";
 export { XhsOpsError, localDateString } from "../lib/xhs-ops-common.js";
 import type { XhsOpsRunSeed, XhsOpsStore } from "../store/xhs-ops-store.js";
 import {
   DeviceControlRpcError,
   type DeviceControlService,
+  dispatchRejectionReason,
 } from "./device-control-service.js";
 import {
   computeCommentQuota,
@@ -37,13 +46,28 @@ import { suggestDailyPlans } from "./xhs-ops-plan-suggest.js";
 import {
   buildPreparationRequest,
   buildPreparationVerificationRequest,
+  buildTakeoverIdentityGateRequest,
   interpretPreparationResult,
+  interpretTakeoverGateResult,
   interruptPreparation,
   isPreparationSafetyStop,
   preparationReason,
+  takeoverGateReason,
+  takeoverSafetyPause,
 } from "./xhs-ops-preparation.js";
 import {
+  type XhsOpsTakeoverCallEnd,
+  type XhsOpsTakeoverPolicyBreach,
+  type XhsOpsTakeoverPolicyWatch,
+  takeoverDispatchRefusal,
+  taskIdFromError,
+  watchTakeoverPolicyMode,
+} from "./xhs-ops-takeover-phone.js";
+import type { XhsOpsTakeoverRecoveryState } from "./xhs-ops-takeover-recovery.js";
+import {
+  XHS_AUDIT_CLICK_LIMITS,
   type XhsOpsChunkQuota,
+  assessAuditReceipt,
   buildCommentChunkTask,
   buildHomeChunkTask,
   buildSearchChunkTask,
@@ -100,23 +124,124 @@ export const XHS_TASK_POLICY: DeviceTaskPolicy = {
   confirmationPolicy: { publish: "forbidden", payment: "forbidden" },
 };
 
+/**
+ * Read-only takeover tasks — identity, profile archive, audit parts A and B
+ * (takeover §3.2). A subset of XHS_TASK_POLICY: no TYPE or ENTER, no long
+ * press or drag, no SLIDE/FLING, only the app and system dialogs. What it
+ * cannot stop is a pure click — a stray like, a one-tap sign-in, sign-out —
+ * which only the task text and the after-the-fact checks cover.
+ */
+export const XHS_AUDIT_TASK_POLICY: DeviceTaskPolicy = {
+  operationClass: "app.use.xhs",
+  targetPackages: [XHS_PACKAGE],
+  allowedAppRoles: ["target_app", "system_dialog"],
+  allowedActions: [
+    "AWAKE",
+    "CLICK",
+    "WAIT",
+    "BACK",
+    "HOME",
+    "SCROLL",
+    "LOAD_SKILL",
+    "COMPLETE",
+    "ABORT",
+    "INFO",
+  ],
+  allowedApps: [XHS_PACKAGE],
+  confirmationPolicy: {
+    login: "forbidden",
+    publish: "forbidden",
+    payment: "forbidden",
+    comment: "forbidden",
+  },
+};
+
+/**
+ * Nurture chunks of an existing account: XHS_TASK_POLICY without the
+ * system_settings role — AWAKE 设置 opens all of system settings, where
+ * clearing the app's data signs the account out — and with login forbidden.
+ * XHS_TASK_POLICY itself stays: new-account nurture, readIdentity and
+ * readbackProfile still use it.
+ */
+export const XHS_EXISTING_TASK_POLICY: DeviceTaskPolicy = {
+  ...XHS_TASK_POLICY,
+  allowedAppRoles: ["target_app", "system_dialog"],
+  confirmationPolicy: {
+    ...XHS_TASK_POLICY.confirmationPolicy,
+    login: "forbidden",
+    comment: "forbidden",
+  },
+};
+
+/**
+ * Profile change orders of a taken-over account (D1): the existing-account
+ * policy minus ENTER (it sends comments and messages unchecked) and the long
+ * presses, which no takeover edit needs — it never touches the birthday
+ * wheel. FLING stays for the 200+ entry region list.
+ */
+export const XHS_TAKEOVER_APPLY_TASK_POLICY: DeviceTaskPolicy = {
+  ...XHS_EXISTING_TASK_POLICY,
+  allowedActions: [
+    "AWAKE",
+    "CLICK",
+    "TYPE",
+    "WAIT",
+    "BACK",
+    "HOME",
+    "SLIDE",
+    "SCROLL",
+    "FLING",
+    "LOAD_SKILL",
+    "COMPLETE",
+    "ABORT",
+    "INFO",
+  ],
+};
+
+/**
+ * The click reconciliation of a ready identity gate (§3.2 点击对账): more
+ * clicks than its expected navigation (XHS_AUDIT_CLICK_LIMITS.gate) — 「我」,
+ * 编辑主页 and one popup — or a report the phone's completion gate
+ * contradicted. A click count is only a hint, so these never fail the run;
+ * they ride on its preparation for a human to check the phone. A missing
+ * receipt line alone is left out: it says nothing about what was clicked.
+ */
+function gateReceiptWarnings(result: TaskResult): string[] {
+  const trust = assessAuditReceipt(result, {
+    packageName: XHS_PACKAGE,
+    clickLimit: XHS_AUDIT_CLICK_LIMITS.gate,
+  });
+  if (!trust.unexpectedClicks && !trust.contradicted) return [];
+  return trust.warnings
+    .filter(
+      (warning) =>
+        warning.startsWith("点击 ") || warning.startsWith("手机端完成校验"),
+    )
+    .map((warning) => `身份闸门${warning}，请到手机上看看资料是否被误改`)
+    .slice(0, 4);
+}
+
 /** Anomalies that end the whole run: the account must not keep browsing. */
 const SAFETY_STOP_TYPES: ReadonlySet<XhsOpsAnomalyType> = new Set([
   "login_required",
   "account_restricted",
   "rate_limited",
 ]);
+
 const MAX_CONSECUTIVE_FAILURES = 2;
 const MAX_MESSAGE_CHARS = 4000;
 const MAX_ERROR_CHARS = 200;
 const DEVICE_UNAVAILABLE = "设备不可用";
 const CANCELLATION_UNCONFIRMED =
   "手机任务停止未确认；请先在手机上确认任务已结束，同设备后续任务已隔离";
+const TAKEOVER_RECOVERY_PENDING = "控制器刚重启，接管任务的恢复检查还没完成";
 const MIN_NURTURE_DWELL_SECONDS = 11;
 
 export const XHS_OPS_DEFAULT_IDLE_POLL_MS = 3_000;
 export const XHS_OPS_DEFAULT_IDLE_WAIT_MS = 180_000;
 export const XHS_OPS_DEFAULT_OFFLINE_AFTER_MS = 90_000;
+/** How often an existing account's phone task is asked for the policy mode it reported. */
+export const XHS_OPS_DEFAULT_POLICY_POLL_MS = 2_000;
 
 export type XhsOpsDeviceControl = Pick<
   DeviceControlService,
@@ -127,14 +252,41 @@ export interface XhsOpsRunServiceOptions {
   idlePollIntervalMs?: number;
   idleWaitTimeoutMs?: number;
   offlineAfterMs?: number;
+  /**
+   * How long a phone dispatch waits for work this service does not own to
+   * leave the device — a takeover step's lock or a profile apply, a
+   * deviceHold, a running audit or change order, the takeover startup
+   * recovery — before the dispatch is skipped (§5.4 N3).
+   */
+  deviceWorkWaitMs?: number;
+  /** Poll interval of the first-progress policy check (§5.2 前提). */
+  policyPollIntervalMs?: number;
   now?: () => number;
 }
 
 export interface XhsOpsRunServiceDeps {
   store: XhsOpsStore;
   deviceControl: XhsOpsDeviceControl;
+  /**
+   * The takeover startup recovery (§2.6): a takeover account's phone
+   * dispatch waits for it to settle. Absent means none is pending.
+   */
+  takeoverRecovery?: XhsOpsTakeoverRecoveryState;
   options?: XhsOpsRunServiceOptions;
 }
+
+/** What one phone dispatch of a run may do now (waitForDispatch). */
+type DispatchSlot =
+  | { ok: true; device: DeviceInfo }
+  | {
+      ok: false;
+      code:
+        | "cancelled"
+        | "device_unavailable"
+        | "device_busy"
+        | "policy_not_enforce";
+      error: string;
+    };
 
 interface RunController {
   cancelled: boolean;
@@ -150,6 +302,7 @@ type ChunkOutcome = Pick<
   | "skipped"
   | "refreshCount"
   | "interactions"
+  | "alreadyLikedSkipped"
   | "anomalies"
   | "posts"
   | "observation"
@@ -177,32 +330,60 @@ export const XHS_COMMENT_WINDOW_START_HOUR = 8;
 export const XHS_COMMENT_WINDOW_END_HOUR = 23;
 export const XHS_COMMENT_MIN_GAP_AFTER_BROWSE_MS = 10 * 60_000;
 
-/** 评论任务的手机策略：仍禁发布/付款，评论放开但只放行这一条审核原文。 */
-export function commentTaskPolicy(text: string): DeviceTaskPolicy {
+/**
+ * 评论任务的手机策略：仍禁发布/付款，评论放开但只放行这一条审核原文。
+ * existing 账号以 XHS_EXISTING_TASK_POLICY 为 base：不带 system_settings，login 仍为 forbidden。
+ */
+export function commentTaskPolicy(
+  text: string,
+  base: DeviceTaskPolicy = XHS_TASK_POLICY,
+): DeviceTaskPolicy {
   return {
-    ...XHS_TASK_POLICY,
+    ...base,
     confirmationPolicy: {
-      ...XHS_TASK_POLICY.confirmationPolicy,
+      ...base.confirmationPolicy,
       comment: "allowed",
     },
     commentAllowlist: [text],
   };
 }
 
+/** Phone policy of one run chunk: an existing account's chunks build on XHS_EXISTING_TASK_POLICY (takeover §3.2). */
+export function chunkTaskPolicy(
+  entryMode: XhsOpsAccount["entryMode"] | null | undefined,
+  commentText: string | null,
+): DeviceTaskPolicy {
+  const base =
+    entryMode === "existing" ? XHS_EXISTING_TASK_POLICY : XHS_TASK_POLICY;
+  return commentText === null ? base : commentTaskPolicy(commentText, base);
+}
+
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** How a dispatch that threw ended, for the policy watch's last look. */
+function thrownCallEnd(error: unknown): XhsOpsTakeoverCallEnd {
+  return dispatchRejectionReason(error)
+    ? { kind: "rejected" }
+    : { kind: "lost", taskId: taskIdFromError(error) };
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * `context` carries the gate's facts outside the account row (§6.1): whether
+ * an audit of the account is running, and the day whose noNurtureDates apply.
+ */
 function nurturePlanIssues(
   account: XhsOpsAccount,
   project: XhsOpsProject | null,
   plan: XhsOpsRunPlan,
+  context: XhsOpsNurtureContext,
 ): string[] {
-  const issues = xhsOpsAccountNurtureIssues(account, project);
+  const issues = xhsOpsAccountNurtureIssues(account, project, context);
   if (plan.dwellSecMin < MIN_NURTURE_DWELL_SECONDS) {
     issues.push(`单篇最短停留必须至少 ${MIN_NURTURE_DWELL_SECONDS} 秒`);
   }
@@ -228,8 +409,9 @@ function assertNurtureReady(
   account: XhsOpsAccount,
   project: XhsOpsProject | null,
   plan: XhsOpsRunPlan,
+  context: XhsOpsNurtureContext,
 ): void {
-  const issues = nurturePlanIssues(account, project, plan);
+  const issues = nurturePlanIssues(account, project, plan, context);
   if (issues.length > 0) {
     throw new XhsOpsError(409, `养号准备未完成：${issues.join("；")}`);
   }
@@ -299,6 +481,7 @@ export function summarizeRun(
     durationMs: null,
   };
   let comments = 0;
+  let alreadyLikedSkipped = 0;
   for (const chunk of chunks) {
     if (chunk.mode === "comment") {
       // 评论 chunk 不算浏览篇数；计划/实际用"篇"口径会误导看板。
@@ -313,9 +496,13 @@ export function summarizeRun(
     summary.interactions.like += chunk.interactions.like;
     summary.interactions.collect += chunk.interactions.collect;
     summary.interactions.follow += chunk.interactions.follow;
+    alreadyLikedSkipped += chunk.alreadyLikedSkipped ?? 0;
     summary.anomalyCount += chunk.anomalies.length;
   }
   if (comments > 0) summary.interactions.comment = comments;
+  // 「已赞跳过 k 篇」 (§6.3): only existing accounts report it.
+  if (alreadyLikedSkipped > 0)
+    summary.alreadyLikedSkipped = alreadyLikedSkipped;
   if (startedAt && completedAt) {
     const duration = Date.parse(completedAt) - Date.parse(startedAt);
     summary.durationMs = Number.isFinite(duration)
@@ -486,6 +673,9 @@ export function interpretTaskResult(
     outcome.skipped = record.skipped;
     outcome.refreshCount = record.refreshCount;
     outcome.interactions = { ...record.interactions };
+    // Only an existing account's chunk asks for it (§6.3); absent stays absent.
+    if (record.alreadyLikedSkipped > 0)
+      outcome.alreadyLikedSkipped = record.alreadyLikedSkipped;
     anomalies.push(...record.anomalies);
     outcome.posts = record.posts;
     outcome.observation = record.observation;
@@ -556,20 +746,28 @@ export class XhsOpsRunService {
   private readonly deviceQueues = new Map<string, string[]>();
   private readonly store: XhsOpsStore;
   private readonly deviceControl: XhsOpsDeviceControl;
+  private readonly takeoverRecovery: XhsOpsTakeoverRecoveryState | undefined;
   private readonly idlePollIntervalMs: number;
   private readonly idleWaitTimeoutMs: number;
   private readonly offlineAfterMs: number;
+  private readonly deviceWorkWaitMs: number;
+  private readonly policyPollIntervalMs: number;
   private readonly now: () => number;
 
   constructor(deps: XhsOpsRunServiceDeps) {
     this.store = deps.store;
     this.deviceControl = deps.deviceControl;
+    this.takeoverRecovery = deps.takeoverRecovery;
     this.idlePollIntervalMs =
       deps.options?.idlePollIntervalMs ?? XHS_OPS_DEFAULT_IDLE_POLL_MS;
     this.idleWaitTimeoutMs =
       deps.options?.idleWaitTimeoutMs ?? XHS_OPS_DEFAULT_IDLE_WAIT_MS;
     this.offlineAfterMs =
       deps.options?.offlineAfterMs ?? XHS_OPS_DEFAULT_OFFLINE_AFTER_MS;
+    this.deviceWorkWaitMs =
+      deps.options?.deviceWorkWaitMs ?? XHS_OPS_DEFAULT_IDLE_WAIT_MS;
+    this.policyPollIntervalMs =
+      deps.options?.policyPollIntervalMs ?? XHS_OPS_DEFAULT_POLICY_POLL_MS;
     this.now = deps.options?.now ?? (() => Date.now());
   }
 
@@ -595,9 +793,16 @@ export class XhsOpsRunService {
 
   // ─── Lifecycle API ─────────────────────────────────────────────────────────
 
-  /** Plan a run (status `planned`). 404 unknown project/account, 400 no device. */
-  /** 为项目下每个已绑设备的账号生成当日计划建议（确定性，见 xhs-ops-plan-suggest.ts）。 */
-  async suggestPlans(projectId: string): Promise<XhsOpsPlanSuggestion[]> {
+  /**
+   * 为项目下每个已绑设备的账号生成当日计划建议（确定性，见 xhs-ops-plan-suggest.ts）。
+   * One account's 409 — an interest pool too small for its target, say — is
+   * that account's skip, not the project's failure (§5.3 #5): `onSkipped`
+   * hears it and the other accounts are still planned. Other errors throw.
+   */
+  async suggestPlans(
+    projectId: string,
+    options: { onSkipped?: (skip: XhsOpsPlanSkip) => void } = {},
+  ): Promise<XhsOpsPlanSuggestion[]> {
     const project = await this.store.getProject(projectId);
     if (!project) throw new XhsOpsError(404, "项目不存在");
     const accounts = await this.store.listAccountsByProject(projectId);
@@ -605,17 +810,32 @@ export class XhsOpsRunService {
     for (const account of accounts) {
       if (!account.deviceId) continue;
       const runs = await this.store.listRuns({ accountId: account.id });
-      plans.push(
-        ...suggestDailyPlans(
-          account,
-          runs,
-          localDateString(new Date(this.now())),
-        ),
-      );
+      try {
+        plans.push(
+          ...suggestDailyPlans(
+            account,
+            runs,
+            localDateString(new Date(this.now())),
+          ),
+        );
+      } catch (error) {
+        if (!(error instanceof XhsOpsError) || error.status !== 409)
+          throw error;
+        logger.warn(
+          { projectId, accountId: account.id, reason: error.message },
+          "xhs-ops: no plan suggestion for one account",
+        );
+        options.onSkipped?.({
+          accountId: account.id,
+          accountLabel: account.label,
+          reason: error.message,
+        });
+      }
     }
     return plans;
   }
 
+  /** Plan a run (status `planned`). 404 unknown project/account, 400 no device. */
   async createRun(
     input: XhsOpsRunCreate,
     options?: { onCreated?: () => void },
@@ -643,8 +863,14 @@ export class XhsOpsRunService {
     if (!account.deviceId) {
       throw new XhsOpsError(400, "账号未绑定设备，无法创建运行计划");
     }
+    const date = input.date ?? localDateString(new Date(this.now()));
     if ((input.plan.kind ?? "browse") === "browse")
-      assertNurtureReady(account, project, input.plan);
+      assertNurtureReady(
+        account,
+        project,
+        input.plan,
+        this.nurtureContext(date),
+      );
     await this.store.assertDeviceBinding(account.id, account.deviceId);
     if (input.segment && input.segment.index > input.segment.count) {
       throw new XhsOpsError(400, "计划分段序号不能超过总段数");
@@ -665,7 +891,7 @@ export class XhsOpsRunService {
       accountId: account.id,
       deviceId: account.deviceId,
       accountLabel: account.label,
-      date: input.date ?? localDateString(new Date(this.now())),
+      date,
       status: "planned",
       plan: input.plan,
       segment: input.segment ?? null,
@@ -696,7 +922,10 @@ export class XhsOpsRunService {
           const currentProject = current.projects.find(
             (candidate) => candidate.id === seed.projectId,
           );
-          assertNurtureReady(bound, currentProject ?? null, seed.plan);
+          // A running audit shows as bound.takeover.activeAuditId.
+          assertNurtureReady(bound, currentProject ?? null, seed.plan, {
+            today: seed.date,
+          });
         }
         if (claimComments) this.validateCommentPlan(seed, current);
       },
@@ -714,6 +943,12 @@ export class XhsOpsRunService {
     const account = current.accounts.find((a) => a.id === run.accountId);
     if (!account || account.deviceId !== run.deviceId)
       throw new XhsOpsError(409, "评论账号绑定已变化");
+    // A paused takeover sends nothing; comment runs skip the nurture gate (§6.5).
+    const pause = account.takeover?.safetyPause;
+    if (pause)
+      throw new XhsOpsTakeoverPausedError(
+        xhsOpsTakeoverPausedMessage(pause.reason),
+      );
     if (
       run.date !== today ||
       now.getHours() < XHS_COMMENT_WINDOW_START_HOUR ||
@@ -806,6 +1041,9 @@ export class XhsOpsRunService {
         projects: project ? [project] : [],
         runs: await this.store.listRuns({ accountId: run.accountId }),
         comments: await this.store.listComments({ accountId: run.accountId }),
+        audits: [],
+        diagnoses: [],
+        changeOrders: [],
       },
       chunkDraftId,
       run.id,
@@ -948,6 +1186,7 @@ export class XhsOpsRunService {
         account,
         await this.store.getProject(run.projectId),
         run.plan,
+        this.nurtureContext(),
       );
     }
     await this.assertDeviceSafe(run);
@@ -1625,7 +1864,11 @@ export class XhsOpsRunService {
       ...current,
       preparation,
     }));
-    const fail = (code: XhsOpsPreparationCode) => {
+    // An existing account's preparation is the identity gate, which runs
+    // before comment runs too: its texts say nothing of 养号.
+    const reasonFor =
+      account.entryMode === "existing" ? takeoverGateReason : preparationReason;
+    const fail = (code: XhsOpsPreparationCode, reason?: string) => {
       const reasonCode = isPreparationSafetyStop(preparation.reasonCode)
         ? preparation.reasonCode
         : code;
@@ -1633,17 +1876,34 @@ export class XhsOpsRunService {
         ...preparation,
         status: "failed",
         reasonCode,
-        reason: preparationReason(reasonCode),
+        reason: reason && reasonCode === code ? reason : reasonFor(reasonCode),
       };
+    };
+    /** A slot that is not ok: the wait's own reason, except the old idle-wait text. */
+    const failSlot = (slot: Exclude<DispatchSlot, { ok: true }>) => {
+      if (slot.code === "cancelled") return;
+      fail(
+        slot.code,
+        slot.code === "device_unavailable" ? undefined : slot.error,
+      );
     };
     let cancellationUnconfirmed = false;
     try {
-      const idle = await this.waitForIdle(controller);
-      if (!idle.ok) {
-        fail("device_unavailable");
+      const slot = await this.waitForDispatch(run, account, controller);
+      if (!slot.ok) {
+        failSlot(slot);
       } else if (!controller.cancelled) {
         await this.store.assertDeviceBinding(run.accountId, run.deviceId);
-        if (!controller.cancelled) {
+        if (!controller.cancelled && account.entryMode === "existing") {
+          const gate = await this.runIdentityGate(
+            run,
+            account,
+            controller,
+            preparation,
+          );
+          preparation = gate.preparation;
+          cancellationUnconfirmed = gate.cancellationUnconfirmed;
+        } else if (!controller.cancelled) {
           let { result } = await this.deviceControl.executeTask(
             run.deviceId,
             buildPreparationRequest(XHS_PACKAGE, account.platformAccountId),
@@ -1664,9 +1924,11 @@ export class XhsOpsRunService {
                 reason: "正在复核登录状态并补全验证回执",
               },
             }));
-            const idle = await this.waitForIdle(controller);
-            if (!idle.ok) {
-              fail("device_unavailable");
+            const retry = await this.waitForDispatch(run, account, controller);
+            if (!retry.ok) {
+              // The first wait's codes and texts (device_busy keeps its own);
+              // a cancel records nothing here, the cancel wins below.
+              failSlot(retry);
             } else if (!controller.cancelled) {
               ({ result } = await this.deviceControl.executeTask(
                 run.deviceId,
@@ -1684,7 +1946,7 @@ export class XhsOpsRunService {
             controller.cancelled = true;
           preparation = {
             ...preparation,
-            ...(preparation.reasonCode === "device_unavailable"
+            ...(preparation.status === "failed"
               ? {}
               : interpretPreparationResult(result)),
             taskId: result.taskId,
@@ -1757,7 +2019,7 @@ export class XhsOpsRunService {
         ...preparation,
         status: "cancelled",
         reasonCode: code,
-        reason: preparationReason(code),
+        reason: reasonFor(code),
       };
     }
     preparation = {
@@ -1779,6 +2041,239 @@ export class XhsOpsRunService {
     return preparation.status === "ready" ? null : preparation.reason;
   }
 
+  /**
+   * The pre-run identity gate (§5.3 #7, §6.1) that every existing account
+   * runs in place of the login-capable preparation — a takeover and an old
+   * existing row whose takeover never started alike: the takeover identity
+   * gate against the account's 小红书号, read-only, no TYPE, no SMS app,
+   * login forbidden, under the first-progress policy check (§5.2 前提). A
+   * takeover keeps what the gate found as its safety pause, with the resume
+   * gate's mapping (phone_required → login_required, account_mismatch, a
+   * risk code with the 48-hour cooldown). An old row has nowhere to keep a
+   * pause: only its run fails, with what the account owner has to do, and
+   * the scheduler's next round runs the gate again.
+   */
+  private async runIdentityGate(
+    run: XhsOpsRun,
+    account: XhsOpsAccount,
+    controller: RunController,
+    initial: XhsOpsPreparation,
+  ): Promise<{
+    preparation: XhsOpsPreparation;
+    cancellationUnconfirmed: boolean;
+  }> {
+    let preparation = initial;
+    let cancellationUnconfirmed = false;
+    const watch = this.policyWatch(run, account);
+    let result: TaskResult;
+    try {
+      ({ result } = await this.deviceControl.executeTask(
+        run.deviceId,
+        buildTakeoverIdentityGateRequest(
+          XHS_PACKAGE,
+          account.platformAccountId,
+        ),
+      ));
+    } catch (error) {
+      // prepareOnDevice keeps the gate open: the phone may still be running it.
+      await watch?.finish(thrownCallEnd(error));
+      throw error;
+    }
+    const breach = (await watch?.finish({ kind: "result", result })) ?? null;
+    if (
+      !breach &&
+      result.status === "aborted" &&
+      result.errorCode === "USER_CANCELLED"
+    )
+      controller.cancelled = true;
+    preparation = {
+      ...preparation,
+      ...interpretTakeoverGateResult(result),
+      taskId: result.taskId,
+    };
+    if (preparation.status === "ready") {
+      const warnings = gateReceiptWarnings(result);
+      if (warnings.length > 0) {
+        preparation = { ...preparation, warnings };
+        logger.warn(
+          { runId: run.id, accountId: account.id, taskId: result.taskId },
+          "xhs-ops: identity gate receipt needs a look, run goes ahead",
+        );
+      }
+    }
+    if (result.needsInteraction && !breach?.stopped) {
+      // CALL_USER returns before the phone task ends: stop it by its own id.
+      try {
+        await this.store.updateRun(run.id, (current) => ({
+          ...current,
+          preparation: { ...preparation, status: "running" },
+        }));
+      } finally {
+        const stopped = await this.stopPreparationTask(
+          run.deviceId,
+          result.taskId,
+        );
+        const safety = isPreparationSafetyStop(preparation.reasonCode)
+          ? preparation.reasonCode
+          : null;
+        if (!stopped) {
+          cancellationUnconfirmed = true;
+          preparation = {
+            ...preparation,
+            status: "running",
+            reasonCode: safety ?? "dispatch_failed",
+            reason: CANCELLATION_UNCONFIRMED,
+          };
+        } else {
+          preparation = {
+            ...preparation,
+            status: "blocked",
+            reasonCode: safety ?? "verification_required",
+            reason: takeoverGateReason(safety ?? "verification_required"),
+          };
+        }
+      }
+    }
+    if (breach && !cancellationUnconfirmed) {
+      preparation = {
+        ...preparation,
+        status: "failed",
+        reasonCode: "policy_not_enforce",
+        reason: breach.reason,
+      };
+    } else if (!breach && preparation.status !== "running") {
+      const pause = takeoverSafetyPause(preparation.reasonCode, "run");
+      if (pause) await this.pauseTakeover(run, pause);
+    }
+    return { preparation, cancellationUnconfirmed };
+  }
+
+  /**
+   * The first-progress policy check (§5.2 前提) of an existing account's
+   * phone task; null for a new account. A mode other than enforce stops the
+   * task at once and pauses a takeover (manual); an old existing row only
+   * fails its run.
+   */
+  private policyWatch(
+    run: XhsOpsRun,
+    account: XhsOpsAccount | null,
+  ): XhsOpsTakeoverPolicyWatch | null {
+    if (account?.entryMode !== "existing") return null;
+    return watchTakeoverPolicyMode(this.deviceControl, {
+      deviceId: run.deviceId,
+      pollIntervalMs: this.policyPollIntervalMs,
+      onBreach: (breach: XhsOpsTakeoverPolicyBreach) =>
+        this.pauseTakeover(run, { code: "manual", reason: breach.reason }),
+    });
+  }
+
+  /**
+   * A safety pause a run raises on its takeover (§6.5). An existing row
+   * whose takeover never started has nowhere to keep one and is left alone;
+   * a failed write is logged, the run's own outcome stands.
+   */
+  private async pauseTakeover(
+    run: XhsOpsRun,
+    pause: { code: XhsOpsSafetyPause["code"]; reason: string },
+  ): Promise<void> {
+    const account = await this.store.getAccount(run.accountId);
+    if (!account?.takeover) return;
+    try {
+      await this.store.pauseTakeover(account.id, {
+        ...pause,
+        sourceRef: run.id,
+      });
+      logger.warn(
+        { runId: run.id, accountId: account.id, code: pause.code },
+        "xhs-ops: takeover paused by a run",
+      );
+    } catch (error) {
+      logger.warn(
+        { runId: run.id, accountId: account.id, error: describe(error) },
+        "xhs-ops: pausing the takeover from a run failed",
+      );
+    }
+  }
+
+  /**
+   * The gate's facts outside the account row (§6.1): the day for
+   * noNurtureDates. A running audit is on the row (takeover.activeAuditId).
+   */
+  private nurtureContext(date?: string): XhsOpsNurtureContext {
+    return { today: date ?? localDateString(new Date(this.now())) };
+  }
+
+  /**
+   * Work on the run's device this service does not own (§5.4 N3): what
+   * store.runDispatchBlocker reports — a takeover step's or profile apply's
+   * lock, a deviceHold, a running audit, the active change order — and, for
+   * a takeover account, a startup recovery that has not settled (§2.6).
+   */
+  private async deviceWorkBlocker(
+    run: XhsOpsRun,
+    account: XhsOpsAccount,
+  ): Promise<string | null> {
+    if (account.takeover && this.takeoverRecovery?.settled === false)
+      return TAKEOVER_RECOVERY_PENDING;
+    return this.store.runDispatchBlocker(run.accountId, run.deviceId);
+  }
+
+  /**
+   * Everything one phone dispatch of a run waits for: the device free of
+   * work this service does not own (deviceWorkBlocker) — waiting up to
+   * deviceWorkWaitMs, after which the dispatch is skipped — and idle
+   * (waitForIdle). An existing account's task then needs the device's last
+   * reported policy mode to be enforce or not reported yet (§5.2 前提); any
+   * other mode refuses it at once.
+   */
+  private async waitForDispatch(
+    run: XhsOpsRun,
+    account: XhsOpsAccount,
+    controller: RunController,
+  ): Promise<DispatchSlot> {
+    const deadline = this.now() + this.deviceWorkWaitMs;
+    for (;;) {
+      if (controller.cancelled)
+        return { ok: false, code: "cancelled", error: "已取消" };
+      let blocker = await this.deviceWorkBlocker(run, account);
+      if (blocker === null) {
+        const idle = await this.waitForIdle(controller);
+        if (!idle.ok)
+          return {
+            ok: false,
+            code: controller.cancelled ? "cancelled" : "device_unavailable",
+            error: idle.error,
+          };
+        // Other work may have taken the phone while it was turning idle.
+        blocker = await this.deviceWorkBlocker(run, account);
+        if (blocker === null) {
+          const refusal =
+            account.entryMode === "existing"
+              ? takeoverDispatchRefusal(idle.device)
+              : null;
+          if (refusal === null) return { ok: true, device: idle.device };
+          logger.warn(
+            { runId: run.id, deviceId: run.deviceId },
+            "xhs-ops: dispatch refused, phone policy mode is not enforce",
+          );
+          return { ok: false, code: "policy_not_enforce", error: refusal };
+        }
+      }
+      if (this.now() >= deadline) {
+        logger.warn(
+          { runId: run.id, deviceId: run.deviceId, blocker },
+          "xhs-ops: device kept by other work, dispatch skipped",
+        );
+        return {
+          ok: false,
+          code: "device_busy",
+          error: `${blocker}；等待超时，本次已跳过`,
+        };
+      }
+      await sleep(this.idlePollIntervalMs);
+    }
+  }
+
   private async execute(
     run: XhsOpsRun,
     account: XhsOpsAccount,
@@ -1787,7 +2282,13 @@ export class XhsOpsRunService {
     let consecutiveFailures = 0;
     let stopReason: string | null = null;
 
-    if (run.plan.kind !== "comment" && !controller.cancelled) {
+    // Every run of an existing account passes the identity gate first, a
+    // comment run included (§6.1, §8.2 误判身份 ④); a new account's comment
+    // run has no preparation.
+    if (
+      (run.plan.kind !== "comment" || account.entryMode === "existing") &&
+      !controller.cancelled
+    ) {
       stopReason = await this.prepareOnDevice(run, account, controller);
     }
 
@@ -1806,7 +2307,7 @@ export class XhsOpsRunService {
         continue;
       }
 
-      const idle = await this.waitForIdle(controller);
+      const slot = await this.waitForDispatch(run, account, controller);
       if (controller.cancelled) {
         await this.patchChunk(run.id, chunk.index, (c) => ({
           ...c,
@@ -1815,16 +2316,18 @@ export class XhsOpsRunService {
         }));
         continue;
       }
-      if (!idle.ok) {
-        stopReason = idle.error;
+      if (!slot.ok) {
+        const error = slot.error;
+        stopReason = error;
+        // Kept by other work past the wait (N3): this chunk never went out.
         await this.patchChunk(run.id, chunk.index, (c) => ({
           ...c,
-          status: "failed",
+          status: slot.code === "device_busy" ? "skipped" : "failed",
           completedAt: this.nowIso(),
-          error: idle.error,
+          error,
         }));
         logger.warn(
-          { runId: run.id, chunk: chunk.index, error: idle.error },
+          { runId: run.id, chunk: chunk.index, error },
           "xhs-ops: device not ready, stopping run",
         );
         continue;
@@ -1841,6 +2344,7 @@ export class XhsOpsRunService {
             currentAccount,
             await this.store.getProject(run.projectId),
             run.plan,
+            this.nurtureContext(),
           );
         } catch (error: unknown) {
           stopReason = error instanceof Error ? error.message : String(error);
@@ -1894,11 +2398,15 @@ export class XhsOpsRunService {
         },
         "xhs-ops: chunk finished",
       );
-      if (controller.cancelled) continue;
-
       const fatal = outcome.anomalies.find((a) =>
         SAFETY_STOP_TYPES.has(a.type),
       );
+      // A takeover keeps the stop as its safety pause, a cancel or not; an
+      // existing row without a takeover has nowhere to keep one (§6.5).
+      const pause = fatal ? takeoverSafetyPause(fatal.type, "chunk") : null;
+      if (pause) await this.pauseTakeover(run, pause);
+      if (controller.cancelled) continue;
+
       if (fatal) {
         stopReason = `安全停机：手机报告 ${fatal.type}${fatal.detail ? `（${fatal.detail}）` : ""}`;
         continue;
@@ -1968,6 +2476,10 @@ export class XhsOpsRunService {
       dwellSecMin: run.plan.dwellSecMin,
       dwellSecMax: run.plan.dwellSecMax,
       quota,
+      existingAccount:
+        account?.entryMode === "existing"
+          ? { maturity: account.takeover?.maturity ?? null }
+          : null,
     };
     const comment =
       chunk.mode === "comment"
@@ -2000,6 +2512,7 @@ export class XhsOpsRunService {
           postTitle: comment.postTitle,
           postAuthor: comment.postAuthor,
           text: comment.text,
+          existingAccount: base.existingAccount !== null,
         })
       : chunk.mode === "search"
         ? buildSearchChunkTask({
@@ -2014,16 +2527,21 @@ export class XhsOpsRunService {
       timeout: XHS_CHUNK_TIMEOUT_MS,
       allowedApps: [XHS_PACKAGE],
       // 评论 chunk：手机策略放开评论但只放行这一条审核原文（逐字白名单）。
-      taskPolicy: comment ? commentTaskPolicy(comment.text) : XHS_TASK_POLICY,
+      taskPolicy: chunkTaskPolicy(account?.entryMode, comment?.text ?? null),
     };
 
     let outcome: ChunkOutcome;
+    const watch = this.policyWatch(run, account);
     try {
       const taskStartedAt = this.now();
-      const { result } = await this.deviceControl.executeTask(
-        run.deviceId,
-        body,
-      );
+      let result: TaskResult;
+      try {
+        ({ result } = await this.deviceControl.executeTask(run.deviceId, body));
+      } catch (error) {
+        await watch?.finish(thrownCallEnd(error));
+        throw error;
+      }
+      const breach = (await watch?.finish({ kind: "result", result })) ?? null;
       const record = comment ? null : parseRecordJson(result.message);
       const evidenceQuota = comment
         ? quota
@@ -2043,11 +2561,12 @@ export class XhsOpsRunService {
             quota: evidenceQuota,
           });
       if (
+        !breach &&
         result.status === "aborted" &&
         result.errorCode === "USER_CANCELLED"
       ) {
         controller.cancelled = true;
-      } else if (result.needsInteraction) {
+      } else if (result.needsInteraction && !breach?.stopped) {
         // CALL_USER is not a terminal result: the phone can otherwise resume
         // after its human-wait timer. Keep this chunk running until stop is acked.
         let stopped = false;
@@ -2065,6 +2584,17 @@ export class XhsOpsRunService {
         outcome.error = stopped
           ? "手机需要人工处理，已确认停止，后续养号任务已暂停"
           : "手机需要人工处理，但尚未确认停止；请在手机上检查任务状态";
+      }
+      if (breach) {
+        // §5.2 前提: the phone ran it without its mechanical gates. What it
+        // recorded stays on the chunk; the run stops, a takeover is paused.
+        const unconfirmed = outcome.status === "running";
+        outcome.status = unconfirmed ? "running" : "failed";
+        outcome.stopRun = true;
+        outcome.anomalies.push({ type: "other", detail: breach.reason });
+        outcome.error = unconfirmed
+          ? `${breach.reason}；但尚未确认停止，请在手机上检查任务状态`
+          : breach.reason;
       }
     } catch (error: unknown) {
       const reason = describe(error).slice(0, MAX_ERROR_CHARS);
@@ -2101,7 +2631,7 @@ export class XhsOpsRunService {
    */
   private async waitForIdle(
     controller: RunController,
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+  ): Promise<{ ok: true; device: DeviceInfo } | { ok: false; error: string }> {
     const deadline = this.now() + this.idleWaitTimeoutMs;
     let lastProbeError: string | null = null;
     for (;;) {
@@ -2124,7 +2654,7 @@ export class XhsOpsRunService {
         if (this.now() - device.lastSeen > this.offlineAfterMs) {
           return { ok: false, error: DEVICE_UNAVAILABLE };
         }
-        if (device.status === "idle") return { ok: true };
+        if (device.status === "idle") return { ok: true, device };
       }
       if (this.now() >= deadline) {
         return {

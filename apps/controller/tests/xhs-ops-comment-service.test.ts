@@ -1,10 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-  XhsOpsAccount,
-  XhsOpsCommentDraft,
-  XhsOpsRun,
+import {
+  type XhsOpsAccount,
+  type XhsOpsCommentDraft,
+  type XhsOpsRun,
+  xhsOpsToneGuideSchema,
 } from "@nexu/shared";
 import { afterAll, describe, expect, it } from "vitest";
 import {
@@ -57,6 +58,7 @@ function account(overrides: Partial<XhsOpsAccount> = {}): XhsOpsAccount {
   return {
     id: "a1",
     projectId: "p1",
+    entryMode: "new",
     label: "豆豆妈",
     positioning: "周末遛娃",
     persona: {
@@ -66,6 +68,10 @@ function account(overrides: Partial<XhsOpsAccount> = {}): XhsOpsAccount {
       occupation: "产品经理",
       lifeStatus: "2岁娃妈",
     },
+    personaTags: { general: [], vertical: [] },
+    personaReviewedAt: null,
+    personaReviewNote: null,
+    platformAccountId: "",
     profileDraft: {} as never,
     deviceId: "dev-1",
     deviceName: "dev-1",
@@ -77,6 +83,8 @@ function account(overrides: Partial<XhsOpsAccount> = {}): XhsOpsAccount {
       comment: { enabled: true, dailyCap: 2 },
     },
     browseDefaults: {} as never,
+    takeover: null,
+    toneGuide: xhsOpsToneGuideSchema.parse({}),
     createdAt: "2026-09-06T00:00:00.000Z",
     updatedAt: "2026-09-06T00:00:00.000Z",
     ...overrides,
@@ -188,6 +196,57 @@ describe("XhsOpsCommentService", () => {
     expect(prompt).toContain('{"candidates"');
   });
 
+  it("adds the takeover tone guide's comment style as one line, and nothing without one (§6.5, #11)", async () => {
+    const store = new XhsOpsStore(join(tempDir, "tone.json"));
+    const project = await store.createProject({
+      name: "P",
+      opsNotes: {
+        forbiddenTopics: ["医美"],
+        boostKeywords: [],
+        avoidContentTypes: [],
+      },
+    });
+    const post = { title: "亲子房天花板", author: "满哥", summary: "" };
+    const plain = buildCommentPrompt({
+      project,
+      account: account({ projectId: project.id }),
+      post,
+    });
+    expect(plain).not.toContain("评论语气");
+    const toned = buildCommentPrompt({
+      project,
+      account: account({
+        projectId: project.id,
+        toneGuide: xhsOpsToneGuideSchema.parse({
+          commentStyle: "像朋友一样聊，\n多用短句",
+        }),
+      }),
+      post,
+    });
+    const lines = toned.split("\n");
+    expect(lines.filter((line) => line.includes("评论语气"))).toEqual([
+      "评论语气（账号调性指南）：像朋友一样聊， 多用短句",
+    ]);
+    // Everything else is the prompt it was, rules and forbidden topics included.
+    expect(lines.filter((line) => !line.includes("评论语气"))).toEqual(
+      plain.split("\n"),
+    );
+    // The hard rules still decide what may be sent.
+    expect(validateCommentText("像朋友一样聊多用短句真好")).toContain(
+      "超过 10 字",
+    );
+    expect(
+      buildCommentPrompt({
+        project,
+        account: account({
+          projectId: project.id,
+          toneGuide: xhsOpsToneGuideSchema.parse({ commentStyle: "   " }),
+        }),
+        post,
+      }),
+    ).toBe(plain);
+  });
+
   it("generateForRun keeps only valid, unused candidates and still creates an empty draft when all fail", async () => {
     const store = new XhsOpsStore(join(tempDir, "gen.json"));
     const project = await store.createProject({ name: "P" });
@@ -239,6 +298,7 @@ describe("XhsOpsCommentService", () => {
             completedAt: null,
             browsed: 2,
             skipped: 0,
+            refreshCount: 0,
             interactions: { like: 0, collect: 0, follow: 0 },
             anomalies: [],
             observation: null,
@@ -252,6 +312,8 @@ describe("XhsOpsCommentService", () => {
                 author: "作者A",
                 action: "none",
                 commentsRead: 3,
+                dwellSeconds: 12,
+                commentsComplete: true,
                 commentWorthy: true,
                 summary: "泳池很大",
               },
@@ -260,6 +322,8 @@ describe("XhsOpsCommentService", () => {
                 author: "作者B",
                 action: "none",
                 commentsRead: 3,
+                dwellSeconds: 12,
+                commentsComplete: true,
                 commentWorthy: true,
                 summary: "",
               },

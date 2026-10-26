@@ -1,4 +1,5 @@
 import type { SessionResponse } from "@nexu/shared";
+import { isRestrictedTextSessionKey } from "../lib/restricted-text-session-key.js";
 
 /** Read through the gateway so OpenClaw retains ownership of its SQLite schema. */
 export interface SessionsGatewayReader {
@@ -62,6 +63,7 @@ export function sessionFromGatewayRow(value: unknown): SessionResponse | null {
     botId === "main" ||
     sessionKey.includes(":subagent:") ||
     sessionKey.includes(":openai:") ||
+    isRestrictedTextSessionKey(sessionKey) ||
     origin.provider === "heartbeat"
   ) {
     return null;

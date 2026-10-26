@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { DeviceInfo } from "@nexu/shared";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { type ReactNode, useState } from "react";
@@ -554,13 +555,23 @@ export function formatDurationMs(ms: number | null | undefined): string {
 
 // ── Devices ──────────────────────────────────────────────────
 
-export interface XhsOpsDevice {
-  deviceId: string;
-  name?: string;
-  model?: string;
-  status: "idle" | "busy" | "error";
-  lastSeen: number;
-}
+/**
+ * The fields of a connected phone the xhs-ops cards read, straight from the
+ * shared device schema (deviceInfoSchema): skillBundleVersion /
+ * skillSyncStatus are absent before the phone's first skill sync,
+ * devicePolicyMode until a task reported since it last connected.
+ */
+export type XhsOpsDevice = Pick<
+  DeviceInfo,
+  | "deviceId"
+  | "name"
+  | "model"
+  | "status"
+  | "lastSeen"
+  | "skillBundleVersion"
+  | "skillSyncStatus"
+  | "devicePolicyMode"
+>;
 
 /** A phone that has not reported in for this long is shown as offline. */
 const DEVICE_OFFLINE_AFTER_MS = 90_000;
@@ -598,7 +609,7 @@ export function useXhsOpsDevices(): {
     refetchInterval: 10_000,
   });
   return {
-    devices: (data?.devices ?? []) as XhsOpsDevice[],
+    devices: data?.devices ?? [],
     error: error ? "设备列表加载失败，稍后自动重试" : null,
   };
 }
