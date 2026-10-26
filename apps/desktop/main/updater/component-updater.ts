@@ -19,7 +19,7 @@ const GITHUB_BASE_URL =
   "https://github.com/coder-zkl1988/tabby/releases/download";
 // Auto-update feed host. The desktop release workflow publishes the per-arch
 // update manifests + artifacts under this base on Cloudflare R2.
-export const R2_BASE_URL = "https://downloads.picaso.studio/updates";
+export const R2_BASE_URL = "https://downloads.happywork.today/updates";
 
 export type ComponentInfo = {
   id: string;

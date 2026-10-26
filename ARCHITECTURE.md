@@ -73,7 +73,7 @@ Never hand-write types that duplicate a schema. Use `z.infer<typeof schema>`.
 
 **Feishu events:** Feishu uses a long-lived runtime connection driven by the controller-compiled OpenClaw config.
 
-**Skill catalog:** `tabby.picaso.studio` mirrors the complete ClawHub catalog into Cloudflare D1 every Monday and Thursday, three to four days apart. The controller reads its cursor-based public API for catalog/search/facets and keeps install, update, uninstall, and ledger state local; desktop clients never run a scheduled full-catalog sync. Repo-local skills remain file-based, and the local runtime watches the managed skills directory for hot-reload.
+**Skill catalog:** `tabby.happywork.today` mirrors the complete ClawHub catalog into Cloudflare D1 every Monday and Thursday, three to four days apart. The controller reads its cursor-based public API for catalog/search/facets and keeps install, update, uninstall, and ledger state local; desktop clients never run a scheduled full-catalog sync. Repo-local skills remain file-based, and the local runtime watches the managed skills directory for hot-reload.
 
 ## Persistence
 

@@ -94,7 +94,8 @@ export function WecomSetupView({
 
   const wecomDeveloperCenterUrl =
     "https://work.weixin.qq.com/wework_admin/frame#/aiHelper/list?from=manage_tools";
-  const wecomDocsUrl = "https://tabby.picaso.studio/docs/guide/channels/wecom";
+  const wecomDocsUrl =
+    "https://tabby.happywork.today/docs/guide/channels/wecom";
 
   return (
     <div className="p-5 rounded-xl border bg-surface-1 border-border">

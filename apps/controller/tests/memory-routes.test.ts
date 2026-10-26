@@ -68,7 +68,7 @@ function createApp(options: {
 describe("memory routes", () => {
   it("defaults legacy configs to private workspace memory", () => {
     const parsed = nexuConfigSchema.parse({
-      $schema: "https://tabby.picaso.studio/config.json",
+      $schema: "https://tabby.happywork.today/config.json",
       schemaVersion: 2,
       runtime: {
         gateway: { port: 18789, bind: "loopback", authMode: "none" },

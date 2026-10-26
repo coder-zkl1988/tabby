@@ -3,7 +3,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
 export const DEFAULT_MAC_UPDATE_BASE_URL =
-  "https://downloads.picaso.studio/updates";
+  "https://downloads.happywork.today/updates";
 
 function assertSupportedMacArch(arch) {
   if (arch === "arm64" || arch === "x64") {

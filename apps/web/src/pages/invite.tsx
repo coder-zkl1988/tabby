@@ -278,7 +278,7 @@ export function InvitePage() {
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
           <a
-            href="https://tabby.picaso.studio/terms"
+            href="https://tabby.happywork.today/terms"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-text-secondary transition-colors"
@@ -287,7 +287,7 @@ export function InvitePage() {
           </a>
           <span className="text-border">&middot;</span>
           <a
-            href="https://tabby.picaso.studio/privacy"
+            href="https://tabby.happywork.today/privacy"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-text-secondary transition-colors"

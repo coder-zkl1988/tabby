@@ -87,7 +87,7 @@ describe("windows update driver", () => {
         feedUrl: null,
       }),
     ).toBe(
-      "https://downloads.picaso.studio/updates/nightly/win32/x64/latest-win.json",
+      "https://downloads.happywork.today/updates/nightly/win32/x64/latest-win.json",
     );
   });
 
@@ -99,7 +99,7 @@ describe("windows update driver", () => {
         feedUrl: null,
       }),
     ).toBe(
-      "https://downloads.picaso.studio/updates/stable/win32/x64/latest-win.json",
+      "https://downloads.happywork.today/updates/stable/win32/x64/latest-win.json",
     );
   });
 

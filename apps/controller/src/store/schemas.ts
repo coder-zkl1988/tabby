@@ -698,7 +698,7 @@ export const nexuConfigSchema = z.preprocess((input) => {
     $schema:
       typeof candidate.$schema === "string"
         ? candidate.$schema
-        : "https://tabby.picaso.studio/config.json",
+        : "https://tabby.happywork.today/config.json",
     schemaVersion: normalizeNexuConfigSchemaVersion(
       candidate.schemaVersion,
       candidate,

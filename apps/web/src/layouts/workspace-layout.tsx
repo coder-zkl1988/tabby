@@ -2049,7 +2049,7 @@ function WorkspaceLayoutContent() {
                   <div className="rounded-xl border bg-surface-1 border-border shadow-xl shadow-black/10 overflow-hidden">
                     <div className="p-1.5">
                       <a
-                        href="https://tabby.picaso.studio/docs/"
+                        href="https://tabby.happywork.today/docs/"
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() =>

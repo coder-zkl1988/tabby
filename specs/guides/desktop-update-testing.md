@@ -11,7 +11,7 @@ Local validation builds do **not** use the production update feed by default. Th
 Windows checks a JSON manifest, then opens the installer URL declared in that manifest.
 
 - Manifest shape: `latest-win.json`
-- Expected feed path example: `https://downloads.picaso.studio/updates/<channel>/win32/x64/latest-win.json`
+- Expected feed path example: `https://downloads.happywork.today/updates/<channel>/win32/x64/latest-win.json`
 
 ## Opt into update testing
 
@@ -20,7 +20,7 @@ Before building the installer, set an explicit update feed URL:
 ### PowerShell
 
 ```powershell
-$env:NEXU_UPDATE_FEED_URL = "https://downloads.picaso.studio/updates/stable/win32/x64/latest-win.json"
+$env:NEXU_UPDATE_FEED_URL = "https://downloads.happywork.today/updates/stable/win32/x64/latest-win.json"
 pnpm --filter @nexu/desktop dist:win
 ```
 

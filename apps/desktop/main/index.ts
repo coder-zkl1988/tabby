@@ -650,7 +650,7 @@ async function refreshProxyDiagnostics(): Promise<void> {
   const targets = [
     { label: "controller", url: runtimeConfig.urls.controllerBase },
     { label: "openclaw", url: runtimeConfig.urls.openclawBase },
-    { label: "external", url: "https://tabby.picaso.studio" },
+    { label: "external", url: "https://tabby.happywork.today" },
   ];
   const snapshot = await proxyManager.collectDiagnostics(
     runtimeConfig.proxy,

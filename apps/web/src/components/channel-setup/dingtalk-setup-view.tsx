@@ -20,7 +20,7 @@ import {
 const DINGTALK_OPEN_PLATFORM_URL =
   "https://open-dev.dingtalk.com/?spm=ding_open_doc.document.0.0.4eb96384sA4J3a";
 const DINGTALK_DOCS_URL =
-  "https://tabby.picaso.studio/docs/guide/channels/dingtalk";
+  "https://tabby.happywork.today/docs/guide/channels/dingtalk";
 
 export interface DingtalkSetupViewProps {
   onConnected: () => void;
