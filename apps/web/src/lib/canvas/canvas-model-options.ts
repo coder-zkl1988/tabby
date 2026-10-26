@@ -32,7 +32,7 @@ export type GenerationCapability = "image" | "video" | "audio" | "text";
 const CAPABILITY_MODEL_ALLOWLIST: Partial<
   Record<GenerationCapability, Set<string>>
 > = {
-  image: new Set(["tabby-image-pro", "tabby-image-flash"]),
+  image: new Set(["tabby-image"]),
   video: new Set(["tabby-video"]),
 };
 

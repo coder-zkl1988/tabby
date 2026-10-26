@@ -29,12 +29,11 @@ function printHelp() {
 Options:
   -p, --prompt                  Image description (required)
   -f, --filename                Output filename (required)
-      --model                   tabby-image-pro or tabby-image-flash
-      --size                    GPT: auto/1K/2K/3K/4K or WIDTHxHEIGHT;
-                                Agnes: 1K/2K/3K/4K or WIDTHxHEIGHT
+      --model                   tabby-image (the default and only model)
+      --size                    auto/1K/2K/3K/4K or WIDTHxHEIGHT
       --ratio                   1:1, 3:4, 4:3, 16:9, 9:16, 2:3, 3:2, 21:9
-      --quality                 GPT: auto, high, medium, low (ignored by Agnes)
-      --transparent-background GPT transparent background (ignored by Agnes)
+      --quality                 auto, high, medium, low
+      --transparent-background Transparent background
   -h, --help                    Show this help`);
 }
 
@@ -95,11 +94,7 @@ async function main() {
   let request;
   try {
     const config = readOpenclawConfig(process.env.OPENCLAW_STATE_DIR);
-    credential = resolveLinkCredential(
-      config,
-      process.env.OPENCLAW_STATE_DIR,
-      args.model,
-    );
+    credential = resolveLinkCredential(config, args.model);
     request = buildImageGenerationRequest({
       baseUrl: credential.baseUrl,
       model: credential.model,

@@ -499,7 +499,7 @@ export const MEMOS_API_KEY_SECRET = "memos:apiKey";
  * Does this cloud model id denote a realtime voice model?
  *
  * Tabby cloud fronts every capability under its own name — `tabby-video`,
- * `tabby-image-pro`, `tabby-phone` — and realtime voice is `tabby-audio`,
+ * `tabby-image`, `tabby-phone` — and realtime voice is `tabby-audio`,
  * regardless of which vendor is behind it. A direct-to-provider deployment
  * instead carries the vendor's own id, and StepFun names those `*realtime*`.
  * Accept both, and keep the cloud side an exact set so a future sibling such
