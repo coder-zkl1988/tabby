@@ -8,9 +8,11 @@ import {
   type XhsOpsHeaderCounts,
   type XhsOpsPlaybookRule,
   type XhsOpsProject,
+  type XhsOpsRun,
   type XhsOpsTakeoverEvent,
   type XhsOpsTakeoverGateResult,
   type XhsOpsTakeoverStage,
+  compareXhsOpsAudits,
   xhsOpsAccountAuditedEvent,
   xhsOpsAuditManualCheckFlags,
   xhsOpsLegacyExistingVerified,
@@ -47,6 +49,7 @@ import {
   olderRevision,
   rememberForwardedTakeoverEvent,
   takeoverEventKey,
+  takeoverPinChangesText,
   takeoverPolicyModeState,
   takeoverSkillDocsState,
   takeoverStageTone,
@@ -284,6 +287,8 @@ export function XhsOpsTakeoverContent({
   const [diagnosis, setDiagnosisState] =
     useState<XhsOpsAccountDiagnosis | null>(null);
   const [orders, setOrdersState] = useState<XhsOpsChangeOrder[]>([]);
+  /** This account's runs, for the dormant review (§6.3); never polled. */
+  const [runs, setRuns] = useState<XhsOpsRun[]>([]);
   const [playbook, setPlaybook] = useState<XhsOpsPlaybookRule[]>([]);
   /** The bundle the playbook's doc rules were checked against; until it loads, PHONE_SKILLS_BUNDLE. */
   const [playbookBundle, setPlaybookBundle] = useState<number | undefined>(
@@ -429,6 +434,26 @@ export function XhsOpsTakeoverContent({
     [forward, setDiagnosis, setOrders],
   );
 
+  // Read on their own and quietly: only the dormant review needs them, and
+  // a failure here must not hold back or fail the sections.
+  const runsSeqRef = useRef(0);
+  const loadRuns = useCallback(
+    async (owner: Pick<XhsOpsAccount, "id" | "projectId">) => {
+      const seq = runsSeqRef.current + 1;
+      runsSeqRef.current = seq;
+      try {
+        const list = await xhsOpsApi.listRuns({
+          projectId: owner.projectId,
+          accountId: owner.id,
+        });
+        if (seq === runsSeqRef.current) setRuns(list);
+      } catch {
+        // Without the runs the dormant review just stays quiet.
+      }
+    },
+    [],
+  );
+
   // The account first: the header, 「暂停接管」 and the banners work while
   // the lists below are on their way — or answer 503 through the
   // controller's startup recovery, which pausing is exempt from (§2.6).
@@ -446,6 +471,7 @@ export function XhsOpsTakeoverContent({
         }
         setAccount(next);
         setDetailsReload((value) => value + 1);
+        void loadRuns(next);
         const nextProject = await xhsOpsApi
           .getProject(next.projectId)
           .catch(() => null);
@@ -460,7 +486,7 @@ export function XhsOpsTakeoverContent({
     return () => {
       cancelled = true;
     };
-  }, [accountId, projectId, reload, setAccount]);
+  }, [accountId, projectId, reload, setAccount, loadRuns]);
 
   // The audits, change orders and diagnosis, read on their own so a 503 or a
   // failure here never holds back the account above.
@@ -534,6 +560,7 @@ export function XhsOpsTakeoverContent({
       // The revision first: the next write sends it back as
       // expectedUpdatedAt even if a detail read below fails.
       setAccount(next);
+      void loadRuns(next);
       const details = await loadDetails(next);
       applyDetails(details);
       setPollError(null);
@@ -541,7 +568,7 @@ export function XhsOpsTakeoverContent({
       if (isTakeoverRecovering(err)) setRecovering(true);
       else setPollError(describeXhsOpsError(err, "接管信息刷新失败"));
     }
-  }, [accountId, loadDetails, applyDetails, setAccount]);
+  }, [accountId, loadDetails, applyDetails, setAccount, loadRuns]);
 
   // ── Poll whatever runs in the background: an audit, a generation, a phone step ──
   // The account names its running audit (takeover.activeAuditId), one this
@@ -743,6 +770,7 @@ export function XhsOpsTakeoverContent({
     audits,
     diagnosis,
     orders,
+    runs,
     playbook,
     skillDocs: takeoverSkillDocsState(device, playbookBundle),
     now,
@@ -1491,6 +1519,17 @@ function AuditSection({
     audit.profile?.accountMatched === true;
   const manualFlags = audit ? xhsOpsAuditManualCheckFlags(audit.flags) : [];
   const needsManualCheck = manualFlags.length > 0 && !audit?.manualCheckAt;
+  // §7.1: a re-audit tells which notes gained or lost 置顶 since the baseline
+  // (the 置顶 / 取消置顶 items the user does on the phone by hand).
+  const baselineAudit =
+    audits.find((entry) => entry.id === takeover?.baselineAuditId) ?? null;
+  const pinChanges =
+    audit &&
+    baselineAudit &&
+    !isBaseline &&
+    (audit.status === "completed" || audit.status === "partial")
+      ? takeoverPinChangesText(compareXhsOpsAudits(baselineAudit, audit).pins)
+      : null;
 
   const start = () =>
     void run("start", "开始只读盘点失败", async () => {
@@ -1596,6 +1635,15 @@ function AuditSection({
           {audit.flags.includes("cancellationUnconfirmed") ? (
             <span>请到手机上确认任务已结束，再在卡片顶部解除占用。</span>
           ) : null}
+        </Notice>
+      ) : null}
+      {pinChanges && baselineAudit ? (
+        <Notice tone="info" testId="audit-pin-changes">
+          <span className="text-text-primary">{pinChanges}</span>
+          <span>
+            对比的是 {formatDateTime(baselineAudit.startedAt)}{" "}
+            的基线盘点；置顶由你自己在手机上操作，桌面不改笔记。
+          </span>
         </Notice>
       ) : null}
       {audit && open ? (

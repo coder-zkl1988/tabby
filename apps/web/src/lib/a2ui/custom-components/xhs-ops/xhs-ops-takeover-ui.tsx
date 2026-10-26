@@ -13,8 +13,10 @@ import {
   type XhsOpsChangeOrder,
   type XhsOpsPlaybookRule,
   type XhsOpsProject,
+  type XhsOpsRun,
   type XhsOpsTakeoverEvent,
   type XhsOpsTakeoverProfileField,
+  xhsOpsIsTakeoverImageField,
 } from "@nexu/shared";
 import { type ReactNode, useCallback, useRef, useState } from "react";
 import type { CustomComponentProps } from "../registry";
@@ -44,6 +46,8 @@ export type TakeoverData = {
   diagnosis: XhsOpsAccountDiagnosis | null;
   /** Newest first. */
   orders: XhsOpsChangeOrder[];
+  /** The account's runs, read on load and after writes; the dormant review (§6.3) reads them. */
+  runs: XhsOpsRun[];
   playbook: XhsOpsPlaybookRule[];
   /** The bound phone's skill docs against the bundle the doc rules were checked against (§4.5). */
   skillDocs: TakeoverSkillDocsState;
@@ -365,7 +369,7 @@ export function TakeoverFieldValueInput({
         onChange={(event) => onChange(event.target.value)}
       />
     );
-  const image = field === "avatar" || field === "cover";
+  const image = xhsOpsIsTakeoverImageField(field);
   return (
     <input
       className={inputClass}

@@ -2,6 +2,10 @@
 
 import {
   PHONE_SKILLS_BUNDLE,
+  XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE,
+  XHS_TAKEOVER_DORMANT_REVIEW_BROWSE,
+  XHS_TAKEOVER_DORMANT_REVIEW_MESSAGE,
+  XHS_TAKEOVER_DORMANT_REVIEW_OVERRIDE_REASON,
   XHS_TAKEOVER_IDENTITY_READ_TTL_MS,
   XHS_TAKEOVER_MANUAL_CHECK_AUDIT_FLAGS,
   XHS_TAKEOVER_RESUME_REASON_CODES,
@@ -42,14 +46,17 @@ import { XhsOpsTakeover } from "../src/lib/a2ui/custom-components/xhs-ops/XhsOps
 import * as takeoverModel from "../src/lib/a2ui/custom-components/xhs-ops/xhs-ops-takeover-model";
 import {
   TAKEOVER_AUTHORIZATION_STATEMENT,
+  TAKEOVER_COMMENT_RUN_PAUSED_HINT,
   TAKEOVER_POLICY_MODE_UNKNOWN_NOTICE,
   TAKEOVER_SKILL_BUNDLE_NOTICE,
   isTakeoverRecovering,
   mergeRevisions,
   olderRevision,
+  takeoverCommentRunPaused,
   takeoverEventKey,
   takeoverImageProblem,
   takeoverParamConflict,
+  takeoverPinChangesText,
   takeoverPolicyModeState,
   takeoverSkillDocsState,
   takeoverSkillPhoneOlderNotice,
@@ -1440,6 +1447,272 @@ describe("XhsOpsTakeover", () => {
     expect(screen.queryByTestId("album-cleanup")).toBeNull();
   });
 
+  it("lists every album an order pushed across its attempts, and an older row's field album, once each", async () => {
+    const avatar = (overrides: Record<string, unknown>) => ({
+      field: "avatar",
+      baselineValue: "",
+      after: "户外自然光半身照",
+      imagePath: "/state/media/xhs-takeover/order-1/avatar.png",
+      imageSha256: "sha-1",
+      ...overrides,
+    });
+    apiMocks.getAccount.mockResolvedValue(account(PLAN_CONFIRMED));
+    apiMocks.listAudits.mockResolvedValue([audit()]);
+    apiMocks.getDiagnosis.mockResolvedValue({
+      diagnosis: diagnosis({ status: "confirmed" }),
+      event: null,
+    });
+    apiMocks.listChangeOrders.mockResolvedValue([
+      // The first attempt's dispatch failed after its push: only
+      // pushedAlbums still names that album.
+      imageOrder({
+        status: "failed",
+        confirmedAt: T0,
+        applyTaskId: "task-apply",
+        pushedAlbums: ["Tabby-1a2b3c4d-a", "Tabby-5e6f7a8b-a"],
+        fields: [avatar({ mediaAlbum: "Tabby-5e6f7a8b-a", outcome: "failed" })],
+      }),
+      // Written before pushedAlbums existed: only the field names its album.
+      imageOrder({
+        id: "order-0",
+        status: "completed",
+        confirmedAt: T0,
+        applyTaskId: "task-old",
+        fields: [
+          avatar({
+            field: "cover",
+            mediaAlbum: "Tabby-0c0d0e0f-c",
+            outcome: "verified",
+          }),
+        ],
+      }),
+    ]);
+
+    render(takeoverCard());
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId("album-cleanup")).toHaveLength(2),
+    );
+    const retried = within(
+      document.querySelector('[data-change-order="order-1"]') as HTMLElement,
+    ).getByTestId("album-cleanup").textContent;
+    expect(retried).toContain("Tabby-1a2b3c4d-a、Tabby-5e6f7a8b-a");
+    expect(retried?.split("Tabby-5e6f7a8b-a")).toHaveLength(2);
+    expect(
+      within(
+        document.querySelector('[data-change-order="order-0"]') as HTMLElement,
+      ).getByTestId("album-cleanup").textContent,
+    ).toContain("Tabby-0c0d0e0f-c");
+  });
+
+  it("asks to delete a draft's own pushed album before it is prechecked again", async () => {
+    apiMocks.getAccount.mockResolvedValue(account(PLAN_CONFIRMED));
+    apiMocks.listAudits.mockResolvedValue([audit()]);
+    apiMocks.getDiagnosis.mockResolvedValue({
+      diagnosis: diagnosis({ status: "confirmed" }),
+      event: null,
+    });
+    // Back in draft after a failed dispatch: mediaAlbum was reset, the
+    // picture is still on the phone.
+    apiMocks.listChangeOrders.mockResolvedValue([
+      imageOrder({
+        status: "draft",
+        precheck: null,
+        pushedAlbums: ["Tabby-1a2b3c4d-a"],
+      }),
+    ]);
+
+    render(takeoverCard());
+
+    expect(
+      (await screen.findByTestId("old-album-warning")).textContent,
+    ).toContain("Tabby-1a2b3c4d-a");
+  });
+
+  it("offers the dormant step-up once a week of nurture ran, and writes it only on the click", async () => {
+    const DAY = 86_400_000;
+    const dormant = account(
+      {
+        ...PLAN_CONFIRMED,
+        maturity: "dormant",
+        planConfirmedAt: new Date(Date.now() - 10 * DAY).toISOString(),
+      },
+      {
+        browseDefaults: {
+          dailyTargetPosts: 30,
+          dailySegments: 1,
+          searchRatioPercent: 80,
+          dwellSecMin: 15,
+        },
+      },
+    );
+    const nurtured = xhsOpsRunSchema.parse({
+      id: "run-1",
+      projectId: "project-1",
+      accountId: "account-1",
+      deviceId: "device-1",
+      accountLabel: "接管·Phone 1",
+      date: "2026-10-10",
+      status: "completed",
+      plan: {
+        keywords: [],
+        homeFeedCount: 6,
+        dwellSecMin: 15,
+        dwellSecMax: 20,
+        interaction: {},
+      },
+      startedAt: new Date(Date.now() - 8 * DAY).toISOString(),
+      createdAt: T0,
+      updatedAt: T0,
+    });
+    const stepped = {
+      ...dormant.browseDefaults,
+      ...XHS_TAKEOVER_DORMANT_REVIEW_BROWSE,
+    };
+    apiMocks.getAccount.mockResolvedValue(dormant);
+    apiMocks.listAudits.mockResolvedValue([audit()]);
+    apiMocks.getDiagnosis.mockResolvedValue({
+      diagnosis: diagnosis({ status: "confirmed" }),
+      event: null,
+    });
+    apiMocks.listRuns.mockResolvedValue([nurtured]);
+    apiMocks.updateAccount.mockResolvedValue({
+      ...dormant,
+      browseDefaults: stepped,
+      updatedAt: "account-rev-2",
+    });
+
+    render(takeoverCard());
+
+    const prompt = await screen.findByTestId("dormant-review");
+    expect(prompt.textContent).toContain(XHS_TAKEOVER_DORMANT_REVIEW_MESSAGE);
+    // Under the plan's confirmation, where the nurture parameters live.
+    expect(section("plan")?.contains(prompt)).toBe(true);
+    expect(apiMocks.listRuns).toHaveBeenCalledWith({
+      projectId: "project-1",
+      accountId: "account-1",
+    });
+    await flush();
+    expect(apiMocks.updateAccount).not.toHaveBeenCalled();
+
+    fireEvent.click(within(prompt).getByRole("button", { name: "按建议调整" }));
+    await waitFor(() =>
+      expect(apiMocks.updateAccount).toHaveBeenCalledTimes(1),
+    );
+    expect(apiMocks.updateAccount).toHaveBeenCalledWith("account-1", {
+      browseDefaults: stepped,
+      overrideReason: XHS_TAKEOVER_DORMANT_REVIEW_OVERRIDE_REASON,
+      expectedUpdatedAt: "account-rev-1",
+    });
+    expect(stepped.dwellSecMin).toBe(15);
+    await waitFor(() =>
+      expect(screen.queryByTestId("dormant-review")).toBeNull(),
+    );
+  });
+
+  it("shows which notes gained or lost 置顶 since the baseline once a re-audit finished", async () => {
+    const note = (i: number, title: string, pinned: boolean) => ({
+      i,
+      title,
+      likes: { text: "12", value: 12, approx: false },
+      video: false,
+      pinned,
+    });
+    const grid = (pinnedFirst: boolean) => ({
+      ...audit().home,
+      notes: [
+        note(1, "通勤穿搭合集", pinnedFirst),
+        note(2, "秋冬大衣怎么选", !pinnedFirst),
+      ],
+    });
+    apiMocks.getAccount.mockResolvedValue(
+      account({ ...BASELINED, latestAuditId: "audit-2" }),
+    );
+    apiMocks.listAudits.mockResolvedValue([
+      audit({
+        id: "audit-2",
+        trigger: "manual",
+        startedAt: "2026-10-23T02:00:00.000Z",
+        home: grid(false),
+      }),
+      audit({ home: grid(true) }),
+    ]);
+
+    render(takeoverCard());
+
+    const changes = await screen.findByTestId("audit-pin-changes");
+    expect(changes.textContent).toContain(
+      "置顶变化：新置顶《秋冬大衣怎么选》；取消置顶《通勤穿搭合集》",
+    );
+    expect(section("audit")?.contains(changes)).toBe(true);
+  });
+
+  it("says nothing about 置顶 while the shown audit is the baseline itself", async () => {
+    apiMocks.getAccount.mockResolvedValue(account(BASELINED));
+    apiMocks.listAudits.mockResolvedValue([audit()]);
+
+    render(takeoverCard());
+
+    await waitFor(() => expect(section("audit")).not.toBeNull());
+    await flush();
+    expect(screen.queryByTestId("audit-pin-changes")).toBeNull();
+  });
+
+  it("shows the 置顶 changes in an observation review against the audit before the order", async () => {
+    const grid = (pinned: boolean) => ({
+      ...audit().home,
+      notes: [
+        {
+          i: 1,
+          title: "通勤穿搭合集",
+          likes: { text: "12", value: 12, approx: false },
+          video: false,
+          pinned,
+        },
+      ],
+    });
+    apiMocks.getAccount.mockResolvedValue(account(PLAN_CONFIRMED));
+    apiMocks.listAudits.mockResolvedValue([
+      audit({ id: "audit-3", trigger: "observation", home: grid(false) }),
+      audit({ home: grid(true) }),
+    ]);
+    apiMocks.getDiagnosis.mockResolvedValue({
+      diagnosis: diagnosis({ status: "confirmed" }),
+      event: null,
+    });
+    apiMocks.listChangeOrders.mockResolvedValue([
+      imageOrder({
+        batchIndex: 1,
+        risk: "L1",
+        status: "completed",
+        confirmedAt: T0,
+        applyTaskId: "task-apply",
+        fields: [
+          {
+            field: "bio",
+            baselineValue: "上班族穿搭记录",
+            before: "上班族穿搭记录",
+            after: "通勤穿搭，一周不重样",
+            outcome: "verified",
+          },
+        ],
+        observation: {
+          until: T0,
+          auditId: "audit-3",
+          baseAuditId: "audit-1",
+          verdict: "pass",
+          notes: ["粉丝数没有明显变化"],
+        },
+      }),
+    ]);
+
+    render(takeoverCard());
+
+    expect(
+      (await screen.findByTestId("observation-pin-changes")).textContent,
+    ).toContain("置顶变化：取消置顶《通勤穿搭合集》");
+  });
+
   it("tells the user to swap the picture back by hand after a mismatch, and pauses the takeover", async () => {
     const mismatchText = "图片与原图不一致，请立即在手机上手动换回";
     const checking = imageOrder({
@@ -1986,6 +2259,49 @@ describe("takeover event keys", () => {
     ).toBeNull();
   });
 
+  it("words the 置顶 changes between two audits, and nothing when none moved or a grid was not read", () => {
+    expect(
+      takeoverPinChangesText({
+        pinned: ["秋冬大衣怎么选"],
+        unpinned: ["通勤穿搭合集", "早八通勤妆"],
+      }),
+    ).toBe(
+      "置顶变化：新置顶《秋冬大衣怎么选》；取消置顶《通勤穿搭合集》、《早八通勤妆》",
+    );
+    expect(
+      takeoverPinChangesText({ pinned: [], unpinned: ["通勤穿搭合集"] }),
+    ).toBe("置顶变化：取消置顶《通勤穿搭合集》");
+    expect(takeoverPinChangesText({ pinned: [], unpinned: [] })).toBeNull();
+    expect(takeoverPinChangesText(null)).toBeNull();
+  });
+
+  it("reads a paused takeover's comment-run 409 by its code, never by its wording", () => {
+    const message = "账号暂停中：客户要求先停一下";
+    expect(
+      takeoverCommentRunPaused(
+        Object.assign(new Error(message), {
+          status: 409,
+          body: { message, code: "takeover_paused" },
+        }),
+      ),
+    ).toBe(message);
+    // The same wording without the code is some other conflict.
+    expect(
+      takeoverCommentRunPaused(
+        Object.assign(new Error(message), { status: 409, body: { message } }),
+      ),
+    ).toBeNull();
+    expect(
+      takeoverCommentRunPaused(
+        Object.assign(new Error(message), {
+          status: 400,
+          body: { message, code: "takeover_paused" },
+        }),
+      ),
+    ).toBeNull();
+    expect(takeoverCommentRunPaused(new Error(message))).toBeNull();
+  });
+
   it("compares the phone's skill bundle with the playbook's, and its sync status", () => {
     expect(takeoverSkillDocsState({ skillBundleVersion: 65 }, 66)).toEqual({
       kind: "bundle_mismatch",
@@ -2055,6 +2371,9 @@ describe("takeover event keys", () => {
       "CHANGE_ORDER_STATUS_LABEL",
       "fieldLabels",
       "takeoverOverrideReasonRequired",
+      "isImageField",
+      "rollbackFields",
+      "TAKEOVER_IMAGE_MAX_BYTES",
     ])
       expect(takeoverModel).not.toHaveProperty(name);
     // The card still words its own outcome and code labels.
@@ -2709,6 +3028,191 @@ describe("takeover rows in the other xhs-ops cards", () => {
     );
   });
 
+  it("embeds the new-account material for the nine-item material issue alone", async () => {
+    // Verified on the phone, but the material lost its review: the material
+    // issue is the only thing holding the account back.
+    apiMocks.listAccounts.mockResolvedValue([
+      xhsOpsAccountSchema.parse({
+        ...newRow(),
+        personaReviewedAt: T0,
+        platformAccountId: "xhs-new",
+        profileDraft: {
+          applyStatus: "applied",
+          appliedAt: T0,
+          verifiedAt: T0,
+          verificationTaskId: "task-verify",
+          verifiedAccountId: "xhs-new",
+        },
+      }),
+    ]);
+
+    render(
+      withQuery(
+        <XhsOpsRunPlanner
+          {...props({
+            type: "XhsOpsRunPlanner",
+            projectId: "project-1",
+            plans: [
+              {
+                accountId: "account-new",
+                keywords: [{ keyword: "护肤", count: 1 }],
+                homeFeedCount: 1,
+              },
+            ],
+          })}
+        />,
+      ),
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "一键生成完整资料" }),
+    ).toBeTruthy();
+    expect(
+      screen.getAllByText(
+        new RegExp(XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/手机账号配置及资料生效核验/)).toHaveLength(0);
+  });
+
+  const browseRun = (
+    id: string,
+    segment: { index: number; count: number } | null,
+    alreadyLikedSkipped?: number,
+  ) =>
+    xhsOpsRunSchema.parse({
+      id,
+      projectId: "project-1",
+      accountId: "account-1",
+      deviceId: "device-1",
+      accountLabel: "接管·Phone 1",
+      date: localDate(),
+      status: "completed",
+      segment,
+      plan: {
+        keywords: [{ keyword: "通勤穿搭", count: 5 }],
+        homeFeedCount: 6,
+        dwellSecMin: 11,
+        dwellSecMax: 20,
+        interaction: {},
+      },
+      summary: {
+        plannedTotal: 11,
+        browsedTotal: 11,
+        ...(alreadyLikedSkipped === undefined ? {} : { alreadyLikedSkipped }),
+      },
+      startedAt: T0,
+      completedAt: T0,
+      createdAt: T0,
+      updatedAt: T0,
+    });
+
+  it("shows 已赞跳过 on an existing account's finished run and its history row, and nothing where none was skipped", async () => {
+    apiMocks.listAccounts.mockResolvedValue([
+      account(PLAN_CONFIRMED, {
+        interestPool: {
+          core: ["通勤穿搭", "职场穿搭", "秋冬穿搭"],
+          extended: ["小个子穿搭", "通勤包"],
+          general: ["咖啡", "探店", "护肤"],
+        },
+      }),
+    ]);
+    apiMocks.listRuns.mockResolvedValue([
+      browseRun("run-2", { index: 1, count: 2 }, 3),
+      browseRun("run-1", null),
+    ]);
+
+    render(
+      withQuery(
+        <XhsOpsRunPlanner
+          {...props({
+            type: "XhsOpsRunPlanner",
+            projectId: "project-1",
+            plans: [
+              {
+                accountId: "account-1",
+                keywords: [{ keyword: "通勤穿搭", count: 5 }],
+                homeFeedCount: 6,
+                segment: { index: 1, count: 2 },
+              },
+            ],
+          })}
+        />,
+      ),
+    );
+
+    expect((await screen.findByText(/已赞跳过 3 篇：/)).textContent).toContain(
+      "以前赞过的笔记不再重复点赞",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "最近 2 次运行" }));
+    // run-2's row; run-1 skipped nothing and says nothing.
+    expect(screen.getAllByText("已赞跳过 3 篇")).toHaveLength(1);
+    expect(screen.getAllByText(/已赞跳过/)).toHaveLength(2);
+  });
+
+  it("shows 已赞跳过 in the project's run history only for runs that skipped some", async () => {
+    apiMocks.listAccounts.mockResolvedValue([]);
+    apiMocks.suggestPlans.mockResolvedValue({ plans: [], skipped: [] });
+    apiMocks.listRuns.mockResolvedValue([
+      browseRun("run-2", null, 4),
+      browseRun("run-1", null),
+    ]);
+
+    render(
+      withQuery(
+        <XhsOpsRunPlanner
+          {...props({ type: "XhsOpsRunPlanner", projectId: "project-1" })}
+        />,
+      ),
+    );
+
+    expect(await screen.findByText("已赞跳过 4 篇")).toBeTruthy();
+    expect(screen.getAllByText(/已赞跳过/)).toHaveLength(1);
+  });
+
+  it("keeps a takeover row's edits through the startup recovery's 503 and saves them on the next click", async () => {
+    const takeoverRow = account(PLAN_CONFIRMED);
+    apiMocks.listAccounts.mockResolvedValue([takeoverRow]);
+    apiMocks.updateAccount
+      .mockRejectedValueOnce(recoveringError())
+      .mockResolvedValueOnce({
+        ...takeoverRow,
+        label: "接管·通勤号",
+        updatedAt: "account-rev-2",
+      });
+
+    render(
+      withQuery(
+        <XhsOpsAccountPlanner
+          {...props({ type: "XhsOpsAccountPlanner", projectId: "project-1" })}
+        />,
+      ),
+    );
+
+    fireEvent.change(await screen.findByDisplayValue("接管·Phone 1"), {
+      target: { value: "接管·通勤号" },
+    });
+    const save = screen.getByRole("button", { name: "保存账号配置" });
+    fireEvent.click(save);
+    expect(
+      await screen.findByText(
+        "控制端刚重启，正在收口上次未完成的接管任务；1 个账号还没保存，修改都还在，稍后再点「保存账号配置」重试",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/请修正后再点/)).toBeNull();
+    expect(screen.getByDisplayValue("接管·通勤号")).toBeTruthy();
+
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(apiMocks.updateAccount).toHaveBeenCalledTimes(2),
+    );
+    expect(apiMocks.updateAccount.mock.calls[1]?.[1]).toMatchObject({
+      label: "接管·通勤号",
+      expectedUpdatedAt: "account-rev-1",
+    });
+    await waitFor(() => expect(screen.queryByText(/控制端刚重启/)).toBeNull());
+  });
+
   it("embeds the new-account material, not a takeover card, for a new account the planner holds", async () => {
     apiMocks.listAccounts.mockResolvedValue([
       { ...newRow(), personaReviewedAt: T0 },
@@ -2914,6 +3418,41 @@ describe("takeover rows in the other xhs-ops cards", () => {
         await screen.findByText("账号暂停中：客户要求先停一下"),
       ).toBeTruthy();
       expect(screen.queryByText("派发失败")).toBeNull();
+      // Without the code nothing is read into the wording.
+      expect(document.body.textContent).not.toContain(
+        TAKEOVER_COMMENT_RUN_PAUSED_HINT,
+      );
+    });
+
+    it("sends the user to the takeover card when the comment run answers takeover_paused", async () => {
+      apiMocks.listAccounts.mockResolvedValue([
+        account({
+          ...PLAN_CONFIRMED,
+          safetyPause: {
+            code: "manual",
+            reason: "客户要求先停一下",
+            since: T0,
+          },
+        }),
+      ]);
+      const message = "账号暂停中：客户要求先停一下";
+      apiMocks.createCommentRun.mockRejectedValue(
+        Object.assign(new Error(message), {
+          status: 409,
+          body: { message, code: "takeover_paused" },
+        }),
+      );
+
+      render(reviewCard());
+
+      fireEvent.click(
+        await screen.findByRole("button", { name: "派发已批准的评论（1）" }),
+      );
+      expect(
+        await screen.findByText(
+          `账号暂停中：客户要求先停一下。${TAKEOVER_COMMENT_RUN_PAUSED_HINT}`,
+        ),
+      ).toBeTruthy();
     });
 
     it("follows a dispatched run and shows why its identity gate failed it", async () => {

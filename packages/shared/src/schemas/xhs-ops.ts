@@ -1765,6 +1765,15 @@ function existingAccountNurtureIssues(
   return issues;
 }
 
+/**
+ * A new account's nurture issue while its material is not complete and
+ * confirmed: nine items, the platform interest tags included (the phone
+ * applies eight of them). The run planner embeds the material card on
+ * exactly this text.
+ */
+export const XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE =
+  "请先完成九项账号资料与素材并校验确认";
+
 /** Checked again immediately before dispatch; draft confirmation alone is not a phone setup receipt. */
 export function xhsOpsAccountNurtureIssues(
   account: z.infer<typeof xhsOpsAccountSchema>,
@@ -1778,7 +1787,7 @@ export function xhsOpsAccountNurtureIssues(
   if (!account.personaReviewedAt)
     issues.push("人设或目标画像已变化，请重新核对并确认人设");
   if (!xhsOpsProfileDraftReady(account.profileDraft))
-    issues.push("请先完成九项账号资料与素材并校验确认");
+    issues.push(XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE);
   if (account.profileDraft.applyOperation?.status === "running")
     issues.push("资料应用任务仍在执行或等待手机状态核验");
   if (!profileVerifiedOnPhone(account))
