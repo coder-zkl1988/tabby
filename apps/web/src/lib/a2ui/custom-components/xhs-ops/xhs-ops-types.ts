@@ -648,6 +648,10 @@ export function normalizeProfileDraft(value: unknown): XhsOpsProfileDraft {
             typeof operation.completedAt === "string"
               ? operation.completedAt
               : null,
+          changeOrderId:
+            typeof operation.changeOrderId === "string"
+              ? operation.changeOrderId
+              : null,
         }
       : null;
   return {

@@ -50,6 +50,7 @@ pnpm probe:slack run                  # Run the local Slack reply smoke probe ag
 pnpm --filter @nexu/web dev           # Web only
 pnpm build                            # Build all
 pnpm check:esm-imports                # Scan built dist for extensionless relative ESM specifiers
+pnpm check:xhs-playbook               # Check xhs-ops playbook excerpts, cited lines and bundle against ../tabby-control/phone-skills (--phone-skills <dir>)
 pnpm typecheck                        # Typecheck all
 pnpm lint                             # Biome lint
 pnpm format                           # Biome format
@@ -264,6 +265,11 @@ See `ARCHITECTURE.md` for the full bird's-eye view. Key points:
 | KOC installation/login startup preparation | `docs/plans/2026-09-08-koc-startup-preparation.md` |
 | KOC mindmap and V0.1 requirements audit | `docs/plans/2026-09-09-koc-requirements-audit.md` |
 | KOC stage completion and verification | `docs/plans/2026-09-09-koc-completion-plan.md` |
+| XHS existing-account takeover (老号接管) design | `docs/plans/2026-10-14-xhs-account-takeover-design.md` |
+| XHS takeover controller (audits, diagnoses, change orders, phone tasks, startup recovery) | `apps/controller/src/services/xhs-ops-{audit,diagnosis,change-order}-service.ts`, `xhs-ops-change-order-rules.ts`, `xhs-ops-takeover-{facts,phone,recovery}.ts`, `apps/controller/src/store/xhs-ops-takeover-records.ts` |
+| XHS takeover card (web) | `apps/web/src/lib/a2ui/custom-components/xhs-ops/XhsOpsTakeover.tsx`, `xhs-ops-takeover-{model,orders,plan,ui}.ts(x)` |
+| Restricted text-generation session key (shared with the guard) | `apps/controller/src/lib/restricted-text-session-key.ts` |
+| XHS playbook excerpt check (phone-skills release chain step 4) | `scripts/check-xhs-playbook-excerpts.mjs` (`pnpm check:xhs-playbook`), `packages/shared/src/xhs-ops-playbook.ts` |
 | Execution plans | `specs/exec-plans/` |
 | Documentation sync | `skills/localdev/sync-specs/SKILL.md` |
 | Nano Banana (image gen) | `skills/nexubot/nano-banana/SKILL.md` |

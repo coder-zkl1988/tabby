@@ -1,8 +1,11 @@
-import type {
-  XhsOpsAccount,
-  XhsOpsPlanSuggestion,
-  XhsOpsRun,
-  XhsOpsRunSegment,
+import {
+  XHS_OPS_PLAN_MAX_HOME_FEED,
+  XHS_OPS_PLAN_MAX_KEYWORDS,
+  type XhsOpsAccount,
+  type XhsOpsPlanSuggestion,
+  type XhsOpsRun,
+  type XhsOpsRunSegment,
+  xhsOpsSegmentBudgetIssues,
 } from "@nexu/shared";
 import { XhsOpsError } from "../lib/xhs-ops-common.js";
 
@@ -22,8 +25,6 @@ const RETRYABLE_STATUSES: ReadonlySet<string> = new Set([
 ]);
 const EXTENDED_PICK = 1;
 const GENERAL_PICK = 1;
-const MAX_KEYWORDS = 8;
-const MAX_HOME = 12;
 
 function uniq(list: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -56,10 +57,14 @@ export function homeFeedFromRatio(
 ): number {
   const r = Math.max(0, Math.min(100, searchRatioPercent)) / 100;
   if (r >= 1) return 0;
-  if (r <= 0) return Math.max(0, Math.min(MAX_HOME, fallback));
+  if (r <= 0)
+    return Math.max(0, Math.min(XHS_OPS_PLAN_MAX_HOME_FEED, fallback));
   return Math.max(
     0,
-    Math.min(MAX_HOME, Math.round((searchTotal * (1 - r)) / r)),
+    Math.min(
+      XHS_OPS_PLAN_MAX_HOME_FEED,
+      Math.round((searchTotal * (1 - r)) / r),
+    ),
   );
 }
 
@@ -150,7 +155,7 @@ function suggestPlanAt(
     ...rotate(core, offset, core.length),
     ...rotate(extended, round, extended.length),
     ...rotate(general, round, general.length),
-  ]).slice(0, MAX_KEYWORDS);
+  ]).slice(0, XHS_OPS_PLAN_MAX_KEYWORDS);
   const target = account.browseDefaults.dailyTargetPosts ?? 0;
   const segmentCount = segment?.count ?? 1;
   const perKeyword = account.browseDefaults.postsPerKeyword;
@@ -171,18 +176,13 @@ function suggestPlanAt(
     const requestedSearchBudget = Math.round(segmentTarget * r);
     const requestedHomeBudget = segmentTarget - requestedSearchBudget;
     const requiredWordCount = Math.ceil(requestedSearchBudget / 8);
-    if (requiredWordCount > availableWords.length) {
-      throw new XhsOpsError(
-        409,
-        `本段搜索目标 ${requestedSearchBudget} 篇至少需要 ${requiredWordCount} 个兴趣词，当前只有 ${availableWords.length} 个，请补充兴趣池或增加每日分段`,
-      );
-    }
-    if (requestedHomeBudget > MAX_HOME) {
-      throw new XhsOpsError(
-        409,
-        `本段首页目标 ${requestedHomeBudget} 篇超过上限 ${MAX_HOME}，请提高搜索占比或增加每日分段`,
-      );
-    }
+    // The same two checks plan confirmation and the nurture gate run (§2.5).
+    const [budgetIssue] = xhsOpsSegmentBudgetIssues(
+      segmentTarget,
+      account.browseDefaults.searchRatioPercent,
+      availableWords.length,
+    );
+    if (budgetIssue) throw new XhsOpsError(409, budgetIssue);
     const searchBudget = requestedSearchBudget;
     const homeBudget = requestedHomeBudget;
     const activeWordCount = Math.min(
@@ -204,7 +204,7 @@ function suggestPlanAt(
       0,
     );
     const total = searchTotalPlanned + homeFeedCount;
-    targetLine = `日目标 ${target} 篇${segmentCount > 1 ? ` ÷ ${segmentCount} 段` : ""} → 本${segmentCount > 1 ? "段" : "次"}目标 ${segmentTarget} 篇：搜索 ${searchTotalPlanned} + 首页 ${homeFeedCount}${total < segmentTarget ? `（受每词 ≤8、首页 ≤${MAX_HOME} 限制，实际 ${total} 篇）` : ""}`;
+    targetLine = `日目标 ${target} 篇${segmentCount > 1 ? ` ÷ ${segmentCount} 段` : ""} → 本${segmentCount > 1 ? "段" : "次"}目标 ${segmentTarget} 篇：搜索 ${searchTotalPlanned} + 首页 ${homeFeedCount}${total < segmentTarget ? `（受每词 ≤8、首页 ≤${XHS_OPS_PLAN_MAX_HOME_FEED} 限制，实际 ${total} 篇）` : ""}`;
   }
   const keywords = plannedWords.map((keyword, index) => ({
     keyword,

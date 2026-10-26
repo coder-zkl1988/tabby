@@ -1,5 +1,9 @@
 import { Switch } from "@/components/ui/switch";
-import { type XhsOpsProject, xhsOpsAccountNurtureIssues } from "@nexu/shared";
+import {
+  type XhsOpsPlanSkip,
+  type XhsOpsProject,
+  xhsOpsAccountNurtureIssues,
+} from "@nexu/shared";
 import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import {
   type MutableRefObject,
@@ -15,6 +19,7 @@ import {
   getRunPreparation,
 } from "./XhsOpsPreparationStatus";
 import { XhsOpsProfileMaterialContent } from "./XhsOpsProfileMaterial";
+import { XhsOpsTakeoverContent } from "./XhsOpsTakeover";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import { localDateString } from "./xhs-ops-dashboard-data";
 import { ProjectPicker, useProjectResolution } from "./xhs-ops-project-picker";
@@ -230,12 +235,14 @@ export function XhsOpsRunPlanner({
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [accountsReload, setAccountsReload] = useState(0);
   const [project, setProject] = useState<XhsOpsProject | null>(null);
+  const today = localDateString(new Date());
   const blockingAccounts = accounts
     ? [...accounts.values()]
         .filter((account) => Boolean(account.deviceId))
         .map((account) => ({
           account,
-          issues: xhsOpsAccountNurtureIssues(account, project),
+          // A running read-only audit is on the row (takeover.activeAuditId).
+          issues: xhsOpsAccountNurtureIssues(account, project, { today }),
         }))
         .filter((entry) => entry.issues.length > 0)
     : [];
@@ -249,6 +256,8 @@ export function XhsOpsRunPlanner({
     () => new Map(),
   );
   const [autoError, setAutoError] = useState<string | null>(null);
+  /** Accounts the desktop could not plan today (e.g. a pool too small for the target); the others are still planned. */
+  const [autoSkipped, setAutoSkipped] = useState<XhsOpsPlanSkip[]>([]);
   useEffect(() => {
     if (plans.length > 0 || !projectId) return;
     if (accounts === null) return;
@@ -256,8 +265,9 @@ export function XhsOpsRunPlanner({
     setAutoPlans(null);
     xhsOpsApi
       .suggestPlans(projectId)
-      .then((list) => {
+      .then(({ plans: list, skipped }) => {
         if (cancelled) return;
+        setAutoSkipped(skipped);
         setAutoPlans(
           list.map((p) => ({
             accountId: p.accountId,
@@ -282,6 +292,7 @@ export function XhsOpsRunPlanner({
       .catch((err) => {
         if (cancelled) return;
         setAutoPlans([]);
+        setAutoSkipped([]);
         setAutoError(describeXhsOpsError(err, "今日计划建议生成失败"));
       });
     return () => {
@@ -432,6 +443,19 @@ export function XhsOpsRunPlanner({
     >
       {accountsError ? <ErrorLine message={accountsError} /> : null}
       {autoError ? <ErrorLine message={autoError} /> : null}
+      {plans.length === 0 && autoSkipped.length > 0 ? (
+        <div
+          data-testid="plan-skipped"
+          className="flex flex-col gap-0.5 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] px-2.5 py-1.5 text-[12px] text-[var(--color-warning-ink)]"
+        >
+          <span className="font-medium">这些账号今天没有生成计划：</span>
+          {autoSkipped.map((skip) => (
+            <span key={skip.accountId}>
+              {skip.accountLabel}：{skip.reason}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {blockingAccounts.length > 0 ? (
         <NurtureGate
           projectId={projectId}
@@ -620,6 +644,11 @@ function NurtureGate({
       ),
     )
     .map(({ account }) => account.id);
+  // A takeover account is unlocked on its takeover card (identity, baseline,
+  // plan, pause, device hold), never through the new-account material.
+  const takeoverAccounts = entries
+    .filter(({ account }) => account.entryMode === "existing")
+    .map(({ account }) => account);
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] p-3">
@@ -670,6 +699,20 @@ function NurtureGate({
           onAccountChange={onAccountChange}
         />
       ) : null}
+      {takeoverAccounts.map((account) => (
+        <div
+          key={account.id}
+          data-testid="run-planner-takeover"
+          className="rounded-lg border border-border bg-surface-1 p-3"
+        >
+          <XhsOpsTakeoverContent
+            accountId={account.id}
+            projectId={projectId}
+            onAction={onAction}
+            onAccountChange={onAccountChange}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -1063,7 +1106,9 @@ function RunPlanCard({
         (candidate) => candidate.id === accountId,
       );
       const freshIssues = freshAccount
-        ? xhsOpsAccountNurtureIssues(freshAccount, freshProject)
+        ? xhsOpsAccountNurtureIssues(freshAccount, freshProject, {
+            today: localDateString(new Date()),
+          })
         : ["账号不存在或不属于当前项目"];
       if (freshIssues.length > 0) {
         setError(`养号条件尚未完成：${freshIssues.join("；")}`);

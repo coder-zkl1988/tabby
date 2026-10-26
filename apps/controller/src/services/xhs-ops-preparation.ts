@@ -1,12 +1,18 @@
 import type {
   DeviceExecuteTaskBody,
   TaskResult,
+  XhsOpsAnomalyType,
   XhsOpsPreparation,
   XhsOpsPreparationCode,
+  XhsOpsSafetyPause,
 } from "@nexu/shared";
 import { z } from "zod";
+import { XHS_TAKEOVER_PAUSE_COOLDOWN_MS } from "../store/xhs-ops-takeover-records.js";
 
-import { XHS_ME_TAB_UNFOLD_HINT } from "./xhs-ops-task-builder.js";
+import {
+  XHS_AUDIT_UNFOLD_HINT,
+  XHS_ME_TAB_UNFOLD_HINT,
+} from "./xhs-ops-task-builder.js";
 
 export const XHS_PREPARATION_TIMEOUT_MS = 600_000;
 export const XHS_PREPARATION_MARKER = "PREPARATION_JSON:";
@@ -64,6 +70,10 @@ const REASONS: Record<XhsOpsPreparationCode, string> = {
   rate_limited: "操作过于频繁，今日后续任务已暂停",
   invalid_result: "启动检查未返回有效的登录验证结果，养号未开始",
   device_unavailable: "设备不可用或等待空闲超时，启动检查未完成",
+  device_busy:
+    "手机正被只读盘点、资料变更或资料应用占用，等待超时，本次运行已跳过",
+  policy_not_enforce:
+    "手机端策略模式不是 enforce，不会拦截越界操作，已拒绝派发；请换用 enforce 构建的 TabbyApp",
   dispatch_failed:
     "启动检查执行失败、超时或未确认停止，请先在手机上确认当前任务已结束，再重新启动养号",
   interrupted: "控制器重启，启动检查已中断，请检查手机状态后重新启动养号",
@@ -203,6 +213,151 @@ export function buildPreparationVerificationRequest(
       ],
     },
   };
+}
+
+/**
+ * Pre-run identity gate of an existing account (takeover §3.2, §3.3 身份闸门,
+ * §5.3 #7): the receipt retry above, reworded so nothing positively names
+ * 登录 — 「只复核小红书登录状态」 loaded the login subskill — with
+ * XHS_AUDIT_UNFOLD_HINT and login forbidden; the retry inherited "required".
+ *
+ * It stays account.login: only that class gets the phone's preparation
+ * receipt contract (two format retries, no CompletionGate). Read-only comes
+ * from the inherited roles and actions — no TYPE, no SMS app. The codes stay
+ * the ones the contract accepts, so a signed-out phone still answers
+ * blocked/phone_required, which the desktop maps to a login_required pause.
+ */
+export function buildTakeoverIdentityGateRequest(
+  packageName: string,
+  expectedPlatformAccountId = "",
+): DeviceExecuteTaskBody {
+  const request = buildPreparationVerificationRequest(
+    packageName,
+    expectedPlatformAccountId,
+  );
+  const expectedId = expectedPlatformAccountId.trim();
+  return {
+    ...request,
+    task: [
+      "【接管账号运行前身份闸门】只核对当前账号并返回机器回执。禁止安装、请求验证码、填写手机号、登录、退出或切换账号、修改资料、打开笔记、任何互动、加载 login/research/nurture 子技能。",
+      `AWAKE 打开 ${packageName}，进入底部“我”。${XHS_AUDIT_UNFOLD_HINT}`,
+      expectedId
+        ? `进入编辑主页，只读取并核对“小红书号”与任务指定值「${expectedId}」完全一致；不一致返回 blocked/account_mismatch。不得在回执或过程记录中复述该号码。`
+        : "本次未提供目标小红书号：只确认「我」页显示的是个人主页，不执行具体账号身份比对。",
+      "「我」页显示手机号输入页而非个人主页返回 blocked/phone_required；需人工验证返回 blocked/verification_required；账号受限返回 blocked/account_restricted；操作频繁返回 blocked/rate_limited；无法判断返回 failed/login_failed。",
+      `最后使用 COMPLETE，其 return 只能为 ${XHS_PREPARATION_MARKER}{"v":1,"status":"ready","code":"ready","profileVerified":true}；未完成时替换 status/code，profileVerified:false。不得省略 PREPARATION_JSON 前缀，不得输出个人主页内容、手机号、验证码或其他字段。`,
+    ].join("\n"),
+    taskPolicy: {
+      ...request.taskPolicy,
+      confirmationPolicy: {
+        ...request.taskPolicy?.confirmationPolicy,
+        login: "forbidden",
+      },
+    },
+  };
+}
+
+const NOT_LOGGED_IN =
+  "「我」页显示手机号输入页，请账号本人在手机上登录原账号，桌面不会代为登录";
+
+/** Where a takeover safety stop was seen: the resume gate, the pre-run gate, or a nurture / comment chunk. */
+export type XhsOpsTakeoverPauseSource = "resume" | "run" | "chunk";
+
+/** The risk pauses' cooldown as the reasons word it ("48 小时"). */
+const COOLDOWN_TEXT = `${Math.round(XHS_TAKEOVER_PAUSE_COOLDOWN_MS / 3_600_000)} 小时`;
+
+/**
+ * The safety pause a takeover takes for a code a phone task reported (§6.5,
+ * §5.3 #7), or null when the code is no reason to pause — one mapping for
+ * the resume gate, the pre-run gate and a nurture or comment chunk's safety
+ * stop; only the wording says which ran. A risk signal pauses with the
+ * cooldown (nextSafetyPause sets it), a signed-out phone — the gate's
+ * phone_required, a chunk's login_required — becomes login_required, the
+ * gate's account_mismatch account_mismatch. Fixed text: nothing the phone
+ * wrote goes into it.
+ */
+export function takeoverSafetyPause(
+  code: XhsOpsPreparationCode | XhsOpsAnomalyType | null,
+  source: XhsOpsTakeoverPauseSource,
+): { code: XhsOpsSafetyPause["code"]; reason: string } | null {
+  const chunk = source === "chunk";
+  const gate = source === "resume" ? "恢复前的身份闸门" : "运行前的身份闸门";
+  switch (code) {
+    case "rate_limited":
+      return {
+        code: "rate_limited",
+        reason: `${chunk ? "养号或评论任务中手机" : gate}提示操作频繁，冷却 ${COOLDOWN_TEXT}后再恢复`,
+      };
+    case "account_restricted":
+      return {
+        code: "account_restricted",
+        reason: `${chunk ? "养号或评论任务中" : gate}发现账号异常，冷却 ${COOLDOWN_TEXT}后再处理`,
+      };
+    case "account_mismatch":
+      return chunk
+        ? null
+        : {
+            code: "account_mismatch",
+            reason:
+              "手机上当前登录的不是锁定的小红书号，请账号本人在手机上切换回来",
+          };
+    case "phone_required":
+      return chunk
+        ? null
+        : { code: "login_required", reason: `${gate}：${NOT_LOGGED_IN}` };
+    case "login_required":
+      return chunk
+        ? {
+            code: "login_required",
+            reason:
+              "养号或评论任务中手机出现登录页，请账号本人在手机上登录原账号，桌面不会代为登录",
+          }
+        : null;
+    default:
+      return null;
+  }
+}
+
+const GATE_NO_RESULT =
+  "身份闸门没有返回有效结果，本次任务未开始；请确认手机停在小红书后重试";
+
+/**
+ * What the pre-run identity gate leaves on a run (§5.3 #7). The gate never
+ * logs in, so the login flow's wording (「填写本次登录手机号」…) would tell
+ * the account owner the wrong thing, and it runs before nurture and comment
+ * runs alike, so nothing here says 养号. Fixed text only.
+ */
+const RUN_GATE_REASONS: Partial<Record<XhsOpsPreparationCode, string>> = {
+  ready: "运行前身份闸门通过：手机上登录的是这个账号",
+  phone_required: "请账号本人在手机上登录原账号，桌面不会代为登录",
+  account_mismatch: "手机上当前登录的不是这个账号，请账号本人在手机上切换回来",
+  verification_required:
+    "手机上需要人工验证，本次任务未开始；请账号本人在手机上处理后重试",
+  sms_unavailable: GATE_NO_RESULT,
+  store_unavailable: GATE_NO_RESULT,
+  install_failed: GATE_NO_RESULT,
+  login_failed:
+    "身份闸门无法判断手机上的账号状态，本次任务未开始；请确认手机停在小红书后重试",
+  invalid_result: GATE_NO_RESULT,
+  dispatch_failed:
+    "身份闸门执行失败、超时或未确认停止，请先在手机上确认当前任务已结束，再重试",
+  interrupted: "控制器重启，身份闸门已中断，请检查手机状态后重试",
+  cancelled: "身份闸门已取消，本次任务未开始",
+};
+
+/** A pre-run identity gate's text for `code`; the shared texts where the gate has none of its own. */
+export function takeoverGateReason(code: XhsOpsPreparationCode): string {
+  return RUN_GATE_REASONS[code] ?? REASONS[code];
+}
+
+/** interpretPreparationResult for the pre-run identity gate: same contract and codes, the gate's wording. */
+export function interpretTakeoverGateResult(
+  result: TaskResult,
+): Pick<XhsOpsPreparation, "status" | "reasonCode" | "reason"> {
+  const outcome = interpretPreparationResult(result);
+  return outcome.reasonCode
+    ? { ...outcome, reason: takeoverGateReason(outcome.reasonCode) }
+    : outcome;
 }
 
 /** Only the fixed receipt is persisted; raw login output/screenshots are not. */

@@ -78,13 +78,20 @@ import { WorkflowComposer } from "../services/teams/team-workflow-composer.js";
 import { TeamWorkflowLedgerStore } from "../services/teams/team-workflow-ledger.js";
 import { TeamWorkflowService } from "../services/teams/team-workflow-service.js";
 import { TemplateService } from "../services/template-service.js";
+import { XhsOpsAuditService } from "../services/xhs-ops-audit-service.js";
+import { XhsOpsChangeOrderService } from "../services/xhs-ops-change-order-service.js";
 import { XhsOpsCommentService } from "../services/xhs-ops-comment-service.js";
+import { XhsOpsDiagnosisService } from "../services/xhs-ops-diagnosis-service.js";
 import { XhsOpsProfileService } from "../services/xhs-ops-profile-service.js";
 import { XhsOpsRunService } from "../services/xhs-ops-run-service.js";
 import {
   XHS_OPS_SCHEDULER_INTERVAL_MS,
   XhsOpsScheduler,
 } from "../services/xhs-ops-scheduler.js";
+import {
+  type XhsOpsTakeoverRecoveryState,
+  recoverXhsOpsTakeoverWork,
+} from "../services/xhs-ops-takeover-recovery.js";
 import { ArtifactsStore } from "../store/artifacts-store.js";
 import { CompiledOpenClawStore } from "../store/compiled-openclaw-store.js";
 import { DeviceNameStore } from "../store/device-name-store.js";
@@ -153,6 +160,11 @@ export interface ControllerContainer {
   deviceControlService: DeviceControlService;
   xhsOpsStore: XhsOpsStore;
   xhsOpsRunService: XhsOpsRunService;
+  xhsOpsAuditService: XhsOpsAuditService;
+  xhsOpsDiagnosisService: XhsOpsDiagnosisService;
+  xhsOpsChangeOrderService: XhsOpsChangeOrderService;
+  /** Settled once the takeover startup recovery ran; takeover writes answer 503 before. */
+  xhsOpsTakeoverRecovery: XhsOpsTakeoverRecoveryState;
   xhsOpsProfileService: XhsOpsProfileService;
   xhsOpsScheduler: XhsOpsScheduler;
   xhsOpsCommentService: XhsOpsCommentService;
@@ -334,14 +346,20 @@ export async function createContainer(): Promise<ControllerContainer> {
     deviceTaskHistoryStore,
   );
   const xhsOpsStore = new XhsOpsStore(env.xhsOpsStorePath);
+  // 老号接管的重启恢复在 startBackgroundLoops 里跑，HTTP 服务在那之前就已应答；
+  // 恢复收口之前，接管的写路由一律回 503，接管账号也不派任何手机任务（takeover §2.6）。
+  const xhsOpsTakeoverRecovery: XhsOpsTakeoverRecoveryState = {
+    settled: false,
+  };
   const xhsOpsRunService = new XhsOpsRunService({
     store: xhsOpsStore,
     deviceControl: deviceControlService,
+    takeoverRecovery: xhsOpsTakeoverRecovery,
   });
-  // P2-4 每日自动执行：每分钟检查各项目 schedule，到点后按兴趣池生成当日计划并派发。
-  const xhsOpsScheduler = new XhsOpsScheduler({
+  // 老号接管：身份读取与只读盘点（takeover §1.2 T2–T3）。
+  const xhsOpsAuditService = new XhsOpsAuditService({
     store: xhsOpsStore,
-    runService: xhsOpsRunService,
+    deviceControl: deviceControlService,
   });
   // The tabby-control plugin loses its in-memory VLM credential on every
   // OpenClaw (re)start, so re-push it once the plugin RPC is reachable after
@@ -828,6 +846,34 @@ export async function createContainer(): Promise<ControllerContainer> {
     media: mediaGenerationService,
     deviceControl: deviceControlService,
     mediaRoot: path.resolve(env.openclawStateDir, "media"),
+    takeoverIdentity: xhsOpsAuditService,
+  });
+  // 老号接管：诊断与方案确认（takeover §4、§5.1），诊断走受限档会话。
+  const xhsOpsDiagnosisService = new XhsOpsDiagnosisService({
+    store: xhsOpsStore,
+    media: mediaGenerationService,
+    resolveBotModel: async (botId) => {
+      const config = await configStore.getConfig();
+      const bot = config.bots.find((entry) => entry.id === botId);
+      return bot?.modelId ?? config.runtime.defaultModelId ?? null;
+    },
+  });
+  // 老号接管：公开资料变更单与观察复查（takeover §5.2、§6.4），
+  // 上传的图片写在 media/xhs-takeover/<orderId>/ 下。
+  const xhsOpsChangeOrderService = new XhsOpsChangeOrderService({
+    store: xhsOpsStore,
+    deviceControl: deviceControlService,
+    profile: xhsOpsProfileService,
+    audits: xhsOpsAuditService,
+    mediaRoot: path.resolve(env.openclawStateDir, "media"),
+  });
+  // P2-4 每日自动执行：每分钟检查各项目 schedule，到点后按兴趣池生成当日计划并派发。
+  // 接管账号先刷新变更单（过期预检随之失效），恢复收口前不派发（takeover §6.1）。
+  const xhsOpsScheduler = new XhsOpsScheduler({
+    store: xhsOpsStore,
+    runService: xhsOpsRunService,
+    changeOrders: xhsOpsChangeOrderService,
+    takeoverRecovery: xhsOpsTakeoverRecovery,
   });
 
   return {
@@ -880,6 +926,10 @@ export async function createContainer(): Promise<ControllerContainer> {
     deviceControlService,
     xhsOpsStore,
     xhsOpsRunService,
+    xhsOpsAuditService,
+    xhsOpsDiagnosisService,
+    xhsOpsChangeOrderService,
+    xhsOpsTakeoverRecovery,
     xhsOpsProfileService,
     xhsOpsScheduler,
     xhsOpsCommentService: new XhsOpsCommentService({
@@ -899,6 +949,14 @@ export async function createContainer(): Promise<ControllerContainer> {
     scheduleService,
     runtimeState,
     startBackgroundLoops: () => {
+      // 老号接管的重启恢复（takeover §2.6）：先于调度器和其他恢复入队，
+      // 把上个进程留下的盘点、诊断和变更单收口，再停止或对账手机任务。
+      void recoverXhsOpsTakeoverWork({
+        store: xhsOpsStore,
+        audits: xhsOpsAuditService,
+        changeOrders: xhsOpsChangeOrderService,
+        state: xhsOpsTakeoverRecovery,
+      });
       // 控制器重启后恢复残留 run；只有手机停止已确认的任务才会收口，
       // 无法确认的手机任务继续保持隔离，避免重复派发。
       void xhsOpsRunService.recoverInterruptedRuns().catch((err) => {

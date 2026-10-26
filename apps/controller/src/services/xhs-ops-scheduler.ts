@@ -1,12 +1,20 @@
-import type {
-  XhsOpsPlanSuggestion,
-  XhsOpsProject,
-  XhsOpsRun,
-  XhsOpsRunCreate,
+import {
+  XHS_TAKEOVER_AUDIT_RUNNING_MESSAGE,
+  XHS_TAKEOVER_DEVICE_HOLD_MESSAGE,
+  XHS_TAKEOVER_NO_NURTURE_TODAY_MESSAGE,
+  type XhsOpsAccount,
+  type XhsOpsPlanSkip,
+  type XhsOpsPlanSuggestion,
+  type XhsOpsProject,
+  type XhsOpsRun,
+  type XhsOpsRunCreate,
+  xhsOpsTakeoverPausedMessage,
 } from "@nexu/shared";
 import { logger } from "../lib/logger.js";
 import type { XhsOpsStore } from "../store/xhs-ops-store.js";
+import type { XhsOpsChangeOrderService } from "./xhs-ops-change-order-service.js";
 import { XhsOpsError, localDateString } from "./xhs-ops-run-service.js";
+import type { XhsOpsTakeoverRecoveryState } from "./xhs-ops-takeover-recovery.js";
 
 /**
  * P2-4 每日自动执行的胶水。OpenClaw cron 只能投递 agentTurn、带不了账目，所以
@@ -21,7 +29,10 @@ import { XhsOpsError, localDateString } from "./xhs-ops-run-service.js";
 export const XHS_OPS_SCHEDULER_INTERVAL_MS = 60_000;
 
 export type XhsOpsSchedulerRunService = {
-  suggestPlans(projectId: string): Promise<XhsOpsPlanSuggestion[]>;
+  suggestPlans(
+    projectId: string,
+    options?: { onSkipped?: (skip: XhsOpsPlanSkip) => void },
+  ): Promise<XhsOpsPlanSuggestion[]>;
   createRun(
     input: XhsOpsRunCreate,
     options?: { onCreated?: () => void },
@@ -32,8 +43,54 @@ export type XhsOpsSchedulerRunService = {
 export interface XhsOpsSchedulerDeps {
   store: XhsOpsStore;
   runService: XhsOpsSchedulerRunService;
+  /**
+   * Lists a takeover account's change orders, which lazily expires a stale
+   * precheck and with it activeChangeOrderId (§6.1). Absent: no refresh.
+   */
+  changeOrders?: Pick<XhsOpsChangeOrderService, "listChangeOrders">;
+  /**
+   * The takeover startup recovery (§2.6): nothing is dispatched for a
+   * takeover account until it settled. Absent means none is pending.
+   */
+  takeoverRecovery?: XhsOpsTakeoverRecoveryState;
   now?: () => number;
   intervalMs?: number;
+}
+
+/** Why a takeover account sits out this dispatch (§6.1); `retry`: worth another tick today. */
+interface TakeoverSkip {
+  reason: string;
+  retry: boolean;
+}
+
+const TAKEOVER_RECOVERY_PENDING =
+  "控制器刚重启，接管任务的恢复检查还没完成，稍后自动重试";
+
+/**
+ * The scheduler-side half of the takeover maintenance gate (§6.1 bullet 4):
+ * a safety pause, a device hold, a running audit or a public-profile change
+ * today keeps the account out of the day's dispatch. The first three can
+ * clear the same day, so the project is tried again on the next tick; a
+ * change today keeps nurture off until tomorrow (MT-03).
+ */
+function takeoverSkip(
+  account: XhsOpsAccount,
+  context: { auditRunning: boolean; today: string },
+): TakeoverSkip | null {
+  const takeover = account.takeover;
+  if (!takeover) return null;
+  if (takeover.safetyPause)
+    return {
+      reason: xhsOpsTakeoverPausedMessage(takeover.safetyPause.reason),
+      retry: true,
+    };
+  if (takeover.deviceHold)
+    return { reason: XHS_TAKEOVER_DEVICE_HOLD_MESSAGE, retry: true };
+  if (context.auditRunning)
+    return { reason: XHS_TAKEOVER_AUDIT_RUNNING_MESSAGE, retry: true };
+  if (takeover.noNurtureDates.includes(context.today))
+    return { reason: XHS_TAKEOVER_NO_NURTURE_TODAY_MESSAGE, retry: false };
+  return null;
 }
 
 export interface XhsOpsScheduleTriggerResult {
@@ -55,6 +112,11 @@ export function localClock(now: Date): string {
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
+/** A lastResult without its HH:MM: two ticks with the same outcome compare equal. */
+function withoutClock(lastResult: string): string {
+  return lastResult.replace(/^(\d{4}-\d{2}-\d{2}) \d{2}:\d{2} /, "$1 ");
+}
+
 /** True when the schedule should fire at `now`: enabled, time reached, not yet fired today. */
 export function isScheduleDue(project: XhsOpsProject, now: Date): boolean {
   const schedule = project.schedule;
@@ -73,6 +135,8 @@ function dispatchKey(run: Pick<XhsOpsRun, "accountId" | "segment">): string {
 export class XhsOpsScheduler {
   private readonly store: XhsOpsStore;
   private readonly runService: XhsOpsSchedulerRunService;
+  private readonly changeOrders: XhsOpsSchedulerDeps["changeOrders"];
+  private readonly takeoverRecovery: XhsOpsTakeoverRecoveryState | undefined;
   private readonly now: () => number;
   private readonly intervalMs: number;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -81,8 +145,55 @@ export class XhsOpsScheduler {
   constructor(deps: XhsOpsSchedulerDeps) {
     this.store = deps.store;
     this.runService = deps.runService;
+    this.changeOrders = deps.changeOrders;
+    this.takeoverRecovery = deps.takeoverRecovery;
     this.now = deps.now ?? (() => Date.now());
     this.intervalMs = deps.intervalMs ?? XHS_OPS_SCHEDULER_INTERVAL_MS;
+  }
+
+  /**
+   * The takeover accounts of a project that sit out this dispatch, keyed by
+   * account id. Until the startup recovery settled every takeover account
+   * waits; afterwards each one's change orders are listed first, so a stale
+   * precheck has expired before the account is evaluated.
+   */
+  private async takeoverSkips(
+    projectId: string,
+    today: string,
+  ): Promise<Map<string, TakeoverSkip>> {
+    const skips = new Map<string, TakeoverSkip>();
+    const takeovers = (
+      await this.store.listAccountsByProject(projectId)
+    ).filter((account) => account.takeover !== null);
+    for (const listed of takeovers) {
+      if (this.takeoverRecovery?.settled === false) {
+        skips.set(listed.id, {
+          reason: TAKEOVER_RECOVERY_PENDING,
+          retry: true,
+        });
+        continue;
+      }
+      if (this.changeOrders) {
+        try {
+          await this.changeOrders.listChangeOrders(listed.id);
+        } catch (error: unknown) {
+          logger.warn(
+            {
+              accountId: listed.id,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            "xhs-ops: refreshing a takeover's change orders before dispatch failed",
+          );
+        }
+      }
+      const account = (await this.store.getAccount(listed.id)) ?? listed;
+      const skip = takeoverSkip(account, {
+        auditRunning: Boolean(account.takeover?.activeAuditId),
+        today,
+      });
+      if (skip) skips.set(account.id, skip);
+    }
+    return skips;
   }
 
   start(): void {
@@ -153,7 +264,11 @@ export class XhsOpsScheduler {
         const key = dispatchKey(run);
         if (!runsByKey.has(key)) runsByKey.set(key, run);
       }
-      const plans = await this.runService.suggestPlans(projectId);
+      const takeoverSkips = await this.takeoverSkips(projectId, date);
+      const suggestSkips: XhsOpsPlanSkip[] = [];
+      const plans = await this.runService.suggestPlans(projectId, {
+        onSkipped: (skip) => suggestSkips.push(skip),
+      });
       const result: XhsOpsScheduleTriggerResult = {
         projectId,
         date,
@@ -161,11 +276,26 @@ export class XhsOpsScheduler {
         created: 0,
         started: 0,
         queued: 0,
-        skipped: [],
+        // A 409 like 兴趣池不足 waits for the operator, as an empty pool does.
+        skipped: suggestSkips.map(
+          (skip) => `${skip.accountLabel}：${skip.reason}`,
+        ),
         summary: "",
       };
       let dispatchComplete = true;
       const blockedAccounts = new Set<string>();
+      const reportedTakeoverSkips = new Set<string>();
+      /** A takeover account that sits this dispatch out: say why once, retry if it may clear today. */
+      const skipTakeover = (accountId: string, label: string): boolean => {
+        const skip = takeoverSkips.get(accountId);
+        if (!skip) return false;
+        if (skip.retry) dispatchComplete = false;
+        if (!reportedTakeoverSkips.has(accountId)) {
+          reportedTakeoverSkips.add(accountId);
+          result.skipped.push(`${label}：${skip.reason}`);
+        }
+        return true;
+      };
 
       const recordDispatch = (run: XhsOpsRun): boolean => {
         runsByKey.set(dispatchKey(run), run);
@@ -215,6 +345,7 @@ export class XhsOpsScheduler {
         );
       for (const run of runsToResume) {
         if (blockedAccounts.has(run.accountId)) continue;
+        if (skipTakeover(run.accountId, run.accountLabel)) continue;
         const label = `${run.accountLabel}${run.segment && run.segment.count > 1 ? ` 第${run.segment.index}/${run.segment.count}段` : ""}`;
         await start(run, label);
       }
@@ -223,6 +354,7 @@ export class XhsOpsScheduler {
         const label = `${plan.accountLabel}${plan.segment && plan.segment.count > 1 ? ` 第${plan.segment.index}/${plan.segment.count}段` : ""}`;
         const key = dispatchKey(plan);
         if (runsByKey.has(key)) continue;
+        if (skipTakeover(plan.accountId, plan.accountLabel)) continue;
         if (blockedAccounts.has(plan.accountId)) {
           result.skipped.push(`${label}：同账号前序分段启动失败，暂停派发`);
           continue;
@@ -271,20 +403,32 @@ export class XhsOpsScheduler {
           ? "没有可执行的计划（无已绑定手机的账号，或今日各段已执行）"
           : `${result.started} 个开始、${result.queued} 个排队${result.skipped.length > 0 ? `、${result.skipped.length} 个未派发` : ""}`;
       const latestProject = await this.store.getProject(projectId);
-      await this.store.updateProject(projectId, {
-        schedule: {
-          ...(latestProject?.schedule ?? project.schedule),
-          lastTriggeredDate: dispatchComplete
-            ? date
-            : (latestProject?.schedule.lastTriggeredDate ??
-              project.schedule.lastTriggeredDate),
-          lastResult:
-            `${date} ${localClock(new Date(this.now()))} ${opts.reason === "manual" ? "手动" : "定时"}：${result.summary}${result.skipped.length > 0 ? `（${result.skipped.join("；")}）` : ""}`.slice(
-              0,
-              500,
-            ),
-        },
-      });
+      const schedule = latestProject?.schedule ?? project.schedule;
+      const lastTriggeredDate = dispatchComplete
+        ? date
+        : (latestProject?.schedule.lastTriggeredDate ??
+          project.schedule.lastTriggeredDate);
+      const lastResult =
+        `${date} ${localClock(new Date(this.now()))} ${opts.reason === "manual" ? "手动" : "定时"}：${result.summary}${result.skipped.length > 0 ? `（${result.skipped.join("；")}）` : ""}`.slice(
+          0,
+          500,
+        );
+      // A dispatch still waiting on the same thing — a paused or held
+      // takeover, the startup recovery, a run that keeps answering 409 — is
+      // tried again on every tick. Writing that same outcome under a new
+      // clock each minute would move the project's updatedAt all day (all
+      // through a 48-hour pause) and fail every card that saves with it as
+      // expectedUpdatedAt, so a scheduled pass that changed nothing writes
+      // nothing; lastResult keeps the time this outcome was first seen.
+      const unchanged =
+        opts.reason === "schedule" &&
+        lastTriggeredDate === schedule.lastTriggeredDate &&
+        schedule.lastResult !== null &&
+        withoutClock(schedule.lastResult) === withoutClock(lastResult);
+      if (!unchanged)
+        await this.store.updateProject(projectId, {
+          schedule: { ...schedule, lastTriggeredDate, lastResult },
+        });
       logger.info(
         { reason: opts.reason, ...result, skipped: result.skipped.length },
         "xhs-ops: daily schedule triggered",

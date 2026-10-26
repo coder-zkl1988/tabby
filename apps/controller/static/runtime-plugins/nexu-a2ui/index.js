@@ -582,6 +582,33 @@ const COMPONENT_SCHEMAS = [
     },
   },
   {
+    type: "XhsOpsTakeover",
+    required: ["id", "type"],
+    properties: {
+      id: { type: "string", description: "Unique component ID" },
+      type: { const: "XhsOpsTakeover" },
+      projectId: {
+        type: "string",
+        description:
+          "The nurturing project the takeover account belongs to. Pass it when this session has it (xhs_ops_project_saved, or the projectId of any xhs_ops_* event); otherwise omit (optionally pass projectName) and the component lets the user pick.",
+      },
+      projectName: {
+        type: "string",
+        description: "Optional: the project name the user mentioned, auto-selected when it matches.",
+      },
+      accountId: {
+        type: "string",
+        description:
+          "The existing-mode account this card takes over: one id from the accountIds of xhs_ops_existing_accounts_selected or the saved takeover rows of xhs_ops_accounts_saved (render one card per id, each on its own surfaceId), or the accountId of any takeover event. Omit it only when you do not know it; the component then lets the user pick one of the project's existing-mode accounts.",
+      },
+      feedbackDraft: {
+        type: "string",
+        description:
+          "Optional, at most 300 characters: your short summary of what the user said in chat about this account's audit or diagnosis (e.g. keep the current nickname; add 护肤 gradually instead of switching). It only PREFILLS the card's 「来自对话的意见（未提交）」 box: nothing is submitted until the user clicks 「按意见生成诊断」 or regenerates on the card. Pass it with accountId when re-rendering the same surfaceId. Never put the 小红书号, birthday, region or contact details in it.",
+      },
+    },
+  },
+  {
     type: "XhsOpsRunPlanner",
     required: ["id", "type"],
     properties: {
@@ -707,7 +734,7 @@ WHEN TO USE:
     • Images are OPTIONAL and are NOT a prerequisite for publishing: render the post(s) immediately with images:[] and let the user add images afterwards. NEVER stall, loop, or refuse to render just because there are no images yet.
 - Updating an existing XHSEditor or XHSBatchTable in the chat, including putting a generated image into it. Reuse the exact prior surfaceId and preserve all existing post fields. For a requested generated image, first call image_generate and wait for its real media path, then call render_a2ui with that path appended to the XHS images. NEVER use canvas_read or canvas_op for a chat XHS component.
 - Running the Xiaohongshu KOC account-nurturing (小红书养号) workflow. FIRST decide which of the two entry modes the user asked for; reuse the current project when available, otherwise collect project input first:
-    • EXISTING ACCOUNT (entryMode "existing") — 「手机上已经登录了小红书」「已有账号」「帮我优化账号」「优化现有账号」「这两台手机的号帮我优化」. The phone already holds a real account, so nothing is being invented: do NOT run the new-account pipeline and do NOT reply with 账号人设/资料/养号方案 language. The target-user profile still requires HUMAN confirmation before profile application or nurturing: project form → XhsOpsProfileCard → XhsOpsAccountPlanner → XhsOpsProfileMaterial → XhsOpsRunPlanner. Existing-account mode skips bulk persona generation and new-persona review, not target-profile confirmation. In the planner the user adds one row per phone with 「新增账号」, switches that row to 「已有账号优化」 and binds the phone; rows must be saved and device-bound before they can be selected. Selecting only existing-mode rows fires xhs_ops_existing_accounts_selected carrying accountIds and an agentInstruction — follow that instruction, it is the authoritative next step. XhsOpsProfileMaterial then reads the phone READ-ONLY (「读取手机」 returns the signed-in 小红书号; the readback returns the account's current 名字/简介/职业/性别/生日/地区). Never log in, log out or switch accounts, and never write a field the user has not approved. Nurturing still unlocks only on verified readback.
+    • EXISTING ACCOUNT (entryMode "existing", a takeover / 老号接管) — 「手机上已经登录了小红书」「已有账号」「接管这台手机上的号」「这个号交给你运营」「帮我优化账号」「优化现有账号」「这两台手机的号帮我优化」. The phone already holds a real account that is READ, diagnosed and then maintained, so nothing new is invented: do NOT run the new-account pipeline (no persona batch, no XhsOpsProfileMaterial) and do NOT write a persona, profile copy or 优化方案 yourself — the diagnosis and the 优化方案 are generated on the takeover card and adopted there item by item. The target-user profile still requires HUMAN confirmation before the takeover starts, because the diagnosis compares the account with it: project form → XhsOpsProfileCard → XhsOpsAccountPlanner → XhsOpsTakeover → XhsOpsRunPlanner. Existing-account mode skips bulk persona generation and new-persona review, not target-profile confirmation. In the planner the user adds one row per phone with 「新增账号」, switches it to 「接管已有账号」 and binds the phone; rows must be saved and device-bound before they can be selected. Takeover rows always go to XhsOpsTakeover, whether they arrive with xhs_ops_accounts_saved or with xhs_ops_existing_accounts_selected. A selection that mixes new and takeover rows is split by the card: the takeover rows fire xhs_ops_existing_accounts_selected carrying accountIds and an agentInstruction (follow it, it is the authoritative next step), the new rows go on to persona confirmation (xhs_ops_personas_confirmed) and XhsOpsProfileMaterial. Render one XhsOpsTakeover per takeover account (projectId + accountId, each on its own surfaceId); the card owns authorization, identity lock, the read-only audit and baseline, the diagnosis, item-by-item decisions with 「确认优化方案」, public-profile change orders and observation review. You only explain and ask: after the user answers your questions in chat, re-render the same surfaceId with feedbackDraft (a short summary of their views) — it only prefills the card, and nothing is submitted until the user clicks 「按意见生成诊断」 or regenerates on the card. Never write a field, dispatch a phone task, log in, log out or switch accounts. Public profile fields change only through change orders the user prechecks and confirms one at a time on the card: never precheck or confirm a change order for the user, never promise when a change takes effect, and never claim a profile field was changed — relay only the per-field results xhs_ops_change_order_finished reports. Never restate or ask for the 小红书号, birthday or region. Nurturing unlocks once the identity is locked, the baseline is confirmed and the plan is confirmed; no profile rewrite is needed (「全部保留，只做维护」 is a valid plan). The tone guide (调性指南) is for people to follow: its only automatic effects are interest-pool words and the tone of comment candidates. Suggestions for existing notes are carried out by the user on the phone. Never point the user at the publish button of XHSEditor or XHSBatchTable for a takeover account: that path skips the takeover identity check. Every takeover event (xhs_ops_takeover_identity_locked, xhs_ops_account_audited, xhs_ops_account_diagnosed, xhs_ops_takeover_plan_confirmed, xhs_ops_change_order_finished) carries an agentInstruction: follow it.
     • NEW ACCOUNT (entryMode "new", the default) — render the stage component IN ORDER, one stage at a time, in the same conversation:
     • collect / edit customer business + target-audience info → XhsOpsProjectForm (it fires xhs_ops_project_saved; then generate the target-user profile from the saved business/audience/opsNotes)
     • present the generated profile for HUMAN confirmation → XhsOpsProfileCard (wait for xhs_ops_profile_confirmed or xhs_ops_profile_regenerate; NEVER proceed to personas before confirmed — this gate is a product requirement)
@@ -717,7 +744,7 @@ WHEN TO USE:
     • reviewing results across days (复盘/看板/效果如何/推荐流有没有变/哪些关键词不行/异常多不多) → XhsOpsDashboard, IMMEDIATELY and as the FIRST tool call. Pass projectId if this session already has it, otherwise pass projectName (what the user called it) or nothing — the component lets the user pick. The run data lives ONLY in the desktop's xhs-ops store, which this board reads; it is NOT in sessions_history, memory_search, files or exec output — do not search for it there. READ-ONLY: never re-dispatch phone tasks to "refresh" results. The user may save a 运营备注 there; you receive xhs_ops_dashboard_note_saved.
     • Never render these stages as plain text or Markdown lists — the components own the form, confirmation and progress UX.
     • comment review (评论审核/评论队列/给帖子评论/批准评论) → XhsOpsCommentReview. The DESKTOP generates candidate comments from browsed posts and the HUMAN approves each one there; comments are only ever sent by a later desktop comment task. You NEVER write, approve or send a comment yourself, never dispatch a phone task to comment, and never call device tools for it — render the queue and stop. You receive xhs_ops_comments_reviewed per decision; acknowledge briefly, do not restate the comment. Approved comments are dispatched to the phone by the USER from the same queue (「派发已批准的评论」, a desktop comment task whose phone policy only allows the verbatim approved text) — you receive xhs_ops_comment_run_started; never dispatch, retry or "help" by sending anything.
-    • projectId is only known inside the session that saved the project. In any other session (今天跑一下养号 / 给账号生成资料 / 复盘) render XhsOpsRunPlanner / XhsOpsProfileMaterial / XhsOpsDashboard WITHOUT projectId (pass projectName if the user named it) — the component shows a project picker. Never search memory/sessions/files for a projectId.
+    • projectId is only known inside the session that saved the project. In any other session (今天跑一下养号 / 给账号生成资料 / 复盘) render XhsOpsRunPlanner / XhsOpsProfileMaterial / XhsOpsTakeover / XhsOpsDashboard WITHOUT projectId (pass projectName if the user named it) — the component shows a project picker. Never search memory/sessions/files for a projectId.
 - Showing a generated/edited image to the user in webchat — use an Image component (pass the local file path produced by image_generate)
 - Collecting structured input from the user (forms, date/time, choices)
 - Offering selectable actions (confirm/cancel, option selection)
@@ -764,11 +791,12 @@ CUSTOM COMPONENTS:
 - XhsOpsProjectForm: KOC nurturing project form — customer business, target audience, ops notes; saves via the controller API and reports back xhs_ops_project_saved.
 - XhsOpsProfileCard: Target-user profile proposal with inline editing and human confirm/regenerate (xhs_ops_profile_confirmed / xhs_ops_profile_regenerate).
 - XhsOpsAccountPlanner: Persona suggestion table with phone binding and three-layer interest pool editing.
-- XhsOpsProfileMaterial: Per-account profile material — AI-generated nickname/bio, 3 avatar + 3 cover candidates to pick from, and a user-triggered 「应用到手机」 that edits the public profile via the phone.
+- XhsOpsProfileMaterial: Per-account profile material for NEW accounts — AI-generated nickname/bio, 3 avatar + 3 cover candidates to pick from, and a user-triggered 「应用到手机」 that edits the public profile via the phone.
+- XhsOpsTakeover: Takeover (老号接管) card for one existing account — ① authorization, ② identity lock, ③ read-only audit and baseline, ④ diagnosis, ⑤ item-by-item plan decisions and 「确认优化方案」, ⑥ public-profile change orders the user prechecks and confirms, ⑦ observation review, plus pause/resume. Only the user's clicks there write anything; feedbackDraft just prefills its comment box.
 - XhsOpsRunPlanner: Today's per-account nurture plan (keywords × counts + home feed), launch button, live chunk progress, and post-run review notes.
 - XhsOpsCommentReview: Human review queue for comment drafts — per-account quota, AI candidates per browsed post, edit/approve/reject; nothing is sent from here and the agent never comments on its own.
 - XhsOpsDashboard: Read-only review board for a nurturing project — account × date matrix (actual/planned browsed, home feed, interactions, anomalies), per-keyword verdicts (正常/观察/建议调整), anomaly summary, phone + ops observation timeline, and inline 运营备注 editing.
-Use catalogId: "https://nexu.app/a2ui/custom-catalog.json" when using PhonePreview, MarkdownEditor, XHSEditor, XHSBatchTable, XhsOpsProjectForm, XhsOpsProfileCard, XhsOpsAccountPlanner, XhsOpsProfileMaterial, XhsOpsRunPlanner, XhsOpsDashboard, or XhsOpsCommentReview.`;
+Use catalogId: "https://nexu.app/a2ui/custom-catalog.json" when using PhonePreview, MarkdownEditor, XHSEditor, XHSBatchTable, XhsOpsProjectForm, XhsOpsProfileCard, XhsOpsAccountPlanner, XhsOpsProfileMaterial, XhsOpsTakeover, XhsOpsRunPlanner, XhsOpsDashboard, or XhsOpsCommentReview.`;
 
 const plugin = {
   id: "nexu-a2ui",

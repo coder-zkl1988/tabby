@@ -111,7 +111,7 @@ const runService = new XhsOpsRunService({
     executeTask: async () => {
       throw new Error("not used in route smoke test");
     },
-    cancelTask: async () => {},
+    cancelTask: async () => ({ cancelled: false }),
   },
 });
 
@@ -380,20 +380,39 @@ describe("xhs-ops routes wiring", () => {
       });
     await mk("已绑定", "dev-1");
     await mk("未绑定", null);
+    // A pool too small for the day's target is that account's 409 alone (§5.3 #5).
+    await app.request(`/api/v1/xhs-ops/projects/${proj.id}/accounts`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        label: "装不下",
+        deviceId: "dev-2",
+        browseDefaults: { dailyTargetPosts: 90, dailySegments: 2 },
+        interestPool: { core: ["亲子酒店"], extended: [], general: [] },
+      }),
+    });
 
     const res = await app.request(
       `/api/v1/xhs-ops/projects/${proj.id}/plan-suggest`,
     );
     expect(res.status).toBe(200);
-    const { plans } = (await res.json()) as {
+    const { plans, skipped } = (await res.json()) as {
       plans: Array<{
         accountLabel: string;
         keywords: Array<{ keyword: string; count: number }>;
         homeFeedCount: number;
         rationale: string[];
       }>;
+      skipped: Array<{ accountLabel: string; reason: string }>;
     };
     expect(plans.map((p) => p.accountLabel)).toEqual(["已绑定"]);
+    expect(skipped).toMatchObject([
+      {
+        accountLabel: "装不下",
+        reason:
+          "本段搜索目标 36 篇至少需要 5 个兴趣词，当前只有 1 个，请补充兴趣池或增加每日分段",
+      },
+    ]);
     expect(plans[0]?.keywords.map((k) => k.keyword)).toEqual([
       "亲子酒店",
       "周末遛娃",
@@ -921,6 +940,7 @@ describe("xhs-ops routes wiring", () => {
           completedAt: null,
           browsed: 8,
           skipped: 1,
+          refreshCount: 0,
           interactions: { like: 0, collect: 0, follow: 0 },
           anomalies: [],
           observation: null,
@@ -934,6 +954,8 @@ describe("xhs-ops routes wiring", () => {
               author: "满哥铛弟",
               action: "none",
               commentsRead: 4,
+              dwellSeconds: 0,
+              commentsComplete: false,
               commentWorthy: true,
               summary: "两大一小套房，儿童洗漱用品齐全",
             },
@@ -942,6 +964,8 @@ describe("xhs-ops routes wiring", () => {
               author: "乐妈",
               action: "skip",
               commentsRead: 0,
+              dwellSeconds: 0,
+              commentsComplete: false,
               commentWorthy: true,
               summary: "",
             },
@@ -950,6 +974,8 @@ describe("xhs-ops routes wiring", () => {
               author: "吐司椰椰",
               action: "none",
               commentsRead: 448,
+              dwellSeconds: 0,
+              commentsComplete: false,
               commentWorthy: false,
               summary: "",
             },
@@ -958,6 +984,8 @@ describe("xhs-ops routes wiring", () => {
               author: "旅行者",
               action: "none",
               commentsRead: 12,
+              dwellSeconds: 0,
+              commentsComplete: false,
               commentWorthy: true,
               summary: "",
             },

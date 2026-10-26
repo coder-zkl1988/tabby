@@ -1,3 +1,4 @@
+import { xhsOpsAccountSchema, xhsOpsChangeOrderSchema } from "@nexu/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
@@ -27,6 +28,10 @@ const apiMocks = vi.hoisted(() => ({
   postApiV1XhsOpsRunsByRunIdCancel: vi.fn(),
   postApiV1XhsOpsRunsByRunIdCommentsGenerate: vi.fn(),
   postApiV1XhsOpsRunsByRunIdStart: vi.fn(),
+  getApiV1XhsOpsDiagnosesByDiagnosisId: vi.fn(),
+  getApiV1XhsOpsPlaybook: vi.fn(),
+  postApiV1XhsOpsChangeOrdersByOrderIdConfirm: vi.fn(),
+  putApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImage: vi.fn(),
 }));
 
 vi.mock("../lib/api/sdk.gen", () => apiMocks);
@@ -35,6 +40,7 @@ import {
   XhsOpsApiError,
   xhsOpsApi,
 } from "../src/lib/a2ui/custom-components/xhs-ops/xhs-ops-api";
+import { takeoverParamConflict } from "../src/lib/a2ui/custom-components/xhs-ops/xhs-ops-takeover-model";
 
 const project = {
   id: "project-1",
@@ -129,6 +135,71 @@ describe("xhs-ops generated SDK adapter", () => {
     });
   });
 
+  it("keeps a takeover parameter 409's code and issues on the error, for the PATCH and the transfer", async () => {
+    const body = {
+      message:
+        "点赞每日上限 6 超过接管档位（成熟档）上限 4。超出接管档位的调整需要填写理由",
+      code: "takeover_override_reason_required",
+      issues: [
+        {
+          field: "interaction.like.dailyCap",
+          message: "点赞每日上限 6 超过接管档位（成熟档）上限 4",
+          overridable: true,
+        },
+      ],
+    };
+    apiMocks.patchApiV1XhsOpsAccountsByAccountId.mockResolvedValue({
+      error: body,
+      response: new Response(null, { status: 409 }),
+    });
+    const patchError = await xhsOpsApi
+      .updateAccount("account-1", { label: "接管·Phone 1" })
+      .catch((err: unknown) => err);
+    expect(patchError).toBeInstanceOf(XhsOpsApiError);
+    expect(patchError).toMatchObject({
+      status: 409,
+      message: body.message,
+      body,
+    });
+    expect(takeoverParamConflict(patchError)).toEqual({
+      code: body.code,
+      message: body.message,
+      issues: body.issues,
+    });
+
+    const hard = { ...body, code: "takeover_param_hard_limit" };
+    apiMocks.postApiV1XhsOpsProjectsByProjectIdAccountsTransferDevice.mockResolvedValue(
+      { error: hard, response: new Response(null, { status: 409 }) },
+    );
+    const input = {
+      fromAccountId: "old-account",
+      toAccountId: "account-1",
+      account: { label: "接管·Phone 1", deviceId: "phone-1" },
+      overrideReason: "客户要求加量",
+    };
+    const transferError = await xhsOpsApi
+      .transferDevice("project-1", input)
+      .catch((err: unknown) => err);
+    expect(takeoverParamConflict(transferError)).toMatchObject({
+      code: "takeover_param_hard_limit",
+    });
+    expect(
+      apiMocks.postApiV1XhsOpsProjectsByProjectIdAccountsTransferDevice,
+    ).toHaveBeenCalledWith({ path: { projectId: "project-1" }, body: input });
+  });
+
+  it("returns the playbook with the phone-skills bundle its doc rules were checked against", async () => {
+    apiMocks.getApiV1XhsOpsPlaybook.mockResolvedValue({
+      data: { version: "2026-10-21.1", bundleVersion: 66, rules: [] },
+      response: new Response(null, { status: 200 }),
+    });
+    await expect(xhsOpsApi.getPlaybook()).resolves.toEqual({
+      version: "2026-10-21.1",
+      bundleVersion: 66,
+      rules: [],
+    });
+  });
+
   it("reports rejected requests as desktop connection failures", async () => {
     apiMocks.getApiV1XhsOpsProjects.mockRejectedValue(new Error("offline"));
 
@@ -198,6 +269,113 @@ describe("xhs-ops generated SDK adapter", () => {
     expect(
       apiMocks.postApiV1XhsOpsProjectsByProjectIdAccountsTransferDevice,
     ).toHaveBeenCalledWith({ path: { projectId: "new-project" }, body: input });
+  });
+
+  it("confirms a change order with its digest and acks through the generated endpoint", async () => {
+    const order = xhsOpsChangeOrderSchema.parse({
+      id: "order-1",
+      projectId: "project-1",
+      accountId: "account-1",
+      deviceId: "phone-1",
+      platformAccountId: "xhs-1",
+      diagnosisId: "diag-1",
+      proposalIds: ["P1"],
+      batchIndex: 1,
+      risk: "L1",
+      fields: [{ field: "bio", baselineValue: "旧简介", after: "新简介" }],
+      status: "applying",
+      createdAt: "2026-10-20T00:00:00.000Z",
+      updatedAt: "2026-10-20T00:01:00.000Z",
+    });
+    const account = xhsOpsAccountSchema.parse({
+      id: "account-1",
+      projectId: "project-1",
+      entryMode: "existing",
+      label: "接管·Phone 1",
+      createdAt: "2026-10-20T00:00:00.000Z",
+      updatedAt: "2026-10-20T00:01:00.000Z",
+    });
+    apiMocks.postApiV1XhsOpsChangeOrdersByOrderIdConfirm.mockResolvedValue({
+      data: { order, account, event: null },
+      response: new Response(null, { status: 200 }),
+    });
+    const body = {
+      confirmDigest: "b".repeat(64),
+      expectedUpdatedAt: "2026-10-20T00:00:30.000Z",
+      acks: {},
+    };
+
+    await expect(
+      xhsOpsApi.confirmChangeOrder("order-1", body),
+    ).resolves.toMatchObject({ order: { id: "order-1" }, event: null });
+    expect(
+      apiMocks.postApiV1XhsOpsChangeOrdersByOrderIdConfirm,
+    ).toHaveBeenCalledWith({ path: { orderId: "order-1" }, body });
+  });
+
+  it("puts a change-order picture under its field path", async () => {
+    apiMocks.putApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImage.mockResolvedValue(
+      {
+        error: { message: "图片不能超过 10MB" },
+        response: new Response(null, { status: 400 }),
+      },
+    );
+    const body = {
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      expectedUpdatedAt: "rev-1",
+    };
+
+    await expect(
+      xhsOpsApi.uploadChangeOrderImage("order-1", "cover", body),
+    ).rejects.toMatchObject({ message: "图片不能超过 10MB", status: 400 });
+    expect(
+      apiMocks.putApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImage,
+    ).toHaveBeenCalledWith({
+      path: { orderId: "order-1", field: "cover" },
+      body,
+    });
+  });
+
+  it("rejects a diagnosis the shared schema does not accept", async () => {
+    apiMocks.getApiV1XhsOpsDiagnosesByDiagnosisId.mockResolvedValue({
+      data: { diagnosis: { id: "diag-1" }, event: null },
+      response: new Response(null, { status: 200 }),
+    });
+
+    await expect(xhsOpsApi.getDiagnosis("diag-1")).rejects.toMatchObject({
+      message: "桌面端返回了不兼容的数据格式：诊断加载失败",
+      status: 200,
+    });
+  });
+
+  it("returns plan suggestions with the accounts the desktop skipped", async () => {
+    const skip = {
+      accountId: "account-1",
+      accountLabel: "接管·Phone 1",
+      reason: "本段搜索目标 36 篇至少需要 5 个兴趣词，当前只有 2 个",
+    };
+    apiMocks.getApiV1XhsOpsProjectsByProjectIdPlanSuggest
+      .mockResolvedValueOnce({
+        data: { plans: [], skipped: [skip] },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { plans: [] },
+        response: new Response(null, { status: 200 }),
+      });
+
+    await expect(xhsOpsApi.suggestPlans("project-1")).resolves.toEqual({
+      plans: [],
+      skipped: [skip],
+    });
+    // An older controller sends no `skipped`.
+    await expect(xhsOpsApi.suggestPlans("project-1")).resolves.toEqual({
+      plans: [],
+      skipped: [],
+    });
+    expect(
+      apiMocks.getApiV1XhsOpsProjectsByProjectIdPlanSuggest,
+    ).toHaveBeenCalledWith({ path: { projectId: "project-1" } });
   });
 
   it("confirms a complete profile draft through the generated endpoint", async () => {

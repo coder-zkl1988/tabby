@@ -2,12 +2,18 @@ import { Switch } from "@/components/ui/switch";
 import {
   XHS_OCCUPATION_GROUPS,
   XHS_OCCUPATION_OPTIONS,
+  XHS_TAKEOVER_ENTRY_MODE_LOCKED_MESSAGE,
   type XhsOpsDeviceBinding,
+  xhsOpsAccountEntryModeLocked,
 } from "@nexu/shared";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CustomComponentProps } from "../registry";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
+import {
+  type TakeoverParamConflict,
+  takeoverParamConflict,
+} from "./xhs-ops-takeover-model";
 import {
   type XhsOpsAccount,
   type XhsOpsBrowseDefaults,
@@ -72,11 +78,31 @@ interface AccountRow {
   interestPool: XhsOpsInterestPool;
   interaction: XhsOpsInteractionConfig;
   browseDefaults: XhsOpsBrowseDefaults;
+  /** The takeover started or the 小红书号 is locked: the mode can no longer change (§2.5). */
+  entryModeLocked: boolean;
+  /** The label is the 「接管·{设备名}」 default, still following the device. */
+  labelAuto: boolean;
+  /**
+   * The controller's structured 409 for a takeover row whose interaction /
+   * browse defaults / interest pool go past a limit (§6.3):
+   * takeover_override_reason_required lets the next save or transfer send
+   * `overrideReason`, takeover_param_hard_limit needs the values changed.
+   * `via` is the action it refused. Cleared when any of them changes again.
+   */
+  paramConflict: (TakeoverParamConflict & { via: "save" | "transfer" }) | null;
+  overrideReason: string;
   expanded: boolean;
   error: string | null;
   savedAt: number | null;
   dirty: boolean;
 }
+
+/** T1: what a takeover row's positioning name defaults to. */
+const TAKEOVER_LABEL_PREFIX = "接管·";
+
+/** Where every takeover row goes next, whichever event carries it (T1). */
+const TAKEOVER_ROWS_INSTRUCTION =
+  "为每个接管账号各渲染一张 XhsOpsTakeover（projectId + accountId，每张用独立的 surfaceId）；授权、身份锁定、只读盘点与基线、诊断、逐项采纳和「确认优化方案」都由用户在卡片上操作。先告诉用户：「接管会先只读地看一遍这个号，不改任何资料。」不要渲染 XhsOpsProfileMaterial，不要确认人设，不要自己写人设、资料或优化方案，不要执行登录、退出或切换账号，也不要派发手机任务。";
 
 let rowSeq = 0;
 function nextKey(): string {
@@ -118,6 +144,10 @@ function rowFromAccount(account: XhsOpsAccount): AccountRow {
     interestPool: normalizeInterestPool(account.interestPool),
     interaction: normalizeInteractionConfig(account.interaction),
     browseDefaults: normalizeBrowseDefaults(account.browseDefaults),
+    entryModeLocked: xhsOpsAccountEntryModeLocked(account),
+    labelAuto: false,
+    paramConflict: null,
+    overrideReason: "",
     expanded: false,
     error: null,
     savedAt: null,
@@ -140,11 +170,68 @@ function rowFromSuggestion(s: Suggestion): AccountRow {
     interestPool: s.interestPool,
     interaction: defaultInteractionConfig(),
     browseDefaults: defaultBrowseDefaults(),
+    entryModeLocked: false,
+    labelAuto: false,
+    paramConflict: null,
+    overrideReason: "",
     expanded: true,
     error: null,
     savedAt: null,
     dirty: true,
   };
+}
+
+/**
+ * T1: a takeover row's positioning name defaults to 「接管·{设备名}」, so the
+ * operator binds the phone before anything about its content is known. The
+ * default follows the device until the operator types a name of their own,
+ * and leaves with the takeover mode.
+ */
+function withTakeoverLabel(
+  row: AccountRow,
+  typedLabel: boolean,
+  devices: XhsOpsDevice[],
+): AccountRow {
+  if (typedLabel) return { ...row, labelAuto: false };
+  if (row.label.trim() && !row.labelAuto) return row;
+  const device = devices.find((d) => d.deviceId === row.deviceId);
+  const name = device ? deviceDisplayName(device) : row.deviceId;
+  if (row.entryMode !== "existing" || !name)
+    return row.labelAuto ? { ...row, label: "", labelAuto: false } : row;
+  return {
+    ...row,
+    label: `${TAKEOVER_LABEL_PREFIX}${name}`.slice(0, 40),
+    labelAuto: true,
+  };
+}
+
+/**
+ * Why a save or transfer of a row the controller refused for its takeover
+ * parameters cannot go out yet, or null: a hard limit needs the values
+ * changed (any change clears the conflict), an over-tier one a reason.
+ */
+function paramConflictProblem(
+  row: AccountRow,
+  action: "保存" | "转移",
+): string | null {
+  const conflict = row.paramConflict;
+  if (conflict?.code === "takeover_param_hard_limit")
+    return `请先把超出硬上限的参数调回范围内，再${action}`;
+  if (
+    conflict?.code === "takeover_override_reason_required" &&
+    !row.overrideReason.trim()
+  )
+    return `请填写超出接管档位的理由，再${action}`;
+  return null;
+}
+
+/** `overrideReason` for the next PATCH or transfer, only once the controller asked for it (§6.3). */
+function overrideReasonBody(row: AccountRow): { overrideReason?: string } {
+  const reason = row.overrideReason.trim();
+  return row.paramConflict?.code === "takeover_override_reason_required" &&
+    reason
+    ? { overrideReason: reason.slice(0, 200) }
+    : {};
 }
 
 function blankRow(): AccountRow {
@@ -168,7 +255,9 @@ const RULE_LABEL: Record<"like" | "collect" | "follow", string> = {
  * plus the agent's positioning suggestions (one-click add); each row edits
  * label / positioning / target phone / three-tier interest pool / interaction
  * caps / browse defaults. 「保存账号配置」POSTs new rows and PATCHes existing
- * ones, then reports `xhs_ops_accounts_saved`.
+ * ones, then reports `xhs_ops_accounts_saved`. Takeover rows (接管已有账号)
+ * never enter persona confirmation: the selection is split, and they report
+ * `xhs_ops_existing_accounts_selected` for XhsOpsTakeover instead.
  */
 export function XhsOpsAccountPlanner({
   comp,
@@ -211,6 +300,8 @@ export function XhsOpsAccountPlanner({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  /** The selection whose takeover rows were last announced (every change makes a new Set). */
+  const takeoverReportedRef = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     void accountsReload;
@@ -306,13 +397,32 @@ export function XhsOpsAccountPlanner({
       "persona" in patch ||
       "personaTags" in patch ||
       "entryMode" in patch;
-    patchRow(key, {
-      ...patch,
-      ...(changesPersona ? { personaReviewedAt: null } : {}),
-      error: null,
-      savedAt: null,
-      dirty: true,
-    });
+    // New parameter values get a fresh tier check on the next save; the
+    // typed reason stays in case the controller asks again. The interest
+    // pool counts too: too few words is a hard limit the pool alone fixes.
+    const changesParameters =
+      "interaction" in patch ||
+      "browseDefaults" in patch ||
+      "interestPool" in patch;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.key === key
+          ? withTakeoverLabel(
+              {
+                ...r,
+                ...patch,
+                ...(changesPersona ? { personaReviewedAt: null } : {}),
+                ...(changesParameters ? { paramConflict: null } : {}),
+                error: null,
+                savedAt: null,
+                dirty: true,
+              },
+              "label" in patch,
+              devices,
+            )
+          : r,
+      ),
+    );
     setReportedAt(null);
     setFormError(null);
   };
@@ -358,21 +468,27 @@ export function XhsOpsAccountPlanner({
   const deviceById = new Map(devices.map((d) => [d.deviceId, d]));
   const bindingByDeviceId = new Map(bindings.map((b) => [b.deviceId, b]));
   // P1-3 人设差异检查：两两比对，告警只提示不阻断，随保存动作一并回传给 agent。
+  // 接管行的人设来自诊断，不参与比对：否则 agent 会被引导去重写接管号的人设。
   const overlapWarnings = useMemo(
     () =>
       findPersonaOverlaps(
-        rows.map((r) => ({
-          key: r.key,
-          label: r.label,
-          persona: r.persona,
-          personaTags: r.personaTags,
-          interestPool: r.interestPool,
-        })),
+        rows
+          .filter((r) => r.entryMode !== "existing")
+          .map((r) => ({
+            key: r.key,
+            label: r.label,
+            persona: r.persona,
+            personaTags: r.personaTags,
+            interestPool: r.interestPool,
+          })),
       ),
     [rows],
   );
   const overlapCount = overlapWarnings.size;
-  const archiveIssueCount = rows.filter(
+  // Personas are reviewed for new rows only; a takeover row's persona comes
+  // from its diagnosis (T1).
+  const newAccountRows = rows.filter((row) => row.entryMode !== "existing");
+  const archiveIssueCount = newAccountRows.filter(
     (row) =>
       personaArchiveIssues({
         persona: row.persona,
@@ -380,8 +496,12 @@ export function XhsOpsAccountPlanner({
       }).length > 0,
   ).length;
   const selectedRows = rows.filter((row) => selectedKeys.has(row.key));
+  const selectedNewRows = selectedRows.filter(
+    (row) => row.entryMode !== "existing",
+  );
+  const selectedTakeoverCount = selectedRows.length - selectedNewRows.length;
   const actualDistribution = personaDistributionSummary(
-    selectedRows.length > 0 ? selectedRows : rows,
+    selectedNewRows.length > 0 ? selectedNewRows : newAccountRows,
   );
 
   const generatePersonas = async () => {
@@ -447,6 +567,7 @@ export function XhsOpsAccountPlanner({
     const saved: Array<{
       id: string;
       label: string;
+      entryMode: AccountRow["entryMode"];
       deviceId: string | null;
       deviceName: string | null;
       warnings: string[];
@@ -474,6 +595,12 @@ export function XhsOpsAccountPlanner({
         patchRow(row.key, {
           error: "设备绑定信息不可用，请重试加载后再保存绑定设备的账号",
         });
+        failed += 1;
+        continue;
+      }
+      const paramProblem = paramConflictProblem(row, "保存");
+      if (paramProblem) {
+        patchRow(row.key, { error: paramProblem, expanded: true });
         failed += 1;
         continue;
       }
@@ -507,6 +634,9 @@ export function XhsOpsAccountPlanner({
           ? await xhsOpsApi.updateAccount(row.id, {
               ...body,
               expectedUpdatedAt: row.updatedAt ?? undefined,
+              // Only once the controller asked for it (§6.3); it is recorded
+              // in takeover.paramOverrides.
+              ...overrideReasonBody(row),
             })
           : await xhsOpsApi.createAccount(projectId, { projectId, ...body });
         patchRow(row.key, {
@@ -515,17 +645,31 @@ export function XhsOpsAccountPlanner({
           savedAt: Date.now(),
           updatedAt: account.updatedAt,
           personaReviewedAt: account.personaReviewedAt ?? null,
+          entryModeLocked: xhsOpsAccountEntryModeLocked(account),
+          paramConflict: null,
+          overrideReason: "",
           dirty: false,
         });
         saved.push({
           id: account.id,
           label: account.label,
+          entryMode: account.entryMode,
           deviceId: account.deviceId ?? null,
           deviceName: account.deviceName ?? null,
           warnings: overlapWarnings.get(row.key) ?? [],
         });
       } catch (err) {
-        patchRow(row.key, { error: describeXhsOpsError(err, "保存失败") });
+        const conflict = row.id ? takeoverParamConflict(err) : null;
+        patchRow(
+          row.key,
+          conflict
+            ? {
+                error: null,
+                paramConflict: { ...conflict, via: "save" },
+                expanded: true,
+              }
+            : { error: describeXhsOpsError(err, "保存失败") },
+        );
         failed += 1;
       }
     }
@@ -544,20 +688,35 @@ export function XhsOpsAccountPlanner({
     const overlapReport = saved
       .filter((a) => a.warnings.length > 0)
       .map((a) => ({ id: a.id, label: a.label, warnings: a.warnings }));
+    const existingAccountIds = saved
+      .filter((account) => account.entryMode === "existing")
+      .map((account) => account.id);
+    const hasNew = saved.some((account) => account.entryMode !== "existing");
+    const unboundTakeover = saved.some(
+      (account) => account.entryMode === "existing" && !account.deviceId,
+    );
+    // Takeover rows go to XhsOpsTakeover; new rows still wait for persona
+    // confirmation (T1).
+    const takeoverPart =
+      existingAccountIds.length > 0
+        ? `接管已有账号的行（existingAccountIds）已保存，走老号接管：${TAKEOVER_ROWS_INSTRUCTION}${
+            unboundTakeover
+              ? "其中有的行还没绑定手机：提醒用户先在账号配置里绑定手机并保存，接管卡片才能授权。"
+              : ""
+          }`
+        : "";
+    const newPart =
+      overlapReport.length > 0
+        ? "部分人设相似度过高（见 overlapWarnings）。请指出哪些账号相似、建议如何拉开差异，并询问是否对这些账号重新生成人设；不要自动改动已保存账号。"
+        : hasNew
+          ? "账号草稿已保存，仍需运营在卡片中勾选目标分布并确认人设；收到 xhs_ops_personas_confirmed 前不要进入素材或养号。"
+          : "";
     onAction?.("xhs_ops_accounts_saved", {
       projectId,
       accounts: saved,
+      existingAccountIds,
       overlapWarnings: overlapReport,
-      agentInstruction:
-        overlapReport.length > 0
-          ? "部分人设相似度过高（见 overlapWarnings）。请指出哪些账号相似、建议如何拉开差异，并询问是否对这些账号重新生成人设；不要自动改动已保存账号。"
-          : saved.some(
-                (account) =>
-                  rows.find((row) => row.id === account.id)?.entryMode ===
-                  "existing",
-              )
-            ? "已有账号已保存并绑定手机。请直接渲染 XhsOpsProfileMaterial，先读取手机账号和现有资料，生成并人工确认优化方案；不要执行登录、退出或切换账号。"
-            : "账号草稿已保存，仍需运营在卡片中勾选目标分布并确认人设；收到 xhs_ops_personas_confirmed 前不要进入素材或养号。",
+      agentInstruction: [newPart, takeoverPart].filter(Boolean).join(" "),
     });
   };
 
@@ -571,59 +730,66 @@ export function XhsOpsAccountPlanner({
       setFormError("请至少选择一个要进入素材阶段的人设");
       return;
     }
-    const existingSelected = selected.filter(
-      (row) => row.entryMode === "existing",
-    );
+    // A mixed selection is split (T1): takeover rows go to XhsOpsTakeover and
+    // never into persona confirmation, new rows are confirmed as before.
+    const takeoverRows = selected.filter((row) => row.entryMode === "existing");
+    const newRows = selected.filter((row) => row.entryMode !== "existing");
     if (
-      existingSelected.length > 0 &&
-      existingSelected.length === selected.length
+      takeoverRows.some(
+        (row) => row.dirty || !row.id || !row.updatedAt || !row.deviceId,
+      )
     ) {
-      if (
-        selected.some(
-          (row) => row.dirty || !row.id || !row.updatedAt || !row.deviceId,
-        )
-      ) {
-        setFormError("请先保存已有账号并绑定手机，再进入优化");
-        return;
-      }
-      onAction?.("xhs_ops_existing_accounts_selected", {
-        projectId,
-        accountIds: selected.map((row) => row.id as string),
-        agentInstruction:
-          "已有账号已绑定手机。直接渲染 XhsOpsProfileMaterial：先读取手机账号身份和现有资料，再生成人工确认的优化方案；禁止登录、退出或切换账号。资料核验通过后再渲染养号计划。",
-      });
-      return;
-    }
-    const invalid = selected.filter(
-      (row) =>
-        row.entryMode !== "existing" &&
-        personaArchiveIssues({
-          persona: row.persona,
-          personaTags: row.personaTags,
-        }).length > 0,
-    );
-    if (invalid.length > 0) {
-      setFormError("选定人设的人口学字段和档案标签尚未补全");
-      return;
-    }
-    if (selected.some((row) => row.dirty || !row.id || !row.updatedAt)) {
-      setFormError("请先保存选定人设的最新草稿，再进行人工确认");
-      return;
-    }
-    if (!distributionReviewed) {
-      setFormError("请先核对目标画像与实际分布");
+      setFormError("请先保存接管已有账号的行并绑定手机，再进入接管");
       return;
     }
     const note = reviewNote.trim();
-    if (!note) {
-      setFormError("请填写本次人设与分布复核说明");
+    if (newRows.length > 0) {
+      const invalid = newRows.filter(
+        (row) =>
+          personaArchiveIssues({
+            persona: row.persona,
+            personaTags: row.personaTags,
+          }).length > 0,
+      );
+      if (invalid.length > 0) {
+        setFormError("选定人设的人口学字段和档案标签尚未补全");
+        return;
+      }
+      if (newRows.some((row) => row.dirty || !row.id || !row.updatedAt)) {
+        setFormError("请先保存选定人设的最新草稿，再进行人工确认");
+        return;
+      }
+      if (!distributionReviewed) {
+        setFormError("请先核对目标画像与实际分布");
+        return;
+      }
+      if (!note) {
+        setFormError("请填写本次人设与分布复核说明");
+        return;
+      }
+    }
+    // Sent once the whole submission went through, and once per selection:
+    // a confirmation that fails and is retried does not announce the
+    // takeover rows twice.
+    const reportTakeoverRows = () => {
+      if (takeoverRows.length === 0) return;
+      if (takeoverReportedRef.current === selectedKeys) return;
+      takeoverReportedRef.current = selectedKeys;
+      onAction?.("xhs_ops_existing_accounts_selected", {
+        projectId,
+        accountIds: takeoverRows.map((row) => row.id as string),
+        agentInstruction: `这些已有账号由用户选定走老号接管。${TAKEOVER_ROWS_INSTRUCTION}`,
+      });
+    };
+    if (newRows.length === 0) {
+      reportTakeoverRows();
       return;
     }
     setSaving(true);
     setFormError(null);
     try {
       const confirmed = await xhsOpsApi.confirmPersonas(projectId, {
-        accounts: selected.map((row) => ({
+        accounts: newRows.map((row) => ({
           accountId: row.id as string,
           expectedUpdatedAt: row.updatedAt as string,
         })),
@@ -645,6 +811,7 @@ export function XhsOpsAccountPlanner({
             : row;
         }),
       );
+      reportTakeoverRows();
       onAction?.("xhs_ops_personas_confirmed", {
         projectId,
         accountIds: confirmed.map((account) => account.id),
@@ -676,6 +843,11 @@ export function XhsOpsAccountPlanner({
       });
       return;
     }
+    const paramProblem = paramConflictProblem(row, "转移");
+    if (paramProblem) {
+      patchRow(row.key, { error: paramProblem, expanded: true });
+      return;
+    }
     if (
       typeof window !== "undefined" &&
       !window.confirm(
@@ -703,6 +875,8 @@ export function XhsOpsAccountPlanner({
           interaction: row.interaction,
           browseDefaults: row.browseDefaults,
         },
+        // As on the PATCH: a takeover target past the tier caps (§6.3).
+        ...overrideReasonBody(row),
       });
       patchRow(row.key, {
         id: account.id,
@@ -710,15 +884,26 @@ export function XhsOpsAccountPlanner({
         savedAt: Date.now(),
         updatedAt: account.updatedAt,
         personaReviewedAt: account.personaReviewedAt ?? null,
+        entryModeLocked: xhsOpsAccountEntryModeLocked(account),
+        paramConflict: null,
+        overrideReason: "",
         dirty: false,
       });
       setReportedAt(null);
       setFormError(null);
       setBindingsReload((value) => value + 1);
     } catch (err) {
-      patchRow(row.key, {
-        error: describeXhsOpsError(err, "设备转移失败"),
-      });
+      const conflict = takeoverParamConflict(err);
+      patchRow(
+        row.key,
+        conflict
+          ? {
+              error: null,
+              paramConflict: { ...conflict, via: "transfer" },
+              expanded: true,
+            }
+          : { error: describeXhsOpsError(err, "设备转移失败") },
+      );
       setBindingsReload((value) => value + 1);
     } finally {
       setTransferringKey(null);
@@ -771,10 +956,11 @@ export function XhsOpsAccountPlanner({
               selectedRows.length === 0
             }
           >
-            {selectedRows.length > 0 &&
-            selectedRows.every((row) => row.entryMode === "existing")
-              ? "进入已有账号优化"
-              : "确认选定人设，进入素材"}
+            {selectedTakeoverCount === 0
+              ? "确认选定人设，进入素材"
+              : selectedNewRows.length === 0
+                ? "进入接管"
+                : "确认人设并进入接管"}
           </PrimaryButton>
         </>
       }
@@ -897,9 +1083,9 @@ export function XhsOpsAccountPlanner({
         </HintLine>
       ) : null}
 
-      {rows.length > 0 ? (
+      {newAccountRows.length > 0 ? (
         <div className="flex flex-col gap-2 rounded-md border border-border p-2.5 text-[12px]">
-          <SectionTitle hint="对照已确认画像，人工核对选定账号的整体年龄、性别和地区分布">
+          <SectionTitle hint="对照已确认画像，人工核对选定新建账号的整体年龄、性别和地区分布；接管行不参与人设确认">
             目标与实际分布复核
           </SectionTitle>
           <div className="text-text-secondary">
@@ -913,8 +1099,8 @@ export function XhsOpsAccountPlanner({
             </div>
           ) : null}
           <div className="text-text-secondary">
-            {selectedRows.length > 0
-              ? `已选 ${selectedRows.length} 个`
+            {selectedNewRows.length > 0
+              ? `已选 ${selectedNewRows.length} 个`
               : "尚未选择，预览全部账号"}
             ：{actualDistribution}
           </div>
@@ -980,6 +1166,75 @@ export function XhsOpsAccountPlanner({
         ))}
       </div>
     </CardShell>
+  );
+}
+
+/**
+ * The controller refused a takeover row's parameters (§6.3): the issues it
+ * named, and the reason box only when a reason lifts them all — a hard limit
+ * offers no override, the values have to change.
+ */
+function ParamConflictBlock({
+  conflict,
+  reason,
+  disabled,
+  onReason,
+}: {
+  conflict: NonNullable<AccountRow["paramConflict"]>;
+  reason: string;
+  disabled: boolean;
+  onReason: (reason: string) => void;
+}) {
+  const hardLimit = conflict.code === "takeover_param_hard_limit";
+  const button =
+    conflict.via === "transfer" ? "转移设备并保存此账号" : "保存账号配置";
+  return (
+    <div
+      data-testid={hardLimit ? "param-hard-limit" : "override-reason"}
+      className="flex flex-col gap-1.5 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] px-2.5 py-2 text-[12px] text-[var(--color-warning-ink)]"
+    >
+      <span className="font-medium">
+        {hardLimit
+          ? "这些参数超出了硬上限，填写理由也不能放行，请调回范围内："
+          : "这些参数超出了接管档位，填写理由后可以放行："}
+      </span>
+      {conflict.issues.length > 0 ? (
+        <ul className="flex list-disc flex-col gap-0.5 pl-4">
+          {conflict.issues.map((issue) => (
+            <li key={`${issue.field}:${issue.message}`}>
+              {issue.message}
+              {hardLimit
+                ? issue.overridable
+                  ? "（超出档位，可填理由）"
+                  : "（硬上限）"
+                : ""}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span>{conflict.message}</span>
+      )}
+      {hardLimit ? (
+        <span>调整这些参数后，再点「{button}」。</span>
+      ) : (
+        <>
+          <Field label="超出接管档位的理由 *">
+            <textarea
+              className={inputClass}
+              value={reason}
+              maxLength={200}
+              disabled={disabled}
+              aria-label="超出接管档位的理由"
+              placeholder="如：客户要求回关老粉"
+              onChange={(event) => onReason(event.target.value)}
+            />
+          </Field>
+          <span>
+            理由会记进这个号的接管参数调整记录；填好后点「{button}」重新提交。
+          </span>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1054,7 +1309,12 @@ function AccountRowEditor({
           <select
             className={selectClass}
             value={row.entryMode}
-            disabled={disabled}
+            disabled={disabled || row.entryModeLocked}
+            title={
+              row.entryModeLocked
+                ? XHS_TAKEOVER_ENTRY_MODE_LOCKED_MESSAGE
+                : undefined
+            }
             onChange={(event) =>
               onPatch({
                 entryMode: event.target.value as AccountRow["entryMode"],
@@ -1062,7 +1322,7 @@ function AccountRowEditor({
             }
           >
             <option value="new">新建账号</option>
-            <option value="existing">已有账号优化</option>
+            <option value="existing">接管已有账号</option>
           </select>
         </Field>
         <Field label="账号定位名 *">
@@ -1071,16 +1331,30 @@ function AccountRowEditor({
             value={row.label}
             maxLength={40}
             disabled={disabled}
-            placeholder="如：北京亲子周末号"
+            placeholder={
+              row.entryMode === "existing"
+                ? "选好执行设备后自动填「接管·设备名」"
+                : "如：北京亲子周末号"
+            }
             onChange={(e) => onPatch({ label: e.target.value })}
           />
         </Field>
-        <Field label="内容方向与风格">
+        <Field
+          label={
+            row.entryMode === "existing"
+              ? "内容方向与风格（选填）"
+              : "内容方向与风格"
+          }
+        >
           <input
             className={inputClass}
             value={row.positioning}
             disabled={disabled}
-            placeholder="一句话，如：周末亲子酒店实测，轻松口语风"
+            placeholder={
+              row.entryMode === "existing"
+                ? "可留空：接管后由诊断给出建议"
+                : "一句话，如：周末亲子酒店实测，轻松口语风"
+            }
             onChange={(e) => onPatch({ positioning: e.target.value })}
           />
         </Field>
@@ -1138,7 +1412,8 @@ function AccountRowEditor({
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-secondary">
         <span>
-          {row.entryMode === "existing" ? "已有账号优化" : "新建账号"}
+          {row.entryMode === "existing" ? "接管已有账号" : "新建账号"}
+          {row.entryModeLocked ? "（模式已锁定）" : ""}
         </span>
         <label className="flex items-center gap-1 text-text-primary">
           <input
@@ -1199,6 +1474,14 @@ function AccountRowEditor({
         </div>
       ) : null}
       <ErrorLine message={row.error} />
+      {row.paramConflict ? (
+        <ParamConflictBlock
+          conflict={row.paramConflict}
+          reason={row.overrideReason}
+          disabled={disabled}
+          onReason={(overrideReason) => onPatch({ overrideReason })}
+        />
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {PERSONA_FIELDS.map(([key, label, placeholder]) => (
@@ -1267,7 +1550,8 @@ function AccountRowEditor({
           />
         </Field>
       </div>
-      {personaArchiveIssues({
+      {row.entryMode !== "existing" &&
+      personaArchiveIssues({
         persona: row.persona,
         personaTags: row.personaTags,
       }).length > 0 ? (

@@ -1,31 +1,61 @@
 /** Typed wrappers over the generated xhs-ops SDK contract. */
 import {
+  type XhsOpsAccountAudit,
+  type XhsOpsAccountDiagnosis,
   type XhsOpsAccountTransferInput,
+  type XhsOpsChangeOrder,
+  type XhsOpsChangeOrderActionResponse,
+  type XhsOpsChangeOrderResponse,
   type XhsOpsDeviceBinding,
+  type XhsOpsPlanSkip,
+  type XhsOpsPlaybookRule,
+  type XhsOpsTakeoverEvent,
+  type XhsOpsTakeoverPlanResponse,
+  type XhsOpsTakeoverResumeResponse,
   xhsOpsAccountIdentityResponseSchema,
   xhsOpsAccountListResponseSchema,
   xhsOpsAccountResponseSchema,
+  xhsOpsAuditBaselineResponseSchema,
+  xhsOpsAuditListResponseSchema,
+  xhsOpsAuditResponseSchema,
+  xhsOpsChangeOrderActionResponseSchema,
+  xhsOpsChangeOrderListResponseSchema,
+  xhsOpsChangeOrderResponseSchema,
   xhsOpsCommentGenerateResponseSchema,
   xhsOpsCommentListResponseSchema,
   xhsOpsCommentResponseSchema,
   xhsOpsDeviceBindingListResponseSchema,
+  xhsOpsDiagnosisResponseSchema,
+  xhsOpsDiagnosisViewResponseSchema,
   type xhsOpsPersonaGenerateBodySchema,
   xhsOpsPersonaGenerateResponseSchema,
   type xhsOpsPersonasConfirmBodySchema,
   xhsOpsPlanSuggestResponseSchema,
+  xhsOpsPlaybookResponseSchema,
   type xhsOpsProfileConfirmBodySchema,
   xhsOpsProfileReadbackResponseSchema,
   xhsOpsProjectListResponseSchema,
   xhsOpsProjectResponseSchema,
   xhsOpsRunListResponseSchema,
   xhsOpsRunResponseSchema,
+  xhsOpsTakeoverIdentityConfirmResponseSchema,
+  xhsOpsTakeoverIdentityReadResponseSchema,
+  xhsOpsTakeoverPlanResponseSchema,
+  xhsOpsTakeoverPlanRevertResponseSchema,
+  xhsOpsTakeoverResumeResponseSchema,
 } from "@nexu/shared";
 import type { z } from "zod";
 import {
   deleteApiV1XhsOpsAccountsByAccountId,
   deleteApiV1XhsOpsProjectsByProjectId,
   getApiV1XhsOpsAccountsByAccountId,
+  getApiV1XhsOpsAccountsByAccountIdAudits,
+  getApiV1XhsOpsAccountsByAccountIdChangeOrders,
+  getApiV1XhsOpsAuditsByAuditId,
+  getApiV1XhsOpsChangeOrdersByOrderId,
   getApiV1XhsOpsDeviceBindings,
+  getApiV1XhsOpsDiagnosesByDiagnosisId,
+  getApiV1XhsOpsPlaybook,
   getApiV1XhsOpsProjects,
   getApiV1XhsOpsProjectsByProjectId,
   getApiV1XhsOpsProjectsByProjectIdAccounts,
@@ -36,13 +66,35 @@ import {
   patchApiV1XhsOpsAccountsByAccountId,
   patchApiV1XhsOpsProjectsByProjectId,
   patchApiV1XhsOpsRunsByRunId,
+  postApiV1XhsOpsAccountsByAccountIdAudits,
+  postApiV1XhsOpsAccountsByAccountIdChangeOrders,
+  postApiV1XhsOpsAccountsByAccountIdDiagnoses,
   postApiV1XhsOpsAccountsByAccountIdIdentityRead,
   postApiV1XhsOpsAccountsByAccountIdProfileDraftApply,
   postApiV1XhsOpsAccountsByAccountIdProfileDraftConfirm,
   postApiV1XhsOpsAccountsByAccountIdProfileDraftGenerate,
   postApiV1XhsOpsAccountsByAccountIdProfileDraftReadback,
   postApiV1XhsOpsAccountsByAccountIdProfileDraftReconcile,
+  postApiV1XhsOpsAccountsByAccountIdTakeoverAuthorize,
+  postApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldRelease,
+  postApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirm,
+  postApiV1XhsOpsAccountsByAccountIdTakeoverIdentityRead,
+  postApiV1XhsOpsAccountsByAccountIdTakeoverPause,
+  postApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevert,
+  postApiV1XhsOpsAccountsByAccountIdTakeoverResume,
+  postApiV1XhsOpsAuditsByAuditIdBaseline,
+  postApiV1XhsOpsAuditsByAuditIdCancel,
+  postApiV1XhsOpsChangeOrdersByOrderIdCancel,
+  postApiV1XhsOpsChangeOrdersByOrderIdConfirm,
+  postApiV1XhsOpsChangeOrdersByOrderIdManualCheck,
+  postApiV1XhsOpsChangeOrdersByOrderIdObservationReview,
+  postApiV1XhsOpsChangeOrdersByOrderIdPrecheck,
+  postApiV1XhsOpsChangeOrdersByOrderIdVerify,
+  postApiV1XhsOpsChangeOrdersByOrderIdVisualCheck,
   postApiV1XhsOpsCommentsByCommentIdReview,
+  postApiV1XhsOpsDiagnosesByDiagnosisIdConfirm,
+  postApiV1XhsOpsDiagnosesByDiagnosisIdDecisions,
+  postApiV1XhsOpsDiagnosesByDiagnosisIdRegenerate,
   postApiV1XhsOpsProjects,
   postApiV1XhsOpsProjectsByProjectIdAccounts,
   postApiV1XhsOpsProjectsByProjectIdAccountsTransferDevice,
@@ -55,11 +107,27 @@ import {
   postApiV1XhsOpsRunsByRunIdCancel,
   postApiV1XhsOpsRunsByRunIdCommentsGenerate,
   postApiV1XhsOpsRunsByRunIdStart,
+  putApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImage,
 } from "../../../../../lib/api/sdk.gen";
 import type {
   PatchApiV1XhsOpsAccountsByAccountIdData,
+  PostApiV1XhsOpsAccountsByAccountIdAuditsData,
+  PostApiV1XhsOpsAccountsByAccountIdChangeOrdersData,
+  PostApiV1XhsOpsAccountsByAccountIdDiagnosesData,
+  PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeData,
+  PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseData,
+  PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmData,
+  PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertData,
+  PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeData,
+  PostApiV1XhsOpsAuditsByAuditIdBaselineData,
+  PostApiV1XhsOpsChangeOrdersByOrderIdConfirmData,
+  PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckData,
+  PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmData,
+  PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsData,
+  PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateData,
   PostApiV1XhsOpsProjectsByProjectIdAccountsData,
   PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceData,
+  PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageData,
 } from "../../../../../lib/api/types.gen";
 import type {
   XhsOpsAccount,
@@ -84,11 +152,18 @@ import type {
 export class XhsOpsApiError extends Error {
   /** HTTP status when the server answered; null when the request never landed. */
   readonly status: number | null;
+  /**
+   * The error body as the server sent it (undefined when none), for answers
+   * that carry more than a message — e.g. the `code` and `issues` of a
+   * takeover parameter 409 (xhsOpsAccountConflictResponseSchema).
+   */
+  readonly body: unknown;
 
-  constructor(message: string, status: number | null) {
+  constructor(message: string, status: number | null, body?: unknown) {
     super(message);
     this.name = "XhsOpsApiError";
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -140,7 +215,7 @@ async function unwrap<T>(
       status === 404 && result.error === undefined
         ? "接口不存在（桌面端尚未更新到支持小红书运营的版本）"
         : extractErrorMessage(result.error, fallback);
-    throw new XhsOpsApiError(message, status);
+    throw new XhsOpsApiError(message, status, result.error);
   }
   const parsed = schema.safeParse(result.data);
   if (!parsed.success) {
@@ -518,14 +593,18 @@ export const xhsOpsApi = {
   },
 
   // ── Plan suggestion ──
-  async suggestPlans(projectId: string): Promise<XhsOpsPlanSuggestion[]> {
+  /** `skipped`: accounts whose plan could not be built today, with the reason (one account no longer fails the project). */
+  async suggestPlans(projectId: string): Promise<{
+    plans: XhsOpsPlanSuggestion[];
+    skipped: XhsOpsPlanSkip[];
+  }> {
     const data = await unwrap(
       () =>
         getApiV1XhsOpsProjectsByProjectIdPlanSuggest({ path: { projectId } }),
       "今日计划建议加载失败",
       xhsOpsPlanSuggestResponseSchema,
     );
-    return data.plans ?? [];
+    return { plans: data.plans ?? [], skipped: data.skipped ?? [] };
   },
 
   // ── Runs ──
@@ -586,7 +665,414 @@ export const xhsOpsApi = {
     );
     return data.run;
   },
+
+  // ── Takeover of an existing account (老号接管) ──
+  async authorizeTakeover(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeData>,
+  ): Promise<XhsOpsAccount> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdTakeoverAuthorize({
+          path: { accountId },
+          body,
+        }),
+      "授权接管失败",
+      xhsOpsAccountResponseSchema,
+    );
+    return data.account;
+  },
+
+  async readTakeoverIdentity(
+    accountId: string,
+  ): Promise<{ identity: XhsOpsAccountIdentity; account: XhsOpsAccount }> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdTakeoverIdentityRead({
+          path: { accountId },
+        }),
+      "读取手机当前账号失败",
+      xhsOpsTakeoverIdentityReadResponseSchema,
+    );
+  },
+
+  async confirmTakeoverIdentity(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmData>,
+  ): Promise<{ account: XhsOpsAccount; event: XhsOpsTakeoverEvent }> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirm({
+          path: { accountId },
+          body,
+        }),
+      "锁定小红书号失败",
+      xhsOpsTakeoverIdentityConfirmResponseSchema,
+    );
+  },
+
+  async revertTakeoverPlan(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertData>,
+  ): Promise<{
+    account: XhsOpsAccount;
+    diagnosis: XhsOpsAccountDiagnosis | null;
+    changeOrders: XhsOpsChangeOrder[];
+  }> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevert({
+          path: { accountId },
+          body,
+        }),
+      "撤销方案失败",
+      xhsOpsTakeoverPlanRevertResponseSchema,
+    );
+  },
+
+  async pauseTakeover(
+    accountId: string,
+    reason: string,
+  ): Promise<XhsOpsAccount> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdTakeoverPause({
+          path: { accountId },
+          body: { reason },
+        }),
+      "暂停接管失败",
+      xhsOpsAccountResponseSchema,
+    );
+    return data.account;
+  },
+
+  async resumeTakeover(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeData>,
+  ): Promise<XhsOpsTakeoverResumeResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdTakeoverResume({
+          path: { accountId },
+          body,
+        }),
+      "恢复接管失败",
+      xhsOpsTakeoverResumeResponseSchema,
+    );
+  },
+
+  async releaseTakeoverDeviceHold(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseData>,
+  ): Promise<XhsOpsAccount> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldRelease({
+          path: { accountId },
+          body,
+        }),
+      "解除手机任务占用失败",
+      xhsOpsAccountResponseSchema,
+    );
+    return data.account;
+  },
+
+  /** `bundleVersion`: the phone-skills bundle the doc rules were checked against (PHONE_SKILLS_BUNDLE, §4.5). */
+  async getPlaybook(): Promise<{
+    version: string;
+    bundleVersion: number;
+    rules: XhsOpsPlaybookRule[];
+  }> {
+    return unwrap(
+      () => getApiV1XhsOpsPlaybook(),
+      "经验库加载失败",
+      xhsOpsPlaybookResponseSchema,
+    );
+  },
+
+  async listAudits(accountId: string): Promise<XhsOpsAccountAudit[]> {
+    const data = await unwrap(
+      () => getApiV1XhsOpsAccountsByAccountIdAudits({ path: { accountId } }),
+      "盘点记录加载失败",
+      xhsOpsAuditListResponseSchema,
+    );
+    return data.audits;
+  },
+
+  async startAudit(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdAuditsData> = {},
+  ): Promise<XhsOpsAccountAudit> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdAudits({
+          path: { accountId },
+          body,
+        }),
+      "开始只读盘点失败",
+      xhsOpsAuditResponseSchema,
+    );
+    return data.audit;
+  },
+
+  async getAudit(auditId: string): Promise<XhsOpsAccountAudit> {
+    const data = await unwrap(
+      () => getApiV1XhsOpsAuditsByAuditId({ path: { auditId } }),
+      "盘点进度读取失败",
+      xhsOpsAuditResponseSchema,
+    );
+    return data.audit;
+  },
+
+  async cancelAudit(auditId: string): Promise<XhsOpsAccountAudit> {
+    const data = await unwrap(
+      () => postApiV1XhsOpsAuditsByAuditIdCancel({ path: { auditId } }),
+      "取消盘点失败",
+      xhsOpsAuditResponseSchema,
+    );
+    return data.audit;
+  },
+
+  async confirmBaseline(
+    auditId: string,
+    body: BodyOf<PostApiV1XhsOpsAuditsByAuditIdBaselineData>,
+  ): Promise<{
+    account: XhsOpsAccount;
+    audit: XhsOpsAccountAudit;
+    event: XhsOpsTakeoverEvent;
+  }> {
+    return unwrap(
+      () => postApiV1XhsOpsAuditsByAuditIdBaseline({ path: { auditId }, body }),
+      "设为基线失败",
+      xhsOpsAuditBaselineResponseSchema,
+    );
+  },
+
+  async generateDiagnosis(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdDiagnosesData>,
+  ): Promise<XhsOpsAccountDiagnosis> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdDiagnoses({
+          path: { accountId },
+          body,
+        }),
+      "生成诊断失败",
+      xhsOpsDiagnosisResponseSchema,
+    );
+    return data.diagnosis;
+  },
+
+  async getDiagnosis(diagnosisId: string): Promise<{
+    diagnosis: XhsOpsAccountDiagnosis;
+    event: XhsOpsTakeoverEvent | null;
+  }> {
+    return unwrap(
+      () => getApiV1XhsOpsDiagnosesByDiagnosisId({ path: { diagnosisId } }),
+      "诊断加载失败",
+      xhsOpsDiagnosisViewResponseSchema,
+    );
+  },
+
+  async regenerateDiagnosis(
+    diagnosisId: string,
+    body: BodyOf<PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateData>,
+  ): Promise<XhsOpsAccountDiagnosis> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsDiagnosesByDiagnosisIdRegenerate({
+          path: { diagnosisId },
+          body,
+        }),
+      "重新生成诊断失败",
+      xhsOpsDiagnosisResponseSchema,
+    );
+    return data.diagnosis;
+  },
+
+  async decideDiagnosis(
+    diagnosisId: string,
+    body: BodyOf<PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsData>,
+  ): Promise<XhsOpsAccountDiagnosis> {
+    const data = await unwrap(
+      () =>
+        postApiV1XhsOpsDiagnosesByDiagnosisIdDecisions({
+          path: { diagnosisId },
+          body,
+        }),
+      "保存采纳决定失败",
+      xhsOpsDiagnosisResponseSchema,
+    );
+    return data.diagnosis;
+  },
+
+  async confirmTakeoverPlan(
+    diagnosisId: string,
+    body: BodyOf<PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmData>,
+  ): Promise<XhsOpsTakeoverPlanResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsDiagnosesByDiagnosisIdConfirm({
+          path: { diagnosisId },
+          body,
+        }),
+      "确认接管方案失败",
+      xhsOpsTakeoverPlanResponseSchema,
+    );
+  },
+
+  async listChangeOrders(accountId: string): Promise<XhsOpsChangeOrder[]> {
+    const data = await unwrap(
+      () =>
+        getApiV1XhsOpsAccountsByAccountIdChangeOrders({ path: { accountId } }),
+      "变更单加载失败",
+      xhsOpsChangeOrderListResponseSchema,
+    );
+    return data.orders;
+  },
+
+  async createChangeOrder(
+    accountId: string,
+    body: BodyOf<PostApiV1XhsOpsAccountsByAccountIdChangeOrdersData>,
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsAccountsByAccountIdChangeOrders({
+          path: { accountId },
+          body,
+        }),
+      "新建变更单失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async getChangeOrder(orderId: string): Promise<XhsOpsChangeOrderResponse> {
+    return unwrap(
+      () => getApiV1XhsOpsChangeOrdersByOrderId({ path: { orderId } }),
+      "变更单读取失败",
+      xhsOpsChangeOrderResponseSchema,
+    );
+  },
+
+  async precheckChangeOrder(
+    orderId: string,
+    body: { expectedUpdatedAt: string },
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsChangeOrdersByOrderIdPrecheck({
+          path: { orderId },
+          body,
+        }),
+      "预检失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async confirmChangeOrder(
+    orderId: string,
+    body: BodyOf<PostApiV1XhsOpsChangeOrdersByOrderIdConfirmData>,
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsChangeOrdersByOrderIdConfirm({
+          path: { orderId },
+          body,
+        }),
+      "确认执行失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async cancelChangeOrder(
+    orderId: string,
+    body: { expectedUpdatedAt: string },
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsChangeOrdersByOrderIdCancel({ path: { orderId }, body }),
+      "取消变更单失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async verifyChangeOrder(
+    orderId: string,
+    body: { expectedUpdatedAt: string },
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsChangeOrdersByOrderIdVerify({ path: { orderId }, body }),
+      "补跑核验失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async visualCheckChangeOrder(
+    orderId: string,
+    body: BodyOf<PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckData>,
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsChangeOrdersByOrderIdVisualCheck({
+          path: { orderId },
+          body,
+        }),
+      "提交图片对照结果失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async manualCheckChangeOrder(
+    orderId: string,
+    body: { expectedUpdatedAt: string },
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsChangeOrdersByOrderIdManualCheck({
+          path: { orderId },
+          body,
+        }),
+      "提交人工检查失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async reviewObservation(
+    orderId: string,
+    body: { expectedUpdatedAt: string },
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        postApiV1XhsOpsChangeOrdersByOrderIdObservationReview({
+          path: { orderId },
+          body,
+        }),
+      "开始复查失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
+
+  async uploadChangeOrderImage(
+    orderId: string,
+    field: PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageData["path"]["field"],
+    body: BodyOf<PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageData>,
+  ): Promise<XhsOpsChangeOrderActionResponse> {
+    return unwrap(
+      () =>
+        putApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImage({
+          path: { orderId, field },
+          body,
+        }),
+      "上传图片失败",
+      xhsOpsChangeOrderActionResponseSchema,
+    );
+  },
 };
+
+/** Request body of a generated SDK call (the generator marks every body optional). */
+type BodyOf<T extends { body?: unknown }> = NonNullable<T["body"]>;
 
 /** Human-readable message for any error thrown by this module (or anything else). */
 export function describeXhsOpsError(
