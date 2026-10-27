@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import * as shared from "../../packages/shared/src/index.js";
 import { deviceInfoSchema } from "../../packages/shared/src/schemas/device-control.js";
 import {
+  XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE,
   XHS_OPS_PLAYBOOK_CATEGORY,
   XHS_TAKEOVER_CHANGE_BUDGET,
   XHS_TAKEOVER_CHANGE_ORDER_STATUS_LABEL,
@@ -846,6 +847,13 @@ describe("xhsOpsAccountNurtureIssues", () => {
         project,
       ),
     ).not.toContain("请先完成手机账号配置及资料生效核验");
+    // The run planner matches this issue exactly to embed the material card.
+    expect(XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE).toBe(
+      "请先完成九项账号资料与素材并校验确认",
+    );
+    expect(xhsOpsAccountNurtureIssues(fresh, null)).toContain(
+      XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE,
+    );
   });
 
   it("lets a legacy existing row the old flow verified keep running", () => {

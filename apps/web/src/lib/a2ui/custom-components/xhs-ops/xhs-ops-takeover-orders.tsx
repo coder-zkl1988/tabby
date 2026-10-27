@@ -24,8 +24,11 @@ import {
   type XhsOpsChangeOrderField,
   type XhsOpsHeaderCounts,
   type XhsOpsTakeoverProfileField,
+  compareXhsOpsAudits,
   xhsOpsChangeOrderPreviousReviewWarned,
   xhsOpsChangeOrderRequiredAcks,
+  xhsOpsChangeOrderRollbackFields,
+  xhsOpsIsTakeoverImageField,
   xhsOpsProfileFieldLabels,
 } from "@nexu/shared";
 import { useEffect, useState } from "react";
@@ -47,13 +50,12 @@ import {
   countDisplay,
   formatDateTime,
   formatRemaining,
-  isImageField,
   orderTakeoverFields,
   rollbackCostText,
-  rollbackFields,
   takeoverBudgetRows,
   takeoverImageProblem,
   takeoverImageUrl,
+  takeoverPinChangesText,
   verdictTone,
 } from "./xhs-ops-takeover-model";
 import {
@@ -114,10 +116,20 @@ function observationWindowLabel(risk: XhsOpsChangeOrder["risk"]): string {
   return hours % 24 === 0 && hours > 72 ? `${hours / 24} 天` : `${hours} 小时`;
 }
 
+/**
+ * Every album a picture of the order was pushed into (§5.2 step 4 清理):
+ * pushedAlbums, kept across attempts and through a failed dispatch, plus the
+ * fields' mediaAlbum of an order written before that list existed.
+ */
 function albumsOf(order: XhsOpsChangeOrder): string[] {
-  return order.fields.flatMap((entry) =>
-    entry.mediaAlbum ? [entry.mediaAlbum] : [],
-  );
+  return [
+    ...new Set([
+      ...order.pushedAlbums,
+      ...order.fields.flatMap((entry) =>
+        entry.mediaAlbum ? [entry.mediaAlbum] : [],
+      ),
+    ]),
+  ];
 }
 
 /** ⑥ 变更单. */
@@ -490,7 +502,7 @@ function ChangeOrderCard({
     });
   };
 
-  const rollbackable = rollbackFields(order);
+  const rollbackable = xhsOpsChangeOrderRollbackFields(order);
   const rollbackOpenAlready = data.orders.some(
     (entry) =>
       entry.rollbackOfId === order.id &&
@@ -509,14 +521,21 @@ function ChangeOrderCard({
       ops.setAccount(result.account);
     });
 
-  const hasImage = order.fields.some((entry) => isImageField(entry.field));
-  const missingImages = order.fields.filter(
-    (entry) => isImageField(entry.field) && !entry.imageSha256,
+  const hasImage = order.fields.some((entry) =>
+    xhsOpsIsTakeoverImageField(entry.field),
   );
-  const previousAlbums = data.orders
-    .filter((entry) => entry.id !== order.id)
-    .flatMap(albumsOf);
+  const missingImages = order.fields.filter(
+    (entry) => xhsOpsIsTakeoverImageField(entry.field) && !entry.imageSha256,
+  );
   const albums = albumsOf(order);
+  // A draft that already went to the phone once (a failed dispatch) left its
+  // own album there too.
+  const previousAlbums = [
+    ...new Set([
+      ...data.orders.filter((entry) => entry.id !== order.id).flatMap(albumsOf),
+      ...albums,
+    ]),
+  ];
   const precheckExpiresAt = order.precheck
     ? Date.parse(order.precheck.expiresAt)
     : Number.NaN;
@@ -560,7 +579,7 @@ function ChangeOrderCard({
             disabled={disabled || !editableImages}
             uploading={busy === `upload:${entry.field}`}
             onUpload={(file) =>
-              isImageField(entry.field)
+              xhsOpsIsTakeoverImageField(entry.field)
                 ? void upload(entry.field, file)
                 : undefined
             }
@@ -692,7 +711,9 @@ function ChangeOrderCard({
       {order.status === "awaiting_visual_check"
         ? order.fields
             .filter(
-              (entry) => isImageField(entry.field) && entry.outcome === "done",
+              (entry) =>
+                xhsOpsIsTakeoverImageField(entry.field) &&
+                entry.outcome === "done",
             )
             .map((entry) => (
               <ImageComparison
@@ -702,7 +723,7 @@ function ChangeOrderCard({
                 busy={busy === `visual:${entry.field}`}
                 disabled={disabled}
                 onResult={(result) =>
-                  isImageField(entry.field)
+                  xhsOpsIsTakeoverImageField(entry.field)
                     ? visualCheck(entry.field, result)
                     : undefined
                 }
@@ -828,7 +849,7 @@ function OrderFieldRow({
           </span>
         ) : null}
       </div>
-      {isImageField(entry.field) ? (
+      {xhsOpsIsTakeoverImageField(entry.field) ? (
         <>
           <ValueRow label="图片方向">{entry.after}</ValueRow>
           <div className="flex flex-wrap items-start gap-3">
@@ -1056,7 +1077,7 @@ function ChangeOrderConfirmDialog({
                   <div className="text-[12px] font-medium text-text-primary">
                     {XHS_PROFILE_FIELD_LABEL[entry.field]}
                   </div>
-                  {isImageField(entry.field) ? (
+                  {xhsOpsIsTakeoverImageField(entry.field) ? (
                     <>
                       <ValueRow label="现值">（图片，见改前截图）</ValueRow>
                       <ValueRow label="新值">
@@ -1176,13 +1197,23 @@ function ObservationPanel({
     order.status === "observing" &&
     observation.auditId !== null &&
     observation.verdict === "pending";
+  // §7.1: what the review audit says about 置顶 against the audit before
+  // the order (observation.baseAuditId).
+  const baseAudit = observation.baseAuditId
+    ? (data.audits.find((audit) => audit.id === observation.baseAuditId) ??
+      null)
+    : null;
+  const pinChanges =
+    baseAudit && reviewAudit && reviewAudit.status !== "running"
+      ? takeoverPinChangesText(compareXhsOpsAudits(baseAudit, reviewAudit).pins)
+      : null;
   const imagesToCheck =
     order.status === "observing" &&
     observation.auditId !== null &&
     observation.verdict === "inconclusive"
       ? order.fields.filter(
           (entry) =>
-            (entry.field === "avatar" || entry.field === "cover") &&
+            xhsOpsIsTakeoverImageField(entry.field) &&
             entry.outcome === "verified" &&
             !observation.visualChecks[entry.field],
         )
@@ -1270,11 +1301,16 @@ function ObservationPanel({
           ) : null}
         </Notice>
       ) : null}
-      {observation.notes.length > 0 ? (
+      {observation.notes.length > 0 || pinChanges ? (
         <div className="flex flex-col gap-0.5 text-[12px] text-text-secondary">
           {observation.notes.map((note) => (
             <span key={note}>{note}</span>
           ))}
+          {pinChanges ? (
+            <span data-testid="observation-pin-changes">
+              {pinChanges}（对比这张单确认前的盘点）
+            </span>
+          ) : null}
         </div>
       ) : null}
       {observation.verdict === "warn" && order.status === "completed" ? (
@@ -1288,7 +1324,7 @@ function ObservationPanel({
           busy={busy === `visual:${entry.field}`}
           disabled={busy !== null}
           onResult={(result) =>
-            entry.field === "avatar" || entry.field === "cover"
+            xhsOpsIsTakeoverImageField(entry.field)
               ? visualCheck(entry.field, result)
               : undefined
           }

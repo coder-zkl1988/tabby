@@ -6,12 +6,16 @@
 import {
   XHS_PROFILE_FIELD_LABEL,
   XHS_TAKEOVER_CHANGE_BUDGET,
+  XHS_TAKEOVER_DORMANT_REVIEW_BROWSE,
+  XHS_TAKEOVER_DORMANT_REVIEW_MESSAGE,
+  XHS_TAKEOVER_DORMANT_REVIEW_OVERRIDE_REASON,
   XHS_TAKEOVER_TIER_LABEL,
   type XhsOpsAccountDiagnosis,
   type XhsOpsDiagnosisDecision,
   type XhsOpsDiagnosisProposal,
   type XhsOpsProposal,
   xhsOpsProposalSchema,
+  xhsOpsTakeoverDormantReviewDue,
   xhsOpsTonePillarKeywords,
 } from "@nexu/shared";
 import { useState } from "react";
@@ -968,6 +972,48 @@ function CadenceGroup({
   );
 }
 
+/**
+ * §6.3: a dormant account a week into nurture is offered its step up
+ * (xhsOpsTakeoverDormantReviewDue). Nothing is written until the click, which
+ * PATCHes the suggestion over the current browseDefaults with the shared
+ * override reason — the suggestion is above the dormant tier's cap.
+ */
+function DormantReview({ data, ops }: TakeoverSectionProps) {
+  const { account, runs, now } = data;
+  const action = useTakeoverAction(ops.refresh);
+  if (!xhsOpsTakeoverDormantReviewDue(account, runs, now)) return null;
+  const browse = account.browseDefaults;
+  const adjust = () =>
+    void action.run("dormant", "调整养号参数失败", async () => {
+      ops.setAccount(
+        await xhsOpsApi.updateAccount(account.id, {
+          browseDefaults: { ...browse, ...XHS_TAKEOVER_DORMANT_REVIEW_BROWSE },
+          overrideReason: XHS_TAKEOVER_DORMANT_REVIEW_OVERRIDE_REASON,
+          expectedUpdatedAt: account.updatedAt,
+        }),
+      );
+    });
+  return (
+    <Notice tone="info" testId="dormant-review">
+      <span className="font-medium text-text-primary">
+        沉寂档已跑满一周：{XHS_TAKEOVER_DORMANT_REVIEW_MESSAGE}
+      </span>
+      <span>
+        现在是日目标 {browse.dailyTargetPosts} 篇 · 分 {browse.dailySegments} 段
+        · 搜索占比 {browse.searchRatioPercent}
+        %，点赞上限不变。点「按建议调整」才会写入，并记为超出沉寂档的调整。
+      </span>
+      <div className="flex justify-end">
+        <PrimaryButton onClick={adjust} disabled={action.busy !== null}>
+          {action.busy === "dormant" ? <Spinner /> : null}
+          按建议调整
+        </PrimaryButton>
+      </div>
+      <ErrorLine message={action.error} />
+    </Notice>
+  );
+}
+
 /** ⑤ 方案 (T6): decisions, regenerate, confirm, and the plan once confirmed. */
 export function PlanSection({
   data,
@@ -1107,6 +1153,7 @@ export function PlanSection({
           </span>
         </Notice>
       ) : null}
+      <DormantReview data={data} ops={ops} />
       {PLAN_GROUPS.map((group) => {
         if (group.kind === null)
           return (
