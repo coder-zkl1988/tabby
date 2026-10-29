@@ -25050,6 +25050,272 @@
         }
       }
     },
+    "/api/v1/devices/pairing/requests": {
+      "get": {
+        "tags": [
+          "Device Control"
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending pairing requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "requestId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "code": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "deviceId": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "manufacturer": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "expiresAt": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "requestId",
+                          "code",
+                          "deviceId",
+                          "model",
+                          "manufacturer",
+                          "createdAt",
+                          "expiresAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "requests"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/pairing/requests/{requestId}/approve": {
+      "post": {
+        "tags": [
+          "Device Control"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "requestId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pairing approved; the phone receives its keyed URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request expired, cancelled or already decided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Device control plugin is not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/pairing/requests/{requestId}/reject": {
+      "post": {
+        "tags": [
+          "Device Control"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "requestId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pairing rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request expired, cancelled or already decided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Device control plugin is not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/pairing/qr": {
+      "post": {
+        "tags": [
+          "Device Control"
+        ],
+        "responses": {
+          "200": {
+            "description": "A freshly minted, single-device phone URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "wsUrl": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "expiresInSec": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "wsUrl",
+                    "expiresInSec"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Device control plugin is not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/devices": {
       "get": {
         "tags": [

@@ -1,6 +1,6 @@
 import { useCloudConnect } from "@/hooks/use-cloud-connect";
 import { useDesktopCloudStatus } from "@/hooks/use-desktop-cloud-status";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Loader2, Lock, LogIn, QrCode } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -9,22 +9,30 @@ import { Link } from "react-router-dom";
 import {
   getApiV1Devices,
   getApiV1RuntimeConfig,
+  postApiV1DevicesPairingQr,
 } from "../../../lib/api/sdk.gen";
 import type { DeviceInfo } from "./device-card";
 import { DeviceCard } from "./device-card";
 import { MirrorPanel } from "./mirror-panel";
 
+const DEVICE_PAIRING_QR_QUERY_KEY = ["device-pairing-qr"] as const;
+/** Keys expire 10 minutes after minting; refresh well before that. */
+const QR_REFRESH_MS = 5 * 60_000;
+
 // Anchored under its trigger button, matching the "下载 Tabby" popover.
 // The parent must be positioned (`relative`).
 function QrConnectPopover({
   qrUrl,
+  failed,
   open,
   align,
 }: {
-  qrUrl: string;
+  qrUrl: string | null;
+  failed: boolean;
   open: boolean;
   align: "right" | "center";
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={`absolute top-full mt-2 z-50 bg-surface-0 rounded-xl border border-border shadow-lg p-4 transition-all duration-200 ${
@@ -38,14 +46,21 @@ function QrConnectPopover({
       }`}
     >
       <div className="bg-white p-2 rounded-lg border border-border">
-        <QRCodeSVG value={qrUrl} size={160} level="M" />
+        {qrUrl ? (
+          <QRCodeSVG value={qrUrl} size={160} level="M" />
+        ) : (
+          <div className="flex h-[160px] w-[160px] items-center justify-center px-3 text-center text-[11px] leading-relaxed text-text-muted">
+            {failed ? (
+              t("devices.qr.error")
+            ) : (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            )}
+          </div>
+        )}
       </div>
       <p className="w-[178px] text-[11px] text-text-muted mt-2 text-center leading-relaxed">
-        在手机上打开 Tabby App，点击「扫码连接」，扫描上方二维码即可连接。
+        {t("devices.qr.hint")}
       </p>
-      <code className="block w-[178px] mt-2 text-[11px] text-text-muted bg-surface-2 px-2 py-1 rounded font-mono break-all text-left">
-        {qrUrl}
-      </code>
     </div>
   );
 }
@@ -91,15 +106,27 @@ export function DevicesPage() {
   });
 
   const deviceControl = runtimeConfig?.deviceControl;
-  const wsPort: number =
-    typeof (deviceControl as Record<string, unknown> | undefined)?.wsPort ===
-    "number"
-      ? ((deviceControl as Record<string, unknown>).wsPort as number)
-      : 18790;
-  const qrUrl =
-    deviceControl?.enabled && deviceControl?.localIp
-      ? `ws://${deviceControl.localIp}:${wsPort}/phone`
-      : null;
+  const qrAvailable = Boolean(deviceControl?.enabled);
+  // The QR carries a freshly minted device key (tabby-control refuses phones
+  // without one), so it is fetched — not built from runtime config — each
+  // time the popover opens, and refreshed before the key expires.
+  const queryClient = useQueryClient();
+  const qrQuery = useQuery({
+    queryKey: DEVICE_PAIRING_QR_QUERY_KEY,
+    queryFn: async () => {
+      const { data, error } = await postApiV1DevicesPairingQr();
+      if (error || !data) throw new Error("QR unavailable");
+      return data;
+    },
+    enabled: qrAvailable && qrPopover !== null,
+    staleTime: 0,
+    gcTime: 0,
+    refetchInterval: QR_REFRESH_MS,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+  const qrUrl = qrQuery.data?.wsUrl ?? null;
+  const qrFailed = qrQuery.isError;
 
   // Device task execution needs the cloud model, so the whole tab is gated
   // behind cloud login. Reuse the same cloud-status / connect path as the
@@ -219,6 +246,11 @@ export function DevicesPage() {
 
       es.addEventListener("device_connected", () => {
         bumpAlive();
+        // A phone may just have claimed the QR's key (one key, one phone):
+        // show a fresh one for the next phone.
+        void queryClient.invalidateQueries({
+          queryKey: DEVICE_PAIRING_QR_QUERY_KEY,
+        });
         void fetchDevicesRef.current();
       });
 
@@ -279,7 +311,7 @@ export function DevicesPage() {
       es?.close();
       stopFallbackPolling();
     };
-  }, []);
+  }, [queryClient]);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -332,7 +364,7 @@ export function DevicesPage() {
                   </p>
                 </div>
               </div>
-              {qrUrl && (
+              {qrAvailable && (
                 <div className="relative">
                   <button
                     type="button"
@@ -346,6 +378,7 @@ export function DevicesPage() {
                   </button>
                   <QrConnectPopover
                     qrUrl={qrUrl}
+                    failed={qrFailed}
                     open={qrPopover === "header"}
                     align="right"
                   />
@@ -402,7 +435,7 @@ export function DevicesPage() {
               <div className="text-[12px] text-text-muted mt-1 max-w-xs">
                 {t("devices.emptyHint")}
               </div>
-              {qrUrl && (
+              {qrAvailable && (
                 <div className="relative mt-4">
                   <button
                     type="button"
@@ -416,6 +449,7 @@ export function DevicesPage() {
                   </button>
                   <QrConnectPopover
                     qrUrl={qrUrl}
+                    failed={qrFailed}
                     open={qrPopover === "empty"}
                     align="center"
                   />

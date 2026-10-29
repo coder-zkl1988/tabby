@@ -185,6 +185,37 @@ export const deviceErrorCodeSchema = z.enum([
   "MAX_DEVICES_REACHED",
 ]);
 
+/**
+ * LAN pairing (iTabby lan-pairing-protocol v1): a phone found this desktop
+ * over mDNS and asked to pair. Shown to the user with the 6-digit code the
+ * phone also displays; never carries the device key.
+ */
+export const devicePairingRequestSchema = z.object({
+  requestId: z.string().min(1),
+  code: z.string().min(1),
+  deviceId: z.string(),
+  model: z.string(),
+  manufacturer: z.string(),
+  createdAt: z.number(),
+  expiresAt: z.number(),
+});
+
+export const devicePairingListResponseSchema = z.object({
+  /** False when LAN pairing is off or the device control plugin is not running. */
+  enabled: z.boolean(),
+  requests: z.array(devicePairingRequestSchema),
+});
+
+export const devicePairingDecisionResponseSchema = z.object({
+  ok: z.boolean(),
+});
+
+/** Keyed phone WebSocket URL for the "扫码连接" QR code. */
+export const devicePairingQrResponseSchema = z.object({
+  wsUrl: z.string().min(1),
+  expiresInSec: z.number(),
+});
+
 export type DeviceCapabilities = z.infer<typeof deviceCapabilitiesSchema>;
 export type DeviceStatus = z.infer<typeof deviceStatusSchema>;
 export type DeviceInfo = z.infer<typeof deviceInfoSchema>;
@@ -200,3 +231,10 @@ export type DeviceTaskArtifact = z.infer<typeof deviceTaskArtifactSchema>;
 export type TaskResult = z.infer<typeof taskResultSchema>;
 export type CancelTaskBody = z.infer<typeof cancelTaskBodySchema>;
 export type DeviceErrorCode = z.infer<typeof deviceErrorCodeSchema>;
+export type DevicePairingRequest = z.infer<typeof devicePairingRequestSchema>;
+export type DevicePairingListResponse = z.infer<
+  typeof devicePairingListResponseSchema
+>;
+export type DevicePairingQrResponse = z.infer<
+  typeof devicePairingQrResponseSchema
+>;

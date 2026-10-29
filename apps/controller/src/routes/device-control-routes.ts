@@ -5,6 +5,9 @@ import {
   deviceExecuteTaskResponseSchema,
   deviceInfoSchema,
   deviceListResponseSchema,
+  devicePairingDecisionResponseSchema,
+  devicePairingListResponseSchema,
+  devicePairingQrResponseSchema,
   devicePushMediaBodySchema,
   devicePushMediaResponseSchema,
   deviceRenameBodySchema,
@@ -28,6 +31,7 @@ const taskIdParamSchema = z.object({
 });
 const renameParamSchema = z.object({ deviceId: z.string() });
 const errorSchema = z.object({ message: z.string() });
+const pairingRequestParamSchema = z.object({ requestId: z.string().min(1) });
 
 function mapRpcErrorToStatus(err: unknown): {
   status: 404 | 503 | 504 | 500;
@@ -143,6 +147,124 @@ export function registerDeviceControlRoutes(
     }
     return c.json({ ok: true });
   });
+
+  // ── LAN pairing (iTabby lan-pairing-protocol v1) ─────────────────────────────
+  // tabby-control holds the requests and mints device keys; these routes only
+  // proxy its loopback-only pairing RPC.
+
+  // GET /api/v1/devices/pairing/requests — phones waiting for approval
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/api/v1/devices/pairing/requests",
+      tags: ["Device Control"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: devicePairingListResponseSchema },
+          },
+          description: "Pending pairing requests",
+        },
+      },
+    }),
+    async (c) => {
+      // Polled app-wide: a plugin that is not running simply has nothing
+      // pending, so this never turns into an error toast.
+      try {
+        const list = await container.deviceControlService.listPairingRequests();
+        return c.json(list, 200);
+      } catch {
+        return c.json({ enabled: false, requests: [] }, 200);
+      }
+    },
+  );
+
+  for (const decision of ["approve", "reject"] as const) {
+    app.openapi(
+      createRoute({
+        method: "post",
+        path: `/api/v1/devices/pairing/requests/{requestId}/${decision}`,
+        tags: ["Device Control"],
+        request: { params: pairingRequestParamSchema },
+        responses: {
+          200: {
+            content: {
+              "application/json": {
+                schema: devicePairingDecisionResponseSchema,
+              },
+            },
+            description:
+              decision === "approve"
+                ? "Pairing approved; the phone receives its keyed URL"
+                : "Pairing rejected",
+          },
+          404: {
+            content: { "application/json": { schema: errorSchema } },
+            description: "Request expired, cancelled or already decided",
+          },
+          503: {
+            content: { "application/json": { schema: errorSchema } },
+            description: "Device control plugin is not running",
+          },
+        },
+      }),
+      async (c) => {
+        const { requestId } = c.req.valid("param");
+        try {
+          if (decision === "approve") {
+            await container.deviceControlService.approvePairingRequest(
+              requestId,
+            );
+          } else {
+            await container.deviceControlService.rejectPairingRequest(
+              requestId,
+            );
+          }
+          return c.json({ ok: true }, 200);
+        } catch (err) {
+          if (
+            err instanceof DeviceControlRpcError &&
+            err.code === "PAIRING_NOT_FOUND"
+          ) {
+            return c.json({ message: err.message }, 404);
+          }
+          return c.json(
+            { message: "Device control plugin is not running" },
+            503,
+          );
+        }
+      },
+    );
+  }
+
+  // POST /api/v1/devices/pairing/qr — keyed phone URL for the QR code
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/api/v1/devices/pairing/qr",
+      tags: ["Device Control"],
+      responses: {
+        200: {
+          content: {
+            "application/json": { schema: devicePairingQrResponseSchema },
+          },
+          description: "A freshly minted, single-device phone URL",
+        },
+        503: {
+          content: { "application/json": { schema: errorSchema } },
+          description: "Device control plugin is not running",
+        },
+      },
+    }),
+    async (c) => {
+      try {
+        const qr = await container.deviceControlService.createPairingQr();
+        return c.json(qr, 200);
+      } catch {
+        return c.json({ message: "Device control plugin is not running" }, 503);
+      }
+    },
+  );
 
   // GET /api/v1/devices — list devices
   app.openapi(

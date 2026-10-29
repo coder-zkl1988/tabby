@@ -8020,6 +8020,137 @@ export type GetApiV1DevicesTasksByTaskIdResponses = {
 
 export type GetApiV1DevicesTasksByTaskIdResponse = GetApiV1DevicesTasksByTaskIdResponses[keyof GetApiV1DevicesTasksByTaskIdResponses];
 
+export type GetApiV1DevicesPairingRequestsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/devices/pairing/requests';
+};
+
+export type GetApiV1DevicesPairingRequestsResponses = {
+    /**
+     * Pending pairing requests
+     */
+    200: {
+        enabled: boolean;
+        requests: Array<{
+            requestId: string;
+            code: string;
+            deviceId: string;
+            model: string;
+            manufacturer: string;
+            createdAt: number;
+            expiresAt: number;
+        }>;
+    };
+};
+
+export type GetApiV1DevicesPairingRequestsResponse = GetApiV1DevicesPairingRequestsResponses[keyof GetApiV1DevicesPairingRequestsResponses];
+
+export type PostApiV1DevicesPairingRequestsByRequestIdApproveData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/devices/pairing/requests/{requestId}/approve';
+};
+
+export type PostApiV1DevicesPairingRequestsByRequestIdApproveErrors = {
+    /**
+     * Request expired, cancelled or already decided
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Device control plugin is not running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1DevicesPairingRequestsByRequestIdApproveError = PostApiV1DevicesPairingRequestsByRequestIdApproveErrors[keyof PostApiV1DevicesPairingRequestsByRequestIdApproveErrors];
+
+export type PostApiV1DevicesPairingRequestsByRequestIdApproveResponses = {
+    /**
+     * Pairing approved; the phone receives its keyed URL
+     */
+    200: {
+        ok: boolean;
+    };
+};
+
+export type PostApiV1DevicesPairingRequestsByRequestIdApproveResponse = PostApiV1DevicesPairingRequestsByRequestIdApproveResponses[keyof PostApiV1DevicesPairingRequestsByRequestIdApproveResponses];
+
+export type PostApiV1DevicesPairingRequestsByRequestIdRejectData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/api/v1/devices/pairing/requests/{requestId}/reject';
+};
+
+export type PostApiV1DevicesPairingRequestsByRequestIdRejectErrors = {
+    /**
+     * Request expired, cancelled or already decided
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Device control plugin is not running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1DevicesPairingRequestsByRequestIdRejectError = PostApiV1DevicesPairingRequestsByRequestIdRejectErrors[keyof PostApiV1DevicesPairingRequestsByRequestIdRejectErrors];
+
+export type PostApiV1DevicesPairingRequestsByRequestIdRejectResponses = {
+    /**
+     * Pairing rejected
+     */
+    200: {
+        ok: boolean;
+    };
+};
+
+export type PostApiV1DevicesPairingRequestsByRequestIdRejectResponse = PostApiV1DevicesPairingRequestsByRequestIdRejectResponses[keyof PostApiV1DevicesPairingRequestsByRequestIdRejectResponses];
+
+export type PostApiV1DevicesPairingQrData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/devices/pairing/qr';
+};
+
+export type PostApiV1DevicesPairingQrErrors = {
+    /**
+     * Device control plugin is not running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1DevicesPairingQrError = PostApiV1DevicesPairingQrErrors[keyof PostApiV1DevicesPairingQrErrors];
+
+export type PostApiV1DevicesPairingQrResponses = {
+    /**
+     * A freshly minted, single-device phone URL
+     */
+    200: {
+        wsUrl: string;
+        expiresInSec: number;
+    };
+};
+
+export type PostApiV1DevicesPairingQrResponse = PostApiV1DevicesPairingQrResponses[keyof PostApiV1DevicesPairingQrResponses];
+
 export type GetApiV1DevicesData = {
     body?: never;
     path?: never;

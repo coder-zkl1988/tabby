@@ -1873,6 +1873,23 @@ const zhCN = {
   "devices.errorTitle": "设备控制插件未运行",
   "devices.emptyTitle": "暂无连接设备",
   "devices.emptyHint": "通过设备控制插件连接 Android 设备以开始使用",
+  "devices.pairing.title": "iTabby 请求配对",
+  "devices.pairing.description":
+    "同一网络中的手机想连接这台电脑。允许后，这台手机可以使用你的模型额度并接受电脑端的操控。",
+  "devices.pairing.device": "设备",
+  "devices.pairing.code": "核对码",
+  "devices.pairing.confirmHint":
+    "请确认手机上显示的核对码与上方一致，再点击「允许」。不一致或不是你的手机，请点击「拒绝」。",
+  "devices.pairing.approve": "允许",
+  "devices.pairing.reject": "拒绝",
+  "devices.pairing.approved": "已允许配对，手机将自动连接",
+  "devices.pairing.expired": "配对请求已过期或已在手机上取消",
+  "devices.pairing.failed": "处理配对请求失败，请确认设备控制插件正在运行",
+  "devices.pairing.notificationBody":
+    "{{device}} 请求与这台电脑配对，请回到 Tabby 核对",
+  "devices.qr.error": "二维码生成失败，请确认设备控制插件正在运行",
+  "devices.qr.hint":
+    "在手机上打开 Tabby App，点击「扫码连接」，扫描上方二维码即可连接。二维码 10 分钟内有效，且只能用于一台手机。",
   "devices.status.idle": "空闲",
   "devices.status.busy": "忙碌",
   "devices.status.error": "错误",

@@ -4,10 +4,13 @@ import type {
   DeviceExecuteTaskBody,
   DeviceInfo,
   DeviceListResponse,
+  DevicePairingListResponse,
+  DevicePairingQrResponse,
   DevicePushMediaBody,
   DevicePushMediaResponse,
   TaskResult,
 } from "@nexu/shared";
+import { getLocalIp } from "../lib/local-ip.js";
 import { logger } from "../lib/logger.js";
 import type { DeviceTaskHistoryStore } from "../store/device-task-history-store.js";
 import type { NexuConfigStore } from "../store/nexu-config-store.js";
@@ -334,6 +337,63 @@ export class DeviceControlService {
     }
 
     return (await response.json()) as DeviceListResponse;
+  }
+
+  /**
+   * LAN pairing requests waiting for the user (iTabby lan-pairing-protocol).
+   * tabby-control keeps them in memory; the pairing RPC is loopback-only.
+   */
+  async listPairingRequests(): Promise<DevicePairingListResponse> {
+    return this.rpc<DevicePairingListResponse>(
+      "device_pairing_list",
+      {},
+      DEFAULT_LIST_TIMEOUT_MS,
+    );
+  }
+
+  /**
+   * Approve a pairing request: tabby-control mints a device key bound to the
+   * requesting phone and hands it the keyed ws:// URL on its next poll. The
+   * host it uses is the address the phone reached it on; `getLocalIp()` is
+   * only the fallback, same as the QR code.
+   */
+  async approvePairingRequest(requestId: string): Promise<void> {
+    await this.rpc("device_pairing_approve", {
+      requestId,
+      host: getLocalIp(),
+    });
+  }
+
+  async rejectPairingRequest(requestId: string): Promise<void> {
+    await this.rpc("device_pairing_reject", { requestId });
+  }
+
+  /**
+   * A keyed phone URL for the "扫码连接" QR code. Each call mints a new key
+   * that the first phone to connect with it claims; unclaimed keys expire.
+   */
+  async createPairingQr(): Promise<DevicePairingQrResponse> {
+    try {
+      return await this.rpc<DevicePairingQrResponse>(
+        "device_pairing_create_qr",
+        { host: getLocalIp() },
+      );
+    } catch (err) {
+      // A tabby-control that predates device keys answers unknown RPC methods
+      // with HTTP 400 — and still accepts keyless phones, so the old URL is
+      // the one that works against it.
+      if (
+        err instanceof Error &&
+        err.message === "Device control RPC failed: 400"
+      ) {
+        const config = await this.configStore.getConfig();
+        return {
+          wsUrl: `ws://${getLocalIp()}:${config.deviceControl.wsPort}/phone`,
+          expiresInSec: 0,
+        };
+      }
+      throw err;
+    }
   }
 
   async getDevice(deviceId: string): Promise<DeviceInfo | null> {

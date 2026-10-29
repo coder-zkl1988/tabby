@@ -2010,6 +2010,27 @@ const en = {
   "devices.emptyTitle": "No devices connected",
   "devices.emptyHint":
     "Connect an Android device via the device control plugin to get started",
+  "devices.pairing.title": "iTabby wants to pair",
+  "devices.pairing.description":
+    "A phone on the same network wants to connect to this computer. Once allowed, it can use your model quota and be controlled from this desktop.",
+  "devices.pairing.device": "Device",
+  "devices.pairing.code": "Verification code",
+  "devices.pairing.confirmHint":
+    "Make sure the code shown on the phone matches the one above before you click Allow. If it does not match, or it is not your phone, click Reject.",
+  "devices.pairing.approve": "Allow",
+  "devices.pairing.reject": "Reject",
+  "devices.pairing.approved":
+    "Pairing allowed — the phone will connect automatically",
+  "devices.pairing.expired":
+    "The pairing request expired or was cancelled on the phone",
+  "devices.pairing.failed":
+    "Could not handle the pairing request. Make sure the device control plugin is running",
+  "devices.pairing.notificationBody":
+    "{{device}} wants to pair with this computer. Return to Tabby to confirm the code",
+  "devices.qr.error":
+    "Could not generate the QR code. Make sure the device control plugin is running",
+  "devices.qr.hint":
+    "Open the Tabby app on your phone, tap “Scan to connect” and scan the code above. The code is valid for 10 minutes and works for one phone.",
   "devices.status.idle": "Idle",
   "devices.status.busy": "Busy",
   "devices.status.error": "Error",
