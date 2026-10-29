@@ -2,14 +2,14 @@
 
 ## 目标
 
-桌面端技能商店以 ClawHub 当前完整目录为准，同时避免每台桌面客户端每天下载数万条全量数据。公开入口统一使用 `tabby.picaso.studio`，不再依赖 `hub.nexu.dev`。
+桌面端技能商店以 ClawHub 当前完整目录为准，同时避免每台桌面客户端每天下载数万条全量数据。公开入口统一使用 `tabby.happywork.today`，不再依赖 `hub.nexu.dev`。
 
 ## 数据流
 
 ```text
 ClawHub packages API
   -> GitHub Actions 每周一、周四全量同步
-  -> tabby.picaso.studio / Cloudflare D1
+  -> tabby.happywork.today / Cloudflare D1
   -> GET /api/v1/skill-catalog（游标分页）
   -> Nexu Controller
   -> 生成的 Web SDK / Skill Store

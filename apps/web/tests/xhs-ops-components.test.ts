@@ -12,6 +12,7 @@ import { XhsOpsProfileCard } from "../src/lib/a2ui/custom-components/xhs-ops/Xhs
 import { XhsOpsProfileMaterial } from "../src/lib/a2ui/custom-components/xhs-ops/XhsOpsProfileMaterial";
 import { XhsOpsProjectForm } from "../src/lib/a2ui/custom-components/xhs-ops/XhsOpsProjectForm";
 import { XhsOpsRunPlanner } from "../src/lib/a2ui/custom-components/xhs-ops/XhsOpsRunPlanner";
+import { XhsOpsTakeover } from "../src/lib/a2ui/custom-components/xhs-ops/XhsOpsTakeover";
 
 const resolveLiteral = <T>(val: T): unknown => val;
 
@@ -218,6 +219,35 @@ describe("xhs-ops a2ui components render (wiring smoke)", () => {
     expect(material).toContain("账号资料与素材");
     expect(material).toContain("正在加载项目列表");
     expect(material).not.toContain("正在加载账号");
+  });
+
+  it("XhsOpsTakeover renders its shell, and falls back to the project picker without ids", () => {
+    const withAccount = renderToStaticMarkup(
+      withProviders(
+        createElement(
+          XhsOpsTakeover,
+          renderProps({
+            id: "c12",
+            type: "XhsOpsTakeover",
+            projectId: "p1",
+            accountId: "a1",
+            feedbackDraft: "昵称保留",
+          }),
+        ),
+      ),
+    );
+    expect(withAccount).toContain("老号接管");
+    expect(withAccount).toContain("正在加载接管信息");
+    const withoutIds = renderToStaticMarkup(
+      withProviders(
+        createElement(
+          XhsOpsTakeover,
+          renderProps({ id: "c13", type: "XhsOpsTakeover" }),
+        ),
+      ),
+    );
+    expect(withoutIds).toContain("老号接管");
+    expect(withoutIds).toContain("正在加载项目列表");
   });
 
   it("XhsOpsCommentReview renders its shell (P3-1 D1) with and without projectId", () => {

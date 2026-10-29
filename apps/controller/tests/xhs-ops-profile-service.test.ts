@@ -783,7 +783,7 @@ describe("XhsOpsProfileService.generate", () => {
 
   it("buildProfileTextPrompt forbids marketing and includes the interest pool", async () => {
     const { project, account } = await seed();
-    const prompt = buildProfileTextPrompt(project, account);
+    const prompt = buildProfileTextPrompt(project, account, "2026-09-10");
     expect(prompt).toContain("亲子酒店");
     expect(prompt).toContain("禁止营销话术");
   });
@@ -1877,15 +1877,18 @@ describe("profile task builder", () => {
         'PROFILE_VERIFICATION_JSON:{"v":1,"status":"verified","accountMatched":true,"fields":{"nickname":true,"bio":true,"avatar":true,"cover":true,"gender":true,"birthday":true,"region":true},"extra":"rejected"}',
       ),
     ).toBeNull();
+    // Lines around the receipt are the phone's, not the model's: CollectedReport
+    // puts its block before the marker, CompletionGate appends [设备校验]. The
+    // old 1–2 line rule rejected those valid receipts (takeover §3.4 rule 2).
     expect(
       parseProfileVerificationJson(
         `资料已核对\n${verificationResult().message}`,
       ),
-    ).toBeNull();
+    ).toMatchObject({ status: "verified" });
     expect(
       parseProfileVerificationJson(
-        `${verificationResult().message}\n[回执] 资料已核对`,
+        `${verificationResult().message}\n[设备校验] 结束时仍有未解决的问题\n[回执] 各应用生效点击: com.xingin.xhs=3`,
       ),
-    ).toBeNull();
+    ).toMatchObject({ status: "verified" });
   });
 });

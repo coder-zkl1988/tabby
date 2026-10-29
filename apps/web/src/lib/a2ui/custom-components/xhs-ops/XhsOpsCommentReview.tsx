@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomComponentProps } from "../registry";
+import { getRunPreparation } from "./XhsOpsPreparationStatus";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import { localDateString } from "./xhs-ops-dashboard-data";
 import { ProjectPicker, useProjectResolution } from "./xhs-ops-project-picker";
+import {
+  TAKEOVER_COMMENT_RUN_PAUSED_HINT,
+  takeoverCommentRunPaused,
+} from "./xhs-ops-takeover-model";
 import {
   COMMENT_MAX_CHARS,
   COMMENT_STATUS_LABEL,
@@ -32,6 +37,42 @@ import {
 
 const RECENT_RUN_DAYS = 3;
 const HISTORY_LIMIT = 20;
+const COMMENT_RUN_POLL_MS = 4_000;
+
+function commentRunActive(run: XhsOpsRun): boolean {
+  return run.status === "planned" || run.status === "running";
+}
+
+/**
+ * Today's newest comment run of each existing-mode account. Such a run passes
+ * the read-only identity gate first (§6.1), and a failed gate fails the run
+ * with the reason on its preparation — the card shows it on the account's
+ * quota tile. New accounts' comment runs have no gate and are not tracked.
+ */
+function latestCommentRuns(
+  runs: readonly XhsOpsRun[],
+  accounts: readonly XhsOpsAccount[],
+): Map<string, XhsOpsRun> {
+  const existing = new Set(
+    accounts
+      .filter((account) => account.entryMode === "existing")
+      .map((account) => account.id),
+  );
+  const today = localDateString(new Date());
+  const latest = new Map<string, XhsOpsRun>();
+  for (const run of runs) {
+    if (
+      run.plan.kind !== "comment" ||
+      run.date !== today ||
+      !existing.has(run.accountId)
+    )
+      continue;
+    const known = latest.get(run.accountId);
+    if (!known || known.createdAt < run.createdAt)
+      latest.set(run.accountId, run);
+  }
+  return latest;
+}
 
 /**
  * P3-1 D1 评论审核队列。人是唯一的放行者：桌面生成候选 → 运营点选/改写 →
@@ -54,6 +95,9 @@ export function XhsOpsCommentReview({
   const [quotas, setQuotas] = useState<XhsOpsCommentQuota[]>([]);
   const [accounts, setAccounts] = useState<XhsOpsAccount[]>([]);
   const [recentRuns, setRecentRuns] = useState<XhsOpsRun[]>([]);
+  const [commentRuns, setCommentRuns] = useState<Map<string, XhsOpsRun>>(
+    () => new Map(),
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -77,6 +121,7 @@ export function XhsOpsCommentReview({
       setAccounts(
         onlyAccountId ? accts.filter((a) => a.id === onlyAccountId) : accts,
       );
+      setCommentRuns(latestCommentRuns(runs, accts));
       setRecentRuns(
         runs.filter(
           (r) =>
@@ -95,6 +140,46 @@ export function XhsOpsCommentReview({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A dispatched comment run of an existing account runs its identity gate
+  // in the background: follow it until it settles, then reload the queue.
+  const activeCommentRunIds = [...commentRuns.values()]
+    .filter(commentRunActive)
+    .map((run) => run.id)
+    .join(",");
+  useEffect(() => {
+    if (!activeCommentRunIds) return;
+    let cancelled = false;
+    let ticking = false;
+    const tick = async () => {
+      if (ticking) return;
+      ticking = true;
+      try {
+        let settled = false;
+        for (const runId of activeCommentRunIds.split(",")) {
+          const next = await xhsOpsApi.getRun(runId).catch(() => null);
+          if (cancelled) return;
+          if (!next) continue;
+          setCommentRuns((current) => {
+            const known = current.get(next.accountId);
+            if (known && known.id !== next.id) return current;
+            return new Map(current).set(next.accountId, next);
+          });
+          if (!commentRunActive(next)) settled = true;
+        }
+        if (settled && !cancelled) await load();
+      } finally {
+        ticking = false;
+      }
+    };
+    const timer = setInterval(() => {
+      void tick();
+    }, COMMENT_RUN_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeCommentRunIds, load]);
 
   const pending = useMemo(
     () => (drafts ?? []).filter((d) => d.status === "pending"),
@@ -162,6 +247,7 @@ export function XhsOpsCommentReview({
           <QuotaStrip
             quotas={quotas}
             approvedUnclaimed={approvedUnclaimed}
+            commentRun={(accountId) => commentRuns.get(accountId)}
             onDispatch={
               projectId
                 ? async (accountId) => {
@@ -178,6 +264,18 @@ export function XhsOpsCommentReview({
                         "运营已把已批准的评论派发给手机（桌面评论任务，同一手机排队串行）。不要再派任何手机任务，也不要生成评论；结果会回写到评论队列和看板。",
                     });
                     await load();
+                    // Followed until its identity gate settles, even when
+                    // the reload has not listed it yet.
+                    if (
+                      accounts.find((a) => a.id === accountId)?.entryMode ===
+                      "existing"
+                    )
+                      setCommentRuns((current) => {
+                        const known = current.get(accountId);
+                        if (known && known.createdAt >= run.createdAt)
+                          return current;
+                        return new Map(current).set(accountId, run);
+                      });
                     return run;
                   }
                 : undefined
@@ -278,13 +376,52 @@ function statusClass(status: XhsOpsCommentDraft["status"]): string {
   }
 }
 
+/**
+ * Where today's comment run of an existing account stands: its identity
+ * gate, or why it sent nothing — the gate's own reason first (§6.1).
+ */
+function CommentRunStatus({ run }: { run: XhsOpsRun | undefined }) {
+  if (!run) return null;
+  const preparation = getRunPreparation(run);
+  if (run.status === "failed") {
+    const gateReason =
+      preparation && preparation.status !== "ready" ? preparation.reason : null;
+    return (
+      <div
+        data-testid="comment-run-failed"
+        className="mt-1 text-[12px] text-[var(--color-error-ink)]"
+      >
+        评论任务没有发出：
+        {gateReason
+          ? `启动前的身份检查没有通过，${gateReason}`
+          : (run.error ?? "评论任务失败")}
+      </div>
+    );
+  }
+  if (!commentRunActive(run)) return null;
+  return (
+    <div
+      data-testid="comment-run-active"
+      className="mt-1 text-[12px] text-text-secondary"
+    >
+      {run.status === "planned"
+        ? "评论任务排队中（等同一手机上的任务结束）"
+        : preparation?.status === "running"
+          ? "评论任务启动前正在只读核对手机上登录的账号…"
+          : "评论任务执行中"}
+    </div>
+  );
+}
+
 function QuotaStrip({
   quotas,
   approvedUnclaimed,
+  commentRun,
   onDispatch,
 }: {
   quotas: XhsOpsCommentQuota[];
   approvedUnclaimed: (accountId: string) => number;
+  commentRun: (accountId: string) => XhsOpsRun | undefined;
   onDispatch?: (accountId: string) => Promise<XhsOpsRun>;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -310,7 +447,14 @@ function QuotaStrip({
         `${label}：评论任务已${run.status === "planned" ? "排队（等同一手机上的任务结束）" : "开始执行"}，${run.plan.comments?.length ?? 0} 条；结果会回写到队列。`,
       );
     } catch (err) {
-      setError(describeXhsOpsError(err, "派发失败"));
+      // A paused takeover (code takeover_paused) is resumed on its takeover
+      // card, not here.
+      const paused = takeoverCommentRunPaused(err);
+      setError(
+        paused
+          ? `${paused.replace(/[。；;.\s]+$/, "")}。${TAKEOVER_COMMENT_RUN_PAUSED_HINT}`
+          : describeXhsOpsError(err, "派发失败"),
+      );
     } finally {
       setBusy(null);
     }
@@ -345,6 +489,7 @@ function QuotaStrip({
                 ；每日上限 {q.dailyCap}；已发 {q.sentToday}，已批未发{" "}
                 {q.approvedPending}
               </div>
+              <CommentRunStatus run={commentRun(q.accountId)} />
               {onDispatch ? (
                 <div className="mt-1 flex items-center justify-end">
                   <PrimaryButton

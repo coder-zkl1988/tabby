@@ -70,12 +70,9 @@ function renderPanel(node: CanvasNode): string {
   // Seed the ["models"] cache so the picker renders options synchronously.
   queryClient.setQueryData(["models"], {
     models: [
+      { id: "tabby-image", name: "tabby-image", provider: "link" },
+      // Legacy tier id still present in stale model caches.
       { id: "tabby-image-pro", name: "tabby-image-pro", provider: "link" },
-      {
-        id: "tabby-image-flash",
-        name: "tabby-image-flash",
-        provider: "link",
-      },
       { id: "tabby-video", name: "tabby-video", provider: "link" },
       { id: "tabby-ultra", name: "tabby-ultra", provider: "link" },
     ],
@@ -109,8 +106,8 @@ describe("PromptPanel controls per mode", () => {
     // offer the image backends, never chat/video models
     expect(markup).toContain("模型");
     expect(markup).toContain("默认模型");
-    expect(markup).toContain("tabby-image-pro");
-    expect(markup).toContain("tabby-image-flash");
+    expect(markup).toContain('value="tabby-image"');
+    expect(markup).not.toContain("tabby-image-pro");
     expect(markup).not.toContain("tabby-ultra");
     expect(markup).not.toContain("tabby-video");
   });

@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { restrictedTextSessionKey } from "../src/lib/restricted-text-session-key.js";
 import type { TabbyMediaRunner } from "../src/services/bundled-tabby-media-runner.js";
 import {
   ImageGenerationFailedError,
@@ -218,7 +219,7 @@ describe("MediaGenerationService", () => {
 
     const result = await buildService(tabbyMediaRunner).generateImage({
       prompt: "a cat",
-      model: "tabby-image-flash",
+      model: "tabby-image",
       aspectRatio: "9:16",
       size: "2K",
     });
@@ -227,7 +228,7 @@ describe("MediaGenerationService", () => {
     expect(tabbyMediaRunner.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
         botId: "bot-1",
-        model: "tabby-image-flash",
+        model: "tabby-image",
         aspectRatio: "9:16",
         size: "2K",
       }),
@@ -235,23 +236,26 @@ describe("MediaGenerationService", () => {
     expect(sendChat).not.toHaveBeenCalled();
   });
 
-  it("maps legacy image model IDs to the renamed official models", async () => {
-    const out = makeMediaFile("outbound/bot-1/tabby-image/out.png");
-    const tabbyMediaRunner: TabbyMediaRunner = {
-      generateImage: vi.fn(async () => [out]),
-      generateVideo: vi.fn(async () => ""),
-    };
+  it.each(["tabby-image-pro", "tabby-image-flash", "tabby-image-free"])(
+    "maps the legacy image model ID %s to tabby-image",
+    async (legacyModel) => {
+      const out = makeMediaFile("outbound/bot-1/tabby-image/out.png");
+      const tabbyMediaRunner: TabbyMediaRunner = {
+        generateImage: vi.fn(async () => [out]),
+        generateVideo: vi.fn(async () => ""),
+      };
 
-    await buildService(tabbyMediaRunner).generateImage({
-      prompt: "a cat",
-      model: "tabby-image-free",
-    });
+      await buildService(tabbyMediaRunner).generateImage({
+        prompt: "a cat",
+        model: legacyModel,
+      });
 
-    expect(tabbyMediaRunner.generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "tabby-image-flash" }),
-    );
-    expect(sendChat).not.toHaveBeenCalled();
-  });
+      expect(tabbyMediaRunner.generateImage).toHaveBeenCalledWith(
+        expect.objectContaining({ model: "tabby-image" }),
+      );
+      expect(sendChat).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps third-party image models on the utility-agent fallback", async () => {
     const out = makeMediaFile("tool-image-generation/out.png");
@@ -518,6 +522,23 @@ describe("MediaGenerationService", () => {
     expect(message).toContain("Size: 2K");
   });
 
+  it("hints tabby-image for a legacy model ID on the agent lane", async () => {
+    const out = makeMediaFile("tool-image-generation/out.png");
+    const reference = makeMediaFile("inbound/ref.png");
+    readAssistantReply.mockResolvedValue(out);
+
+    await buildService().generateImage({
+      prompt: "a cat",
+      model: "tabby-image-pro",
+      referenceImages: [reference],
+    });
+
+    const message = (sendChat.mock.calls[0]?.[0] as { message: string })
+      .message;
+    expect(message).toContain("Preferred model: tabby-image\n");
+    expect(message).not.toContain("tabby-image-pro");
+  });
+
   it("omits the hints block entirely when no W5 params are given", async () => {
     const out = makeMediaFile("tool-image-generation/plain.png");
     readAssistantReply.mockResolvedValue(out);
@@ -742,6 +763,47 @@ describe("MediaGenerationService", () => {
     expect(message).toContain("make it formal");
     expect(message).toContain("hey there");
     expect(message).toContain("Preferred model: gpt-x");
+  });
+
+  it("generateText on a restricted lane uses an automation-tier session key", async () => {
+    readAssistantReply.mockResolvedValue('{"f":[]}');
+    const result = await buildService().generateText({
+      prompt: "diagnose",
+      restrictedLane: "xhs-diagnosis",
+    });
+    expect(result).toEqual({ text: '{"f":[]}', botId: "bot-1" });
+    const call = sendChat.mock.calls[0]?.[0] as {
+      sessionKey: string;
+      message: string;
+    };
+    expect(call.sessionKey).toBe(
+      restrictedTextSessionKey("bot-1", "xhs-diagnosis", "gen-1"),
+    );
+    expect(call.sessionKey).toBe(
+      "agent:bot-1:schedule-textgen-xhs-diagnosis-gen-1",
+    );
+    expect(call.message).toContain("Do NOT call any tools");
+    expect(readSessionEntry).toHaveBeenCalledWith("bot-1", call.sessionKey);
+  });
+
+  it("generateText keeps the textgen lane and result shape without a lane", async () => {
+    readAssistantReply.mockResolvedValue("plain");
+    await expect(
+      buildService().generateText({ prompt: "x" }),
+    ).resolves.toStrictEqual({ text: "plain" });
+    const call = sendChat.mock.calls[0]?.[0] as {
+      sessionKey: string;
+      message: string;
+    };
+    expect(call.sessionKey).toBe("agent:bot-1:subagent:textgen-gen-1");
+    expect(call.message).not.toContain("Do NOT call any tools");
+  });
+
+  it("generateText rejects a lane that would break the session key", async () => {
+    await expect(
+      buildService().generateText({ prompt: "x", restrictedLane: "a:b" }),
+    ).rejects.toThrow(/invalid restricted text lane/);
+    expect(sendChat).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------

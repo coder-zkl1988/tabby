@@ -272,7 +272,7 @@ describe("CatalogManager.getCatalog() workspace skills", () => {
     const catalog = new CatalogManager(cacheDir, {
       skillsDir,
       skillDb,
-      catalogApiUrl: "https://tabby.picaso.studio/api/v1/skill-catalog",
+      catalogApiUrl: "https://tabby.happywork.today/api/v1/skill-catalog",
     });
 
     const page = await catalog.getCatalogPage({ limit: 1 });
@@ -295,7 +295,7 @@ describe("CatalogManager.getCatalog() workspace skills", () => {
     const catalog = new CatalogManager(cacheDir, {
       skillsDir,
       skillDb,
-      catalogApiUrl: "https://tabby.picaso.studio/api/v1/skill-catalog",
+      catalogApiUrl: "https://tabby.happywork.today/api/v1/skill-catalog",
     });
 
     await expect(

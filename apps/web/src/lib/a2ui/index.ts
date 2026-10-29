@@ -44,6 +44,7 @@ import { XhsOpsProfileCard } from "./custom-components/xhs-ops/XhsOpsProfileCard
 import { XhsOpsProfileMaterial } from "./custom-components/xhs-ops/XhsOpsProfileMaterial";
 import { XhsOpsProjectForm } from "./custom-components/xhs-ops/XhsOpsProjectForm";
 import { XhsOpsRunPlanner } from "./custom-components/xhs-ops/XhsOpsRunPlanner";
+import { XhsOpsTakeover } from "./custom-components/xhs-ops/XhsOpsTakeover";
 
 const NEXU_CATALOG = "https://nexu.app/a2ui/custom-catalog.json";
 
@@ -67,6 +68,7 @@ registerCustomComponent(
   "XhsOpsProfileMaterial",
   XhsOpsProfileMaterial,
 );
+registerCustomComponent(NEXU_CATALOG, "XhsOpsTakeover", XhsOpsTakeover);
 registerCustomComponent(NEXU_CATALOG, "XhsOpsDashboard", XhsOpsDashboard);
 registerCustomComponent(
   NEXU_CATALOG,

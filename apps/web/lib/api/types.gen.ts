@@ -8196,6 +8196,9 @@ export type GetApiV1DevicesResponses = {
             wifiSsid?: string;
             isWifiConnected?: boolean;
             isCharging?: boolean;
+            devicePolicyMode?: 'off' | 'audit' | 'enforce';
+            skillBundleVersion?: number;
+            skillSyncStatus?: 'unknown' | 'syncing' | 'current' | 'error' | 'incompatible';
         }>;
     };
 };
@@ -8248,6 +8251,9 @@ export type GetApiV1DevicesByDeviceIdResponses = {
         wifiSsid?: string;
         isWifiConnected?: boolean;
         isCharging?: boolean;
+        devicePolicyMode?: 'off' | 'audit' | 'enforce';
+        skillBundleVersion?: number;
+        skillSyncStatus?: 'unknown' | 'syncing' | 'current' | 'error' | 'incompatible';
     };
 };
 
@@ -8301,6 +8307,9 @@ export type PatchApiV1DevicesByDeviceIdResponses = {
         wifiSsid?: string;
         isWifiConnected?: boolean;
         isCharging?: boolean;
+        devicePolicyMode?: 'off' | 'audit' | 'enforce';
+        skillBundleVersion?: number;
+        skillSyncStatus?: 'unknown' | 'syncing' | 'current' | 'error' | 'incompatible';
     };
 };
 
@@ -8933,6 +8942,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -8978,6 +8988,166 @@ export type PostApiV1XhsOpsProjectsByProjectIdPersonasConfirmResponses = {
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -9078,6 +9248,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -9123,6 +9294,166 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftGenerateResponses = {
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -9221,6 +9552,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -9267,6 +9599,166 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftConfirmResponses = {
                 dailyTargetPosts?: number;
                 dailySegments?: number;
             };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
             createdAt: string;
             updatedAt: string;
         };
@@ -9307,6 +9799,12 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileErrors = {
      * Failed
      */
     500: {
+        message: string;
+    };
+    /**
+     * An existing or taken-over account during the startup recovery of takeover work
+     */
+    503: {
         message: string;
     };
 };
@@ -9362,6 +9860,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -9408,6 +9907,166 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftReconcileResponses = {
                 dailyTargetPosts?: number;
                 dailySegments?: number;
             };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
             createdAt: string;
             updatedAt: string;
         };
@@ -9448,6 +10107,12 @@ export type PostApiV1XhsOpsAccountsByAccountIdIdentityReadErrors = {
      * Failed
      */
     500: {
+        message: string;
+    };
+    /**
+     * An existing or taken-over account during the startup recovery of takeover work
+     */
+    503: {
         message: string;
     };
 };
@@ -9617,6 +10282,7 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -9662,6 +10328,166 @@ export type PostApiV1XhsOpsAccountsByAccountIdProfileDraftApplyResponses = {
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -9982,10 +10808,11 @@ export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsErrors = {
         message: string;
     };
     /**
-     * Conflict
+     * Comment run refused; a paused takeover adds code takeover_paused
      */
     409: {
         message: string;
+        code?: 'takeover_paused';
     };
     /**
      * Failed
@@ -10057,8 +10884,9 @@ export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsResponses = {
             queuedBehindRunId?: string | null;
             preparation?: {
                 status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
-                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
                 reason: string | null;
+                warnings?: Array<string>;
                 taskId: string | null;
                 startedAt: string;
                 completedAt: string | null;
@@ -10081,6 +10909,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalies?: Array<{
                     type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
                     detail?: string;
@@ -10113,6 +10942,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdCommentRunsResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalyCount?: number;
                 durationMs?: number | null;
             };
@@ -10296,6 +11126,11 @@ export type GetApiV1XhsOpsProjectsByProjectIdPlanSuggestResponses = {
                 index: number;
                 count: number;
             } | null;
+        }>;
+        skipped?: Array<{
+            accountId: string;
+            accountLabel: string;
+            reason: string;
         }>;
     };
 };
@@ -10871,6 +11706,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceData = {
                 dailySegments?: number;
             };
         };
+        overrideReason?: string;
     };
     path: {
         projectId: string;
@@ -10893,15 +11729,27 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceErrors = {
         message: string;
     };
     /**
-     * Conflict
+     * Device busy or offline, a binding conflict, or a takeover target's parameters past a limit (code and issues; overrideReason lifts an overridable one)
      */
     409: {
         message: string;
+        code?: 'takeover_override_reason_required' | 'takeover_param_hard_limit';
+        issues?: Array<{
+            field: string;
+            message: string;
+            overridable: boolean;
+        }>;
     };
     /**
      * Failed
      */
     500: {
+        message: string;
+    };
+    /**
+     * An existing or taken-over account during the startup recovery of takeover work
+     */
+    503: {
         message: string;
     };
 };
@@ -10957,6 +11805,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponses = 
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -11002,6 +11851,166 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsTransferDeviceResponses = 
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -11080,6 +12089,7 @@ export type GetApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -11125,6 +12135,166 @@ export type GetApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -11292,6 +12462,7 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -11338,6 +12509,166 @@ export type PostApiV1XhsOpsProjectsByProjectIdAccountsResponses = {
                 dailyTargetPosts?: number;
                 dailySegments?: number;
             };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
             createdAt: string;
             updatedAt: string;
         };
@@ -11378,6 +12709,12 @@ export type DeleteApiV1XhsOpsAccountsByAccountIdErrors = {
      * Failed
      */
     500: {
+        message: string;
+    };
+    /**
+     * An existing or taken-over account during the startup recovery of takeover work
+     */
+    503: {
         message: string;
     };
 };
@@ -11433,6 +12770,7 @@ export type DeleteApiV1XhsOpsAccountsByAccountIdResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -11478,6 +12816,166 @@ export type DeleteApiV1XhsOpsAccountsByAccountIdResponses = {
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -11556,6 +13054,7 @@ export type GetApiV1XhsOpsAccountsByAccountIdResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -11601,6 +13100,166 @@ export type GetApiV1XhsOpsAccountsByAccountIdResponses = {
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -11682,6 +13341,7 @@ export type PatchApiV1XhsOpsAccountsByAccountIdData = {
             dailySegments?: number;
         };
         expectedUpdatedAt?: string;
+        overrideReason?: string;
     };
     path: {
         accountId: string;
@@ -11704,15 +13364,27 @@ export type PatchApiV1XhsOpsAccountsByAccountIdErrors = {
         message: string;
     };
     /**
-     * Device binding conflict or unfinished runs
+     * Device binding conflict, unfinished runs, a locked entryMode or 小红书号, or a takeover's parameters past a limit (code and issues; overrideReason lifts an overridable one)
      */
     409: {
         message: string;
+        code?: 'takeover_override_reason_required' | 'takeover_param_hard_limit';
+        issues?: Array<{
+            field: string;
+            message: string;
+            overridable: boolean;
+        }>;
     };
     /**
      * Account update failed
      */
     500: {
+        message: string;
+    };
+    /**
+     * An existing or taken-over account during the startup recovery of takeover work
+     */
+    503: {
         message: string;
     };
 };
@@ -11768,6 +13440,7 @@ export type PatchApiV1XhsOpsAccountsByAccountIdResponses = {
                     accountUpdatedAt: string;
                     startedAt: string;
                     completedAt?: string | null;
+                    changeOrderId?: string | null;
                 } | null;
                 reviewedAt?: string | null;
                 verifiedAt?: string | null;
@@ -11813,6 +13486,166 @@ export type PatchApiV1XhsOpsAccountsByAccountIdResponses = {
                 homeFeedCount?: number;
                 dailyTargetPosts?: number;
                 dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
             };
             createdAt: string;
             updatedAt: string;
@@ -11893,8 +13726,9 @@ export type GetApiV1XhsOpsRunsResponses = {
             queuedBehindRunId?: string | null;
             preparation?: {
                 status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
-                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
                 reason: string | null;
+                warnings?: Array<string>;
                 taskId: string | null;
                 startedAt: string;
                 completedAt: string | null;
@@ -11917,6 +13751,7 @@ export type GetApiV1XhsOpsRunsResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalies?: Array<{
                     type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
                     detail?: string;
@@ -11949,6 +13784,7 @@ export type GetApiV1XhsOpsRunsResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalyCount?: number;
                 durationMs?: number | null;
             };
@@ -12109,8 +13945,9 @@ export type PostApiV1XhsOpsRunsResponses = {
             queuedBehindRunId?: string | null;
             preparation?: {
                 status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
-                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
                 reason: string | null;
+                warnings?: Array<string>;
                 taskId: string | null;
                 startedAt: string;
                 completedAt: string | null;
@@ -12133,6 +13970,7 @@ export type PostApiV1XhsOpsRunsResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalies?: Array<{
                     type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
                     detail?: string;
@@ -12165,6 +14003,7 @@ export type PostApiV1XhsOpsRunsResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalyCount?: number;
                 durationMs?: number | null;
             };
@@ -12260,8 +14099,9 @@ export type GetApiV1XhsOpsRunsByRunIdResponses = {
             queuedBehindRunId?: string | null;
             preparation?: {
                 status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
-                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
                 reason: string | null;
+                warnings?: Array<string>;
                 taskId: string | null;
                 startedAt: string;
                 completedAt: string | null;
@@ -12284,6 +14124,7 @@ export type GetApiV1XhsOpsRunsByRunIdResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalies?: Array<{
                     type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
                     detail?: string;
@@ -12316,6 +14157,7 @@ export type GetApiV1XhsOpsRunsByRunIdResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalyCount?: number;
                 durationMs?: number | null;
             };
@@ -12413,8 +14255,9 @@ export type PatchApiV1XhsOpsRunsByRunIdResponses = {
             queuedBehindRunId?: string | null;
             preparation?: {
                 status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
-                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
                 reason: string | null;
+                warnings?: Array<string>;
                 taskId: string | null;
                 startedAt: string;
                 completedAt: string | null;
@@ -12437,6 +14280,7 @@ export type PatchApiV1XhsOpsRunsByRunIdResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalies?: Array<{
                     type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
                     detail?: string;
@@ -12469,6 +14313,7 @@ export type PatchApiV1XhsOpsRunsByRunIdResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalyCount?: number;
                 durationMs?: number | null;
             };
@@ -12582,8 +14427,9 @@ export type PostApiV1XhsOpsRunsByRunIdStartResponses = {
             queuedBehindRunId?: string | null;
             preparation?: {
                 status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
-                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
                 reason: string | null;
+                warnings?: Array<string>;
                 taskId: string | null;
                 startedAt: string;
                 completedAt: string | null;
@@ -12606,6 +14452,7 @@ export type PostApiV1XhsOpsRunsByRunIdStartResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalies?: Array<{
                     type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
                     detail?: string;
@@ -12638,6 +14485,7 @@ export type PostApiV1XhsOpsRunsByRunIdStartResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalyCount?: number;
                 durationMs?: number | null;
             };
@@ -12751,8 +14599,9 @@ export type PostApiV1XhsOpsRunsByRunIdCancelResponses = {
             queuedBehindRunId?: string | null;
             preparation?: {
                 status: 'running' | 'ready' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
-                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+                reasonCode: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
                 reason: string | null;
+                warnings?: Array<string>;
                 taskId: string | null;
                 startedAt: string;
                 completedAt: string | null;
@@ -12775,6 +14624,7 @@ export type PostApiV1XhsOpsRunsByRunIdCancelResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalies?: Array<{
                     type: 'no_results' | 'load_failed' | 'login_required' | 'account_restricted' | 'rate_limited' | 'content_mismatch' | 'interrupted' | 'other';
                     detail?: string;
@@ -12807,6 +14657,7 @@ export type PostApiV1XhsOpsRunsByRunIdCancelResponses = {
                     follow?: number;
                     comment?: number;
                 };
+                alreadyLikedSkipped?: number;
                 anomalyCount?: number;
                 durationMs?: number | null;
             };
@@ -12821,6 +14672,9979 @@ export type PostApiV1XhsOpsRunsByRunIdCancelResponses = {
 };
 
 export type PostApiV1XhsOpsRunsByRunIdCancelResponse = PostApiV1XhsOpsRunsByRunIdCancelResponses[keyof PostApiV1XhsOpsRunsByRunIdCancelResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeData = {
+    body?: {
+        expectedUpdatedAt: string;
+        ownershipConfirmed: true;
+        authorizationNote?: string;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/takeover/authorize';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeError = PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeErrors[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeResponses = {
+    /**
+     * Card ① ownership statement: the takeover starts and entryMode is locked
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeResponse = PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeResponses[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverAuthorizeResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/takeover/identity/read';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadError = PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadErrors[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadResponses = {
+    /**
+     * Read-only identity read under the exclusive device lock; the result is kept server-side as pendingIdentity
+     */
+    200: {
+        identity: {
+            status: 'visible' | 'unavailable';
+            screenshotUrl: string | null;
+            accountId: string;
+            taskId: string;
+            reason: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadResponse = PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadResponses[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityReadResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmData = {
+    body?: {
+        identityTaskId: string;
+        platformAccountId: string;
+        overrideRead?: boolean;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/takeover/identity/confirm';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmError = PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmErrors[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmResponses = {
+    /**
+     * Identity locked against the pending read; the event carries no 小红书号
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmResponse = PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmResponses[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverIdentityConfirmResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertData = {
+    body?: {
+        expectedUpdatedAt: string;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/takeover/plan/revert';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertError = PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertErrors[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertResponses = {
+    /**
+     * 「撤销方案」: the pre-plan snapshot restored, unstarted change orders cancelled
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        diagnosis: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            auditId: string;
+            version: number;
+            parentId?: string | null;
+            status: 'generating' | 'ready' | 'failed' | 'superseded' | 'confirmed';
+            playbookVersion: string;
+            citedRules?: Array<{
+                id: string;
+                text: string;
+                source: string;
+                confidence: string;
+                signedOff: boolean;
+            }>;
+            facts: {
+                following?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                followers?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                likesCollects?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                notesSeen?: number;
+                notesEnd?: boolean;
+                videoSharePercent?: number | null;
+                pinnedCount?: number;
+                medianNoteLikes?: number | null;
+                topNoteIndexes?: Array<number>;
+                creatorAvailable?: boolean;
+                weekly?: {
+                    periodLabel: string;
+                    views: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    interactions: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    newFollowers: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    profileVisitors: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                } | null;
+                feedMatch?: 'high' | 'medium' | 'low' | 'unknown';
+                tier: 'starter' | 'growing' | 'established' | 'dormant';
+                tierReasons?: Array<string>;
+                budget?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    blockedUntil: string | null;
+                }>;
+                recentSafetyStops?: number;
+            };
+            cadence: {
+                browseDefaults: {
+                    dwellSecMin?: number;
+                    dwellSecMax?: number;
+                    searchRatioPercent?: number;
+                    postsPerKeyword?: number;
+                    homeFeedCount?: number;
+                    dailyTargetPosts?: number;
+                    dailySegments?: number;
+                };
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                rationale: Array<string>;
+            };
+            summary?: string;
+            inferredPersona?: {
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                contentLine: string;
+                confidence: 'low' | 'medium' | 'high';
+            } | null;
+            dimensions?: Array<{
+                dimension: string;
+                rating: 'good' | 'fair' | 'poor' | 'unknown';
+                note: string;
+            }>;
+            findings?: Array<{
+                id: string;
+                dimension: 'identity' | 'persona_fit' | 'verticality' | 'tone' | 'activity' | 'performance' | 'risk' | 'compliance';
+                severity: 'info' | 'low' | 'medium' | 'high';
+                summary: string;
+                evidence: Array<string>;
+                ruleIds: Array<string>;
+            }>;
+            questions?: Array<{
+                id: string;
+                text: string;
+                options: Array<string>;
+                answer?: string | null;
+            }>;
+            proposals?: Array<({
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'positioning';
+                label: string;
+                positioning: string;
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                personaTags: {
+                    vertical?: Array<string>;
+                    general?: Array<string>;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'interestPool';
+                core: Array<string>;
+                extended: Array<string>;
+                general: Array<string>;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'toneGuide';
+                guide: {
+                    summary?: string;
+                    pillars?: Array<{
+                        name: string;
+                        sharePercent: number;
+                    }>;
+                    topicDirections?: Array<string>;
+                    titlePatterns?: Array<string>;
+                    coverStyle?: string;
+                    bodyStyle?: string;
+                    tagHints?: Array<string>;
+                    keep?: Array<string>;
+                    avoid?: Array<string>;
+                    commentStyle?: string;
+                    cadenceHint?: string;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'profileField';
+                field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                to: string;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'noteAction';
+                noteIndex: number;
+                action: 'keep' | 'pin' | 'unpin' | 'consider_private';
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'keep';
+                field: string;
+            }) & {
+                risk: 'L0' | 'L1' | 'L2' | 'L3';
+                batch: number;
+                from?: string;
+                budgetBlockedUntil?: string | null;
+            }>;
+            dropped?: Array<{
+                ref: string;
+                reason: string;
+            }>;
+            decisions?: {
+                [key: string]: {
+                    decision: 'adopt' | 'edit' | 'reject' | 'defer';
+                    edited?: unknown;
+                    decidedAt: string;
+                };
+            };
+            feedback?: Array<{
+                at: string;
+                text: string;
+            }>;
+            generator: {
+                botId: string;
+                model: string | null;
+            };
+            confirmedAt?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        } | null;
+        changeOrders: Array<{
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertResponse = PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertResponses[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverPlanRevertResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseData = {
+    body?: {
+        reason: string;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/takeover/pause';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseError = PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseErrors[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseResponses = {
+    /**
+     * 「暂停接管」: a manual safety pause; a stronger pause in force stays
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseResponse = PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseResponses[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverPauseResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeData = {
+    body?: {
+        reason?: string;
+        expectedUpdatedAt: string;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/takeover/resume';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeError = PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeErrors[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeResponses = {
+    /**
+     * 「恢复」: cooldown codes lift once the cooldown passed; every other code lifts only when the identity gate reports ready (resumed false keeps the pause)
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        resumed: boolean;
+        gate: {
+            status: 'ready' | 'blocked' | 'failed';
+            code: 'ready' | 'phone_required' | 'verification_required' | 'sms_unavailable' | 'account_mismatch' | 'store_unavailable' | 'install_failed' | 'login_failed' | 'account_restricted' | 'rate_limited' | 'invalid_result' | 'device_unavailable' | 'device_busy' | 'policy_not_enforce' | 'dispatch_failed' | 'interrupted' | 'cancelled';
+            reason: string;
+            taskId: string | null;
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeResponse = PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeResponses[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverResumeResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseData = {
+    body?: {
+        expectedUpdatedAt: string;
+        stoppedOnPhone: true;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/takeover/device-hold/release';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseError = PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseErrors[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseResponses = {
+    /**
+     * The operator confirmed on the phone that the held task ended; the device is free again
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseResponse = PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseResponses[keyof PostApiV1XhsOpsAccountsByAccountIdTakeoverDeviceHoldReleaseResponses];
+
+export type GetApiV1XhsOpsPlaybookData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/xhs-ops/playbook';
+};
+
+export type GetApiV1XhsOpsPlaybookResponses = {
+    /**
+     * The rules diagnoses cite, shown as 技能文档 / 本方案规则 / 参考 chips, and the phone-skills bundle their doc excerpts were checked against
+     */
+    200: {
+        version: string;
+        bundleVersion: number;
+        rules: Array<{
+            id: string;
+            topic: 'identity' | 'profile' | 'takeover' | 'nurture' | 'tone' | 'risk' | 'metrics';
+            text: string;
+            source: string;
+            appliesTo: Array<'new' | 'existing'>;
+            confidence: 'doc' | 'device-verified' | 'design' | 'community-unverified';
+            excerpt?: string;
+            bundleVersion?: number;
+            signedOffAt: string | null;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsPlaybookResponse = GetApiV1XhsOpsPlaybookResponses[keyof GetApiV1XhsOpsPlaybookResponses];
+
+export type GetApiV1XhsOpsAccountsByAccountIdAuditsData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/audits';
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdAuditsErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdAuditsError = GetApiV1XhsOpsAccountsByAccountIdAuditsErrors[keyof GetApiV1XhsOpsAccountsByAccountIdAuditsErrors];
+
+export type GetApiV1XhsOpsAccountsByAccountIdAuditsResponses = {
+    /**
+     * The account's audits, newest first
+     */
+    200: {
+        audits: Array<{
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            trigger?: 'takeover' | 'observation' | 'periodic' | 'manual';
+            changeOrderId?: string | null;
+            status: 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'cancelled';
+            reason?: string;
+            activeTaskId?: string | null;
+            profile?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                accountMatched: boolean;
+                values: {
+                    nickname: string;
+                    bio: string;
+                    occupation: string;
+                    gender: string;
+                    birthdayFilled: boolean;
+                    region: string;
+                } | null;
+            } | null;
+            home?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                headerEnd: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                notesEnd: boolean;
+                notes: Array<{
+                    i: number;
+                    title: string;
+                    likes: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    video: boolean;
+                    pinned: boolean;
+                }>;
+            } | null;
+            creator?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                periodLabel: string;
+                views: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                interactions: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                newFollowers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                profileVisitors: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                accountStatus: string;
+            } | null;
+            noteDetails?: {
+                [key: string]: unknown;
+            } | null;
+            flags?: Array<'nicknameInconsistent' | 'identityStale' | 'unexpectedClicks' | 'countsChanged' | 'possibleSelfLike' | 'profileDrift' | 'creatorUnavailable' | 'cancellationUnconfirmed'>;
+            manualCheckAt?: string | null;
+            startedAt: string;
+            completedAt?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdAuditsResponse = GetApiV1XhsOpsAccountsByAccountIdAuditsResponses[keyof GetApiV1XhsOpsAccountsByAccountIdAuditsResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdAuditsData = {
+    body?: {
+        noteLimit?: number;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/audits';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdAuditsErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdAuditsError = PostApiV1XhsOpsAccountsByAccountIdAuditsErrors[keyof PostApiV1XhsOpsAccountsByAccountIdAuditsErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdAuditsResponses = {
+    /**
+     * Read-only audit started (status running); its three parts run in the background
+     */
+    200: {
+        audit: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            trigger?: 'takeover' | 'observation' | 'periodic' | 'manual';
+            changeOrderId?: string | null;
+            status: 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'cancelled';
+            reason?: string;
+            activeTaskId?: string | null;
+            profile?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                accountMatched: boolean;
+                values: {
+                    nickname: string;
+                    bio: string;
+                    occupation: string;
+                    gender: string;
+                    birthdayFilled: boolean;
+                    region: string;
+                } | null;
+            } | null;
+            home?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                headerEnd: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                notesEnd: boolean;
+                notes: Array<{
+                    i: number;
+                    title: string;
+                    likes: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    video: boolean;
+                    pinned: boolean;
+                }>;
+            } | null;
+            creator?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                periodLabel: string;
+                views: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                interactions: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                newFollowers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                profileVisitors: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                accountStatus: string;
+            } | null;
+            noteDetails?: {
+                [key: string]: unknown;
+            } | null;
+            flags?: Array<'nicknameInconsistent' | 'identityStale' | 'unexpectedClicks' | 'countsChanged' | 'possibleSelfLike' | 'profileDrift' | 'creatorUnavailable' | 'cancellationUnconfirmed'>;
+            manualCheckAt?: string | null;
+            startedAt: string;
+            completedAt?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdAuditsResponse = PostApiV1XhsOpsAccountsByAccountIdAuditsResponses[keyof PostApiV1XhsOpsAccountsByAccountIdAuditsResponses];
+
+export type GetApiV1XhsOpsAuditsByAuditIdData = {
+    body?: never;
+    path: {
+        auditId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/audits/{auditId}';
+};
+
+export type GetApiV1XhsOpsAuditsByAuditIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsAuditsByAuditIdError = GetApiV1XhsOpsAuditsByAuditIdErrors[keyof GetApiV1XhsOpsAuditsByAuditIdErrors];
+
+export type GetApiV1XhsOpsAuditsByAuditIdResponses = {
+    /**
+     * One audit; the card polls it while it runs
+     */
+    200: {
+        audit: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            trigger?: 'takeover' | 'observation' | 'periodic' | 'manual';
+            changeOrderId?: string | null;
+            status: 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'cancelled';
+            reason?: string;
+            activeTaskId?: string | null;
+            profile?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                accountMatched: boolean;
+                values: {
+                    nickname: string;
+                    bio: string;
+                    occupation: string;
+                    gender: string;
+                    birthdayFilled: boolean;
+                    region: string;
+                } | null;
+            } | null;
+            home?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                headerEnd: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                notesEnd: boolean;
+                notes: Array<{
+                    i: number;
+                    title: string;
+                    likes: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    video: boolean;
+                    pinned: boolean;
+                }>;
+            } | null;
+            creator?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                periodLabel: string;
+                views: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                interactions: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                newFollowers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                profileVisitors: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                accountStatus: string;
+            } | null;
+            noteDetails?: {
+                [key: string]: unknown;
+            } | null;
+            flags?: Array<'nicknameInconsistent' | 'identityStale' | 'unexpectedClicks' | 'countsChanged' | 'possibleSelfLike' | 'profileDrift' | 'creatorUnavailable' | 'cancellationUnconfirmed'>;
+            manualCheckAt?: string | null;
+            startedAt: string;
+            completedAt?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type GetApiV1XhsOpsAuditsByAuditIdResponse = GetApiV1XhsOpsAuditsByAuditIdResponses[keyof GetApiV1XhsOpsAuditsByAuditIdResponses];
+
+export type PostApiV1XhsOpsAuditsByAuditIdCancelData = {
+    body?: never;
+    path: {
+        auditId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/audits/{auditId}/cancel';
+};
+
+export type PostApiV1XhsOpsAuditsByAuditIdCancelErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAuditsByAuditIdCancelError = PostApiV1XhsOpsAuditsByAuditIdCancelErrors[keyof PostApiV1XhsOpsAuditsByAuditIdCancelErrors];
+
+export type PostApiV1XhsOpsAuditsByAuditIdCancelResponses = {
+    /**
+     * 「取消盘点」: no further part is dispatched and the running task is stopped by its id
+     */
+    200: {
+        audit: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            trigger?: 'takeover' | 'observation' | 'periodic' | 'manual';
+            changeOrderId?: string | null;
+            status: 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'cancelled';
+            reason?: string;
+            activeTaskId?: string | null;
+            profile?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                accountMatched: boolean;
+                values: {
+                    nickname: string;
+                    bio: string;
+                    occupation: string;
+                    gender: string;
+                    birthdayFilled: boolean;
+                    region: string;
+                } | null;
+            } | null;
+            home?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                headerEnd: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                notesEnd: boolean;
+                notes: Array<{
+                    i: number;
+                    title: string;
+                    likes: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    video: boolean;
+                    pinned: boolean;
+                }>;
+            } | null;
+            creator?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                periodLabel: string;
+                views: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                interactions: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                newFollowers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                profileVisitors: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                accountStatus: string;
+            } | null;
+            noteDetails?: {
+                [key: string]: unknown;
+            } | null;
+            flags?: Array<'nicknameInconsistent' | 'identityStale' | 'unexpectedClicks' | 'countsChanged' | 'possibleSelfLike' | 'profileDrift' | 'creatorUnavailable' | 'cancellationUnconfirmed'>;
+            manualCheckAt?: string | null;
+            startedAt: string;
+            completedAt?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAuditsByAuditIdCancelResponse = PostApiV1XhsOpsAuditsByAuditIdCancelResponses[keyof PostApiV1XhsOpsAuditsByAuditIdCancelResponses];
+
+export type PostApiV1XhsOpsAuditsByAuditIdBaselineData = {
+    body?: {
+        manualChecked?: boolean;
+    };
+    path: {
+        auditId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/audits/{auditId}/baseline';
+};
+
+export type PostApiV1XhsOpsAuditsByAuditIdBaselineErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAuditsByAuditIdBaselineError = PostApiV1XhsOpsAuditsByAuditIdBaselineErrors[keyof PostApiV1XhsOpsAuditsByAuditIdBaselineErrors];
+
+export type PostApiV1XhsOpsAuditsByAuditIdBaselineResponses = {
+    /**
+     * 「数据核对无误，设为基线」; the event carries public fields only (D6)
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        audit: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            trigger?: 'takeover' | 'observation' | 'periodic' | 'manual';
+            changeOrderId?: string | null;
+            status: 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'cancelled';
+            reason?: string;
+            activeTaskId?: string | null;
+            profile?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                accountMatched: boolean;
+                values: {
+                    nickname: string;
+                    bio: string;
+                    occupation: string;
+                    gender: string;
+                    birthdayFilled: boolean;
+                    region: string;
+                } | null;
+            } | null;
+            home?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                headerEnd: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                notesEnd: boolean;
+                notes: Array<{
+                    i: number;
+                    title: string;
+                    likes: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    video: boolean;
+                    pinned: boolean;
+                }>;
+            } | null;
+            creator?: {
+                status: 'pending' | 'running' | 'read' | 'partial' | 'unavailable' | 'failed' | 'interrupted' | 'cancelled' | 'skipped';
+                code: string;
+                evidence: {
+                    taskId: string;
+                    finishedAt: string | null;
+                    screenshotUrl: string | null;
+                    receiptClicks: number | null;
+                    trusted: boolean;
+                    warnings?: Array<string>;
+                } | null;
+                nickname: string;
+                header: {
+                    following: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    followers: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                    likesCollects: {
+                        text: string;
+                        value: number | null;
+                        approx: boolean;
+                    } | null;
+                } | null;
+                periodLabel: string;
+                views: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                interactions: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                newFollowers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                profileVisitors: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                accountStatus: string;
+            } | null;
+            noteDetails?: {
+                [key: string]: unknown;
+            } | null;
+            flags?: Array<'nicknameInconsistent' | 'identityStale' | 'unexpectedClicks' | 'countsChanged' | 'possibleSelfLike' | 'profileDrift' | 'creatorUnavailable' | 'cancellationUnconfirmed'>;
+            manualCheckAt?: string | null;
+            startedAt: string;
+            completedAt?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAuditsByAuditIdBaselineResponse = PostApiV1XhsOpsAuditsByAuditIdBaselineResponses[keyof PostApiV1XhsOpsAuditsByAuditIdBaselineResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdDiagnosesData = {
+    body?: {
+        auditId: string;
+        feedback?: string;
+        answers?: Array<{
+            id: string;
+            answer: string;
+        }>;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/diagnoses';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdDiagnosesErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdDiagnosesError = PostApiV1XhsOpsAccountsByAccountIdDiagnosesErrors[keyof PostApiV1XhsOpsAccountsByAccountIdDiagnosesErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdDiagnosesResponses = {
+    /**
+     * 「按意见生成诊断」: the diagnosis at generating; it settles in the background
+     */
+    200: {
+        diagnosis: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            auditId: string;
+            version: number;
+            parentId?: string | null;
+            status: 'generating' | 'ready' | 'failed' | 'superseded' | 'confirmed';
+            playbookVersion: string;
+            citedRules?: Array<{
+                id: string;
+                text: string;
+                source: string;
+                confidence: string;
+                signedOff: boolean;
+            }>;
+            facts: {
+                following?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                followers?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                likesCollects?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                notesSeen?: number;
+                notesEnd?: boolean;
+                videoSharePercent?: number | null;
+                pinnedCount?: number;
+                medianNoteLikes?: number | null;
+                topNoteIndexes?: Array<number>;
+                creatorAvailable?: boolean;
+                weekly?: {
+                    periodLabel: string;
+                    views: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    interactions: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    newFollowers: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    profileVisitors: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                } | null;
+                feedMatch?: 'high' | 'medium' | 'low' | 'unknown';
+                tier: 'starter' | 'growing' | 'established' | 'dormant';
+                tierReasons?: Array<string>;
+                budget?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    blockedUntil: string | null;
+                }>;
+                recentSafetyStops?: number;
+            };
+            cadence: {
+                browseDefaults: {
+                    dwellSecMin?: number;
+                    dwellSecMax?: number;
+                    searchRatioPercent?: number;
+                    postsPerKeyword?: number;
+                    homeFeedCount?: number;
+                    dailyTargetPosts?: number;
+                    dailySegments?: number;
+                };
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                rationale: Array<string>;
+            };
+            summary?: string;
+            inferredPersona?: {
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                contentLine: string;
+                confidence: 'low' | 'medium' | 'high';
+            } | null;
+            dimensions?: Array<{
+                dimension: string;
+                rating: 'good' | 'fair' | 'poor' | 'unknown';
+                note: string;
+            }>;
+            findings?: Array<{
+                id: string;
+                dimension: 'identity' | 'persona_fit' | 'verticality' | 'tone' | 'activity' | 'performance' | 'risk' | 'compliance';
+                severity: 'info' | 'low' | 'medium' | 'high';
+                summary: string;
+                evidence: Array<string>;
+                ruleIds: Array<string>;
+            }>;
+            questions?: Array<{
+                id: string;
+                text: string;
+                options: Array<string>;
+                answer?: string | null;
+            }>;
+            proposals?: Array<({
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'positioning';
+                label: string;
+                positioning: string;
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                personaTags: {
+                    vertical?: Array<string>;
+                    general?: Array<string>;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'interestPool';
+                core: Array<string>;
+                extended: Array<string>;
+                general: Array<string>;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'toneGuide';
+                guide: {
+                    summary?: string;
+                    pillars?: Array<{
+                        name: string;
+                        sharePercent: number;
+                    }>;
+                    topicDirections?: Array<string>;
+                    titlePatterns?: Array<string>;
+                    coverStyle?: string;
+                    bodyStyle?: string;
+                    tagHints?: Array<string>;
+                    keep?: Array<string>;
+                    avoid?: Array<string>;
+                    commentStyle?: string;
+                    cadenceHint?: string;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'profileField';
+                field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                to: string;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'noteAction';
+                noteIndex: number;
+                action: 'keep' | 'pin' | 'unpin' | 'consider_private';
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'keep';
+                field: string;
+            }) & {
+                risk: 'L0' | 'L1' | 'L2' | 'L3';
+                batch: number;
+                from?: string;
+                budgetBlockedUntil?: string | null;
+            }>;
+            dropped?: Array<{
+                ref: string;
+                reason: string;
+            }>;
+            decisions?: {
+                [key: string]: {
+                    decision: 'adopt' | 'edit' | 'reject' | 'defer';
+                    edited?: unknown;
+                    decidedAt: string;
+                };
+            };
+            feedback?: Array<{
+                at: string;
+                text: string;
+            }>;
+            generator: {
+                botId: string;
+                model: string | null;
+            };
+            confirmedAt?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdDiagnosesResponse = PostApiV1XhsOpsAccountsByAccountIdDiagnosesResponses[keyof PostApiV1XhsOpsAccountsByAccountIdDiagnosesResponses];
+
+export type GetApiV1XhsOpsDiagnosesByDiagnosisIdData = {
+    body?: never;
+    path: {
+        diagnosisId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/diagnoses/{diagnosisId}';
+};
+
+export type GetApiV1XhsOpsDiagnosesByDiagnosisIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsDiagnosesByDiagnosisIdError = GetApiV1XhsOpsDiagnosesByDiagnosisIdErrors[keyof GetApiV1XhsOpsDiagnosesByDiagnosisIdErrors];
+
+export type GetApiV1XhsOpsDiagnosesByDiagnosisIdResponses = {
+    /**
+     * One diagnosis, with xhs_ops_account_diagnosed once it settled at ready or failed
+     */
+    200: {
+        diagnosis: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            auditId: string;
+            version: number;
+            parentId?: string | null;
+            status: 'generating' | 'ready' | 'failed' | 'superseded' | 'confirmed';
+            playbookVersion: string;
+            citedRules?: Array<{
+                id: string;
+                text: string;
+                source: string;
+                confidence: string;
+                signedOff: boolean;
+            }>;
+            facts: {
+                following?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                followers?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                likesCollects?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                notesSeen?: number;
+                notesEnd?: boolean;
+                videoSharePercent?: number | null;
+                pinnedCount?: number;
+                medianNoteLikes?: number | null;
+                topNoteIndexes?: Array<number>;
+                creatorAvailable?: boolean;
+                weekly?: {
+                    periodLabel: string;
+                    views: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    interactions: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    newFollowers: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    profileVisitors: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                } | null;
+                feedMatch?: 'high' | 'medium' | 'low' | 'unknown';
+                tier: 'starter' | 'growing' | 'established' | 'dormant';
+                tierReasons?: Array<string>;
+                budget?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    blockedUntil: string | null;
+                }>;
+                recentSafetyStops?: number;
+            };
+            cadence: {
+                browseDefaults: {
+                    dwellSecMin?: number;
+                    dwellSecMax?: number;
+                    searchRatioPercent?: number;
+                    postsPerKeyword?: number;
+                    homeFeedCount?: number;
+                    dailyTargetPosts?: number;
+                    dailySegments?: number;
+                };
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                rationale: Array<string>;
+            };
+            summary?: string;
+            inferredPersona?: {
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                contentLine: string;
+                confidence: 'low' | 'medium' | 'high';
+            } | null;
+            dimensions?: Array<{
+                dimension: string;
+                rating: 'good' | 'fair' | 'poor' | 'unknown';
+                note: string;
+            }>;
+            findings?: Array<{
+                id: string;
+                dimension: 'identity' | 'persona_fit' | 'verticality' | 'tone' | 'activity' | 'performance' | 'risk' | 'compliance';
+                severity: 'info' | 'low' | 'medium' | 'high';
+                summary: string;
+                evidence: Array<string>;
+                ruleIds: Array<string>;
+            }>;
+            questions?: Array<{
+                id: string;
+                text: string;
+                options: Array<string>;
+                answer?: string | null;
+            }>;
+            proposals?: Array<({
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'positioning';
+                label: string;
+                positioning: string;
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                personaTags: {
+                    vertical?: Array<string>;
+                    general?: Array<string>;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'interestPool';
+                core: Array<string>;
+                extended: Array<string>;
+                general: Array<string>;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'toneGuide';
+                guide: {
+                    summary?: string;
+                    pillars?: Array<{
+                        name: string;
+                        sharePercent: number;
+                    }>;
+                    topicDirections?: Array<string>;
+                    titlePatterns?: Array<string>;
+                    coverStyle?: string;
+                    bodyStyle?: string;
+                    tagHints?: Array<string>;
+                    keep?: Array<string>;
+                    avoid?: Array<string>;
+                    commentStyle?: string;
+                    cadenceHint?: string;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'profileField';
+                field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                to: string;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'noteAction';
+                noteIndex: number;
+                action: 'keep' | 'pin' | 'unpin' | 'consider_private';
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'keep';
+                field: string;
+            }) & {
+                risk: 'L0' | 'L1' | 'L2' | 'L3';
+                batch: number;
+                from?: string;
+                budgetBlockedUntil?: string | null;
+            }>;
+            dropped?: Array<{
+                ref: string;
+                reason: string;
+            }>;
+            decisions?: {
+                [key: string]: {
+                    decision: 'adopt' | 'edit' | 'reject' | 'defer';
+                    edited?: unknown;
+                    decidedAt: string;
+                };
+            };
+            feedback?: Array<{
+                at: string;
+                text: string;
+            }>;
+            generator: {
+                botId: string;
+                model: string | null;
+            };
+            confirmedAt?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type GetApiV1XhsOpsDiagnosesByDiagnosisIdResponse = GetApiV1XhsOpsDiagnosesByDiagnosisIdResponses[keyof GetApiV1XhsOpsDiagnosesByDiagnosisIdResponses];
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateData = {
+    body?: {
+        feedback?: string;
+        answers?: Array<{
+            id: string;
+            answer: string;
+        }>;
+    };
+    path: {
+        diagnosisId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/diagnoses/{diagnosisId}/regenerate';
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateError = PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateErrors[keyof PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateErrors];
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateResponses = {
+    /**
+     * 「按意见重新生成」: a new version on the same audit; decided items are carried over
+     */
+    200: {
+        diagnosis: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            auditId: string;
+            version: number;
+            parentId?: string | null;
+            status: 'generating' | 'ready' | 'failed' | 'superseded' | 'confirmed';
+            playbookVersion: string;
+            citedRules?: Array<{
+                id: string;
+                text: string;
+                source: string;
+                confidence: string;
+                signedOff: boolean;
+            }>;
+            facts: {
+                following?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                followers?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                likesCollects?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                notesSeen?: number;
+                notesEnd?: boolean;
+                videoSharePercent?: number | null;
+                pinnedCount?: number;
+                medianNoteLikes?: number | null;
+                topNoteIndexes?: Array<number>;
+                creatorAvailable?: boolean;
+                weekly?: {
+                    periodLabel: string;
+                    views: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    interactions: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    newFollowers: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    profileVisitors: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                } | null;
+                feedMatch?: 'high' | 'medium' | 'low' | 'unknown';
+                tier: 'starter' | 'growing' | 'established' | 'dormant';
+                tierReasons?: Array<string>;
+                budget?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    blockedUntil: string | null;
+                }>;
+                recentSafetyStops?: number;
+            };
+            cadence: {
+                browseDefaults: {
+                    dwellSecMin?: number;
+                    dwellSecMax?: number;
+                    searchRatioPercent?: number;
+                    postsPerKeyword?: number;
+                    homeFeedCount?: number;
+                    dailyTargetPosts?: number;
+                    dailySegments?: number;
+                };
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                rationale: Array<string>;
+            };
+            summary?: string;
+            inferredPersona?: {
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                contentLine: string;
+                confidence: 'low' | 'medium' | 'high';
+            } | null;
+            dimensions?: Array<{
+                dimension: string;
+                rating: 'good' | 'fair' | 'poor' | 'unknown';
+                note: string;
+            }>;
+            findings?: Array<{
+                id: string;
+                dimension: 'identity' | 'persona_fit' | 'verticality' | 'tone' | 'activity' | 'performance' | 'risk' | 'compliance';
+                severity: 'info' | 'low' | 'medium' | 'high';
+                summary: string;
+                evidence: Array<string>;
+                ruleIds: Array<string>;
+            }>;
+            questions?: Array<{
+                id: string;
+                text: string;
+                options: Array<string>;
+                answer?: string | null;
+            }>;
+            proposals?: Array<({
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'positioning';
+                label: string;
+                positioning: string;
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                personaTags: {
+                    vertical?: Array<string>;
+                    general?: Array<string>;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'interestPool';
+                core: Array<string>;
+                extended: Array<string>;
+                general: Array<string>;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'toneGuide';
+                guide: {
+                    summary?: string;
+                    pillars?: Array<{
+                        name: string;
+                        sharePercent: number;
+                    }>;
+                    topicDirections?: Array<string>;
+                    titlePatterns?: Array<string>;
+                    coverStyle?: string;
+                    bodyStyle?: string;
+                    tagHints?: Array<string>;
+                    keep?: Array<string>;
+                    avoid?: Array<string>;
+                    commentStyle?: string;
+                    cadenceHint?: string;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'profileField';
+                field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                to: string;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'noteAction';
+                noteIndex: number;
+                action: 'keep' | 'pin' | 'unpin' | 'consider_private';
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'keep';
+                field: string;
+            }) & {
+                risk: 'L0' | 'L1' | 'L2' | 'L3';
+                batch: number;
+                from?: string;
+                budgetBlockedUntil?: string | null;
+            }>;
+            dropped?: Array<{
+                ref: string;
+                reason: string;
+            }>;
+            decisions?: {
+                [key: string]: {
+                    decision: 'adopt' | 'edit' | 'reject' | 'defer';
+                    edited?: unknown;
+                    decidedAt: string;
+                };
+            };
+            feedback?: Array<{
+                at: string;
+                text: string;
+            }>;
+            generator: {
+                botId: string;
+                model: string | null;
+            };
+            confirmedAt?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateResponse = PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateResponses[keyof PostApiV1XhsOpsDiagnosesByDiagnosisIdRegenerateResponses];
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsData = {
+    body?: {
+        expectedUpdatedAt: string;
+        decisions: {
+            [key: string]: {
+                decision: 'adopt' | 'edit' | 'reject' | 'defer';
+                edited?: unknown;
+            };
+        };
+    };
+    path: {
+        diagnosisId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/diagnoses/{diagnosisId}/decisions';
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsError = PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsErrors[keyof PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsErrors];
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsResponses = {
+    /**
+     * Card ⑤ adopt / edit / reject / defer per proposal; an edit is re-validated by kind
+     */
+    200: {
+        diagnosis: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            auditId: string;
+            version: number;
+            parentId?: string | null;
+            status: 'generating' | 'ready' | 'failed' | 'superseded' | 'confirmed';
+            playbookVersion: string;
+            citedRules?: Array<{
+                id: string;
+                text: string;
+                source: string;
+                confidence: string;
+                signedOff: boolean;
+            }>;
+            facts: {
+                following?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                followers?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                likesCollects?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                notesSeen?: number;
+                notesEnd?: boolean;
+                videoSharePercent?: number | null;
+                pinnedCount?: number;
+                medianNoteLikes?: number | null;
+                topNoteIndexes?: Array<number>;
+                creatorAvailable?: boolean;
+                weekly?: {
+                    periodLabel: string;
+                    views: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    interactions: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    newFollowers: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    profileVisitors: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                } | null;
+                feedMatch?: 'high' | 'medium' | 'low' | 'unknown';
+                tier: 'starter' | 'growing' | 'established' | 'dormant';
+                tierReasons?: Array<string>;
+                budget?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    blockedUntil: string | null;
+                }>;
+                recentSafetyStops?: number;
+            };
+            cadence: {
+                browseDefaults: {
+                    dwellSecMin?: number;
+                    dwellSecMax?: number;
+                    searchRatioPercent?: number;
+                    postsPerKeyword?: number;
+                    homeFeedCount?: number;
+                    dailyTargetPosts?: number;
+                    dailySegments?: number;
+                };
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                rationale: Array<string>;
+            };
+            summary?: string;
+            inferredPersona?: {
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                contentLine: string;
+                confidence: 'low' | 'medium' | 'high';
+            } | null;
+            dimensions?: Array<{
+                dimension: string;
+                rating: 'good' | 'fair' | 'poor' | 'unknown';
+                note: string;
+            }>;
+            findings?: Array<{
+                id: string;
+                dimension: 'identity' | 'persona_fit' | 'verticality' | 'tone' | 'activity' | 'performance' | 'risk' | 'compliance';
+                severity: 'info' | 'low' | 'medium' | 'high';
+                summary: string;
+                evidence: Array<string>;
+                ruleIds: Array<string>;
+            }>;
+            questions?: Array<{
+                id: string;
+                text: string;
+                options: Array<string>;
+                answer?: string | null;
+            }>;
+            proposals?: Array<({
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'positioning';
+                label: string;
+                positioning: string;
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                personaTags: {
+                    vertical?: Array<string>;
+                    general?: Array<string>;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'interestPool';
+                core: Array<string>;
+                extended: Array<string>;
+                general: Array<string>;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'toneGuide';
+                guide: {
+                    summary?: string;
+                    pillars?: Array<{
+                        name: string;
+                        sharePercent: number;
+                    }>;
+                    topicDirections?: Array<string>;
+                    titlePatterns?: Array<string>;
+                    coverStyle?: string;
+                    bodyStyle?: string;
+                    tagHints?: Array<string>;
+                    keep?: Array<string>;
+                    avoid?: Array<string>;
+                    commentStyle?: string;
+                    cadenceHint?: string;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'profileField';
+                field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                to: string;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'noteAction';
+                noteIndex: number;
+                action: 'keep' | 'pin' | 'unpin' | 'consider_private';
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'keep';
+                field: string;
+            }) & {
+                risk: 'L0' | 'L1' | 'L2' | 'L3';
+                batch: number;
+                from?: string;
+                budgetBlockedUntil?: string | null;
+            }>;
+            dropped?: Array<{
+                ref: string;
+                reason: string;
+            }>;
+            decisions?: {
+                [key: string]: {
+                    decision: 'adopt' | 'edit' | 'reject' | 'defer';
+                    edited?: unknown;
+                    decidedAt: string;
+                };
+            };
+            feedback?: Array<{
+                at: string;
+                text: string;
+            }>;
+            generator: {
+                botId: string;
+                model: string | null;
+            };
+            confirmedAt?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+    };
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsResponse = PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsResponses[keyof PostApiV1XhsOpsDiagnosesByDiagnosisIdDecisionsResponses];
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmData = {
+    body?: {
+        expectedUpdatedAt: string;
+        keepAllPublic?: boolean;
+    };
+    path: {
+        diagnosisId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/diagnoses/{diagnosisId}/confirm';
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmError = PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmErrors[keyof PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmErrors];
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmResponses = {
+    /**
+     * 「确认优化方案」: L0 in force, adopted public fields drafted as change orders (image fields only on Android 10+)
+     */
+    200: {
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        diagnosis: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            auditId: string;
+            version: number;
+            parentId?: string | null;
+            status: 'generating' | 'ready' | 'failed' | 'superseded' | 'confirmed';
+            playbookVersion: string;
+            citedRules?: Array<{
+                id: string;
+                text: string;
+                source: string;
+                confidence: string;
+                signedOff: boolean;
+            }>;
+            facts: {
+                following?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                followers?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                likesCollects?: {
+                    min: number;
+                    max: number | null;
+                } | null;
+                notesSeen?: number;
+                notesEnd?: boolean;
+                videoSharePercent?: number | null;
+                pinnedCount?: number;
+                medianNoteLikes?: number | null;
+                topNoteIndexes?: Array<number>;
+                creatorAvailable?: boolean;
+                weekly?: {
+                    periodLabel: string;
+                    views: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    interactions: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    newFollowers: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                    profileVisitors: {
+                        min: number;
+                        max: number | null;
+                    } | null;
+                } | null;
+                feedMatch?: 'high' | 'medium' | 'low' | 'unknown';
+                tier: 'starter' | 'growing' | 'established' | 'dormant';
+                tierReasons?: Array<string>;
+                budget?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    blockedUntil: string | null;
+                }>;
+                recentSafetyStops?: number;
+            };
+            cadence: {
+                browseDefaults: {
+                    dwellSecMin?: number;
+                    dwellSecMax?: number;
+                    searchRatioPercent?: number;
+                    postsPerKeyword?: number;
+                    homeFeedCount?: number;
+                    dailyTargetPosts?: number;
+                    dailySegments?: number;
+                };
+                interaction: {
+                    like?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    collect?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    follow?: {
+                        enabled: boolean;
+                        dailyCap: number;
+                        ratioPercent: number;
+                        targetTypes?: Array<string>;
+                    };
+                    comment?: {
+                        enabled?: boolean;
+                        dailyCap?: number;
+                    };
+                };
+                rationale: Array<string>;
+            };
+            summary?: string;
+            inferredPersona?: {
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                contentLine: string;
+                confidence: 'low' | 'medium' | 'high';
+            } | null;
+            dimensions?: Array<{
+                dimension: string;
+                rating: 'good' | 'fair' | 'poor' | 'unknown';
+                note: string;
+            }>;
+            findings?: Array<{
+                id: string;
+                dimension: 'identity' | 'persona_fit' | 'verticality' | 'tone' | 'activity' | 'performance' | 'risk' | 'compliance';
+                severity: 'info' | 'low' | 'medium' | 'high';
+                summary: string;
+                evidence: Array<string>;
+                ruleIds: Array<string>;
+            }>;
+            questions?: Array<{
+                id: string;
+                text: string;
+                options: Array<string>;
+                answer?: string | null;
+            }>;
+            proposals?: Array<({
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'positioning';
+                label: string;
+                positioning: string;
+                persona: {
+                    age?: string;
+                    gender?: string;
+                    region?: string;
+                    occupation?: string;
+                    lifeStatus?: string;
+                };
+                personaTags: {
+                    vertical?: Array<string>;
+                    general?: Array<string>;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'interestPool';
+                core: Array<string>;
+                extended: Array<string>;
+                general: Array<string>;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'toneGuide';
+                guide: {
+                    summary?: string;
+                    pillars?: Array<{
+                        name: string;
+                        sharePercent: number;
+                    }>;
+                    topicDirections?: Array<string>;
+                    titlePatterns?: Array<string>;
+                    coverStyle?: string;
+                    bodyStyle?: string;
+                    tagHints?: Array<string>;
+                    keep?: Array<string>;
+                    avoid?: Array<string>;
+                    commentStyle?: string;
+                    cadenceHint?: string;
+                };
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'profileField';
+                field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                to: string;
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'noteAction';
+                noteIndex: number;
+                action: 'keep' | 'pin' | 'unpin' | 'consider_private';
+            } | {
+                id: string;
+                rationale: string;
+                findingIds?: Array<string>;
+                evidence?: Array<string>;
+                ruleIds: Array<string>;
+                kind: 'keep';
+                field: string;
+            }) & {
+                risk: 'L0' | 'L1' | 'L2' | 'L3';
+                batch: number;
+                from?: string;
+                budgetBlockedUntil?: string | null;
+            }>;
+            dropped?: Array<{
+                ref: string;
+                reason: string;
+            }>;
+            decisions?: {
+                [key: string]: {
+                    decision: 'adopt' | 'edit' | 'reject' | 'defer';
+                    edited?: unknown;
+                    decidedAt: string;
+                };
+            };
+            feedback?: Array<{
+                at: string;
+                text: string;
+            }>;
+            generator: {
+                botId: string;
+                model: string | null;
+            };
+            confirmedAt?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        changeOrders: Array<{
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+        skippedFields: Array<{
+            proposalId: string;
+            field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+            reason: string;
+        }>;
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmResponse = PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmResponses[keyof PostApiV1XhsOpsDiagnosesByDiagnosisIdConfirmResponses];
+
+export type GetApiV1XhsOpsAccountsByAccountIdChangeOrdersData = {
+    body?: never;
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/change-orders';
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdChangeOrdersErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdChangeOrdersError = GetApiV1XhsOpsAccountsByAccountIdChangeOrdersErrors[keyof GetApiV1XhsOpsAccountsByAccountIdChangeOrdersErrors];
+
+export type GetApiV1XhsOpsAccountsByAccountIdChangeOrdersResponses = {
+    /**
+     * The account's change orders, newest first; a precheck past 30 minutes is back at draft
+     */
+    200: {
+        orders: Array<{
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        }>;
+    };
+};
+
+export type GetApiV1XhsOpsAccountsByAccountIdChangeOrdersResponse = GetApiV1XhsOpsAccountsByAccountIdChangeOrdersResponses[keyof GetApiV1XhsOpsAccountsByAccountIdChangeOrdersResponses];
+
+export type PostApiV1XhsOpsAccountsByAccountIdChangeOrdersData = {
+    body?: {
+        rollbackOfId?: string;
+        fields: Array<{
+            field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+            after?: string;
+        }>;
+    };
+    path: {
+        accountId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/accounts/{accountId}/change-orders';
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdChangeOrdersErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdChangeOrdersError = PostApiV1XhsOpsAccountsByAccountIdChangeOrdersErrors[keyof PostApiV1XhsOpsAccountsByAccountIdChangeOrdersErrors];
+
+export type PostApiV1XhsOpsAccountsByAccountIdChangeOrdersResponses = {
+    /**
+     * A rollback or manual change order at draft; plan drafts come from the plan confirmation
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsAccountsByAccountIdChangeOrdersResponse = PostApiV1XhsOpsAccountsByAccountIdChangeOrdersResponses[keyof PostApiV1XhsOpsAccountsByAccountIdChangeOrdersResponses];
+
+export type GetApiV1XhsOpsChangeOrdersByOrderIdData = {
+    body?: never;
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}';
+};
+
+export type GetApiV1XhsOpsChangeOrdersByOrderIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type GetApiV1XhsOpsChangeOrdersByOrderIdError = GetApiV1XhsOpsChangeOrdersByOrderIdErrors[keyof GetApiV1XhsOpsChangeOrdersByOrderIdErrors];
+
+export type GetApiV1XhsOpsChangeOrdersByOrderIdResponses = {
+    /**
+     * One change order; the card polls it while a phone step runs
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type GetApiV1XhsOpsChangeOrdersByOrderIdResponse = GetApiV1XhsOpsChangeOrdersByOrderIdResponses[keyof GetApiV1XhsOpsChangeOrdersByOrderIdResponses];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckData = {
+    body?: {
+        expectedUpdatedAt: string;
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/precheck';
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckError = PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckErrors[keyof PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckErrors];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckResponses = {
+    /**
+     * 「预检」 started (status prechecking): read-only readback with the 号码核对, in the background
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckResponse = PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckResponses[keyof PostApiV1XhsOpsChangeOrdersByOrderIdPrecheckResponses];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdConfirmData = {
+    body?: {
+        confirmDigest: string;
+        expectedUpdatedAt: string;
+        acks: {
+            photoPermission?: boolean;
+            screenshotPrivacy?: boolean;
+            cleanup?: boolean;
+            l2SecondCheck?: boolean;
+            warnAcknowledged?: boolean;
+        };
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/confirm';
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdConfirmErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdConfirmError = PostApiV1XhsOpsChangeOrdersByOrderIdConfirmErrors[keyof PostApiV1XhsOpsChangeOrdersByOrderIdConfirmErrors];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdConfirmResponses = {
+    /**
+     * 「确认执行」 with the precheck digest and the required acks: the apply runs in the background
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdConfirmResponse = PostApiV1XhsOpsChangeOrdersByOrderIdConfirmResponses[keyof PostApiV1XhsOpsChangeOrdersByOrderIdConfirmResponses];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdCancelData = {
+    body?: {
+        expectedUpdatedAt: string;
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/cancel';
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdCancelErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdCancelError = PostApiV1XhsOpsChangeOrdersByOrderIdCancelErrors[keyof PostApiV1XhsOpsChangeOrdersByOrderIdCancelErrors];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdCancelResponses = {
+    /**
+     * 「取消」 of a draft or awaiting_confirm order no phone step has touched
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdCancelResponse = PostApiV1XhsOpsChangeOrdersByOrderIdCancelResponses[keyof PostApiV1XhsOpsChangeOrdersByOrderIdCancelResponses];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVerifyData = {
+    body?: {
+        expectedUpdatedAt: string;
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/verify';
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVerifyErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVerifyError = PostApiV1XhsOpsChangeOrdersByOrderIdVerifyErrors[keyof PostApiV1XhsOpsChangeOrdersByOrderIdVerifyErrors];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVerifyResponses = {
+    /**
+     * 「补跑核验」 of an interrupted order: verification only, nothing pushed or written
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVerifyResponse = PostApiV1XhsOpsChangeOrdersByOrderIdVerifyResponses[keyof PostApiV1XhsOpsChangeOrdersByOrderIdVerifyResponses];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckData = {
+    body?: {
+        field: 'avatar' | 'cover';
+        result: 'match' | 'mismatch';
+        expectedUpdatedAt: string;
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/visual-check';
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckError = PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckErrors[keyof PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckErrors];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckResponses = {
+    /**
+     * 「图片一致 / 不一致」 for one image field, after verification or after the observation review
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckResponse = PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckResponses[keyof PostApiV1XhsOpsChangeOrdersByOrderIdVisualCheckResponses];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckData = {
+    body?: {
+        expectedUpdatedAt: string;
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/manual-check';
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckError = PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckErrors[keyof PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckErrors];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckResponses = {
+    /**
+     * 「已人工检查」 after the header counts moved: the order enters observation
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckResponse = PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckResponses[keyof PostApiV1XhsOpsChangeOrdersByOrderIdManualCheckResponses];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewData = {
+    body?: {
+        expectedUpdatedAt: string;
+    };
+    path: {
+        orderId: string;
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/observation/review';
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewError = PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewErrors[keyof PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewErrors];
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewResponses = {
+    /**
+     * 「复查」 once the window ended: a review audit runs in the background and decides the verdict
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewResponse = PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewResponses[keyof PostApiV1XhsOpsChangeOrdersByOrderIdObservationReviewResponses];
+
+export type PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageData = {
+    body?: {
+        dataUrl: string;
+        expectedUpdatedAt: string;
+    };
+    path: {
+        orderId: string;
+        field: 'avatar' | 'cover';
+    };
+    query?: never;
+    url: '/api/v1/xhs-ops/change-orders/{orderId}/fields/{field}/image';
+};
+
+export type PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageErrors = {
+    /**
+     * Invalid request
+     */
+    400: {
+        message: string;
+    };
+    /**
+     * Not found
+     */
+    404: {
+        message: string;
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        message: string;
+    };
+    /**
+     * Failed
+     */
+    500: {
+        message: string;
+    };
+    /**
+     * Startup recovery of takeover work still running
+     */
+    503: {
+        message: string;
+    };
+};
+
+export type PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageError = PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageErrors[keyof PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageErrors];
+
+export type PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageResponses = {
+    /**
+     * The user's picture for an image field (png, jpeg or webp, at most 10 MB); the order is a draft again
+     */
+    200: {
+        order: {
+            id: string;
+            projectId: string;
+            accountId: string;
+            deviceId: string;
+            platformAccountId: string;
+            diagnosisId: string | null;
+            proposalIds: Array<string>;
+            batchIndex: number;
+            risk: 'L1' | 'L2';
+            fields: Array<{
+                field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                baselineValue: string;
+                before?: string;
+                after: string;
+                imagePath?: string | null;
+                imageSha256?: string | null;
+                mediaAlbum?: string | null;
+                beforeScreenshotUrl?: string | null;
+                outcome?: 'pending' | 'done' | 'failed' | 'skipped' | 'uncertain' | 'verified' | 'mismatch';
+                code?: string | null;
+                visualCheck?: {
+                    screenshotUrl: string | null;
+                    result: 'match' | 'mismatch';
+                    at: string;
+                } | null;
+                note?: string;
+            }>;
+            status: 'draft' | 'prechecking' | 'awaiting_confirm' | 'applying' | 'verifying' | 'awaiting_visual_check' | 'awaiting_manual_check' | 'observing' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+            countsBefore?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            countsAfter?: {
+                following: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                followers: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+                likesCollects: {
+                    text: string;
+                    value: number | null;
+                    approx: boolean;
+                } | null;
+            } | null;
+            flags?: Array<'countsChanged' | 'possibleSelfLike' | 'permissionRequired' | 'albumNotFound' | 'pickerUnsupported'>;
+            pushedAlbums?: Array<string>;
+            manualCheckAt?: string | null;
+            acks?: {
+                photoPermission?: boolean;
+                screenshotPrivacy?: boolean;
+                cleanup?: boolean;
+                l2SecondCheck?: boolean;
+                warnAcknowledged?: boolean;
+            };
+            acksAt?: string | null;
+            precheck?: {
+                taskId: string;
+                readAt: string;
+                accountMatched: boolean;
+                drift: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    baseline: string;
+                    current: string;
+                }>;
+                confirmDigest: string;
+                expiresAt: string;
+            } | null;
+            precheckTaskId?: string | null;
+            confirmedAt?: string | null;
+            applyTaskId?: string | null;
+            verificationTaskId?: string | null;
+            verificationScreenshotUrl?: string | null;
+            observation?: {
+                until: string;
+                auditId: string | null;
+                baseAuditId: string | null;
+                visualChecks?: {
+                    avatar?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                    cover?: {
+                        screenshotUrl: string | null;
+                        result: 'match' | 'mismatch';
+                        at: string;
+                    };
+                };
+                verdict: 'pending' | 'pass' | 'warn' | 'fail' | 'inconclusive';
+                notes: Array<string>;
+            } | null;
+            rollbackOfId?: string | null;
+            error?: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        account: {
+            id: string;
+            projectId: string;
+            entryMode?: 'new' | 'existing';
+            label: string;
+            positioning?: string;
+            persona?: {
+                age?: string;
+                gender?: string;
+                region?: string;
+                occupation?: string;
+                lifeStatus?: string;
+            };
+            personaTags?: {
+                vertical?: Array<string>;
+                general?: Array<string>;
+            };
+            personaReviewedAt?: string | null;
+            personaReviewNote?: string | null;
+            platformAccountId?: string;
+            profileDraft?: {
+                nickname?: string;
+                bio?: string;
+                occupation?: string;
+                gender?: '' | '男' | '女' | '不展示';
+                birthday?: string;
+                region?: string;
+                interestTags?: Array<string>;
+                avatarCandidates?: Array<string>;
+                coverCandidates?: Array<string>;
+                avatarPath?: string | null;
+                coverPath?: string | null;
+                generatedAt?: string | null;
+                appliedAt?: string | null;
+                applyStatus?: 'applied' | 'partial' | 'failed';
+                applyResult?: string | null;
+                applyOperation?: {
+                    operationId: string;
+                    status: 'running' | 'completed';
+                    deviceId: string;
+                    taskId?: string | null;
+                    accountUpdatedAt: string;
+                    startedAt: string;
+                    completedAt?: string | null;
+                    changeOrderId?: string | null;
+                } | null;
+                reviewedAt?: string | null;
+                verifiedAt?: string | null;
+                verifiedAccountId?: string | null;
+                verificationTaskId?: string | null;
+            };
+            deviceId?: string | null;
+            deviceName?: string | null;
+            interestPool?: {
+                core?: Array<string>;
+                extended?: Array<string>;
+                general?: Array<string>;
+            };
+            interaction?: {
+                like?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                collect?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                follow?: {
+                    enabled: boolean;
+                    dailyCap: number;
+                    ratioPercent: number;
+                    targetTypes?: Array<string>;
+                };
+                comment?: {
+                    enabled?: boolean;
+                    dailyCap?: number;
+                };
+            };
+            browseDefaults?: {
+                dwellSecMin?: number;
+                dwellSecMax?: number;
+                searchRatioPercent?: number;
+                postsPerKeyword?: number;
+                homeFeedCount?: number;
+                dailyTargetPosts?: number;
+                dailySegments?: number;
+            };
+            takeover?: {
+                authorizedAt?: string | null;
+                authorizationNote?: string;
+                identityConfirmedAt?: string | null;
+                identitySource?: 'takeover' | 'legacy';
+                identityTaskId?: string | null;
+                identityScreenshotUrl?: string | null;
+                pendingIdentity?: {
+                    taskId: string;
+                    deviceId: string;
+                    readAt: string;
+                    screenshotUrl: string | null;
+                    readAccountId: string;
+                } | null;
+                baselineAuditId?: string | null;
+                latestAuditId?: string | null;
+                activeAuditId?: string | null;
+                maturity?: 'starter' | 'growing' | 'established' | 'dormant';
+                activeDiagnosisId?: string | null;
+                planConfirmedAt?: string | null;
+                keepAllPublic?: boolean;
+                skippedFields?: Array<{
+                    proposalId: string;
+                    field: 'nickname' | 'bio' | 'occupation' | 'region' | 'avatar' | 'cover';
+                    reason: string;
+                }>;
+                safetyPause?: {
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                    resumableAfter?: string | null;
+                } | null;
+                pendingObservationFailure?: {
+                    reason: string;
+                    sourceRef?: string;
+                    since: string;
+                } | null;
+                resumeHistory?: Array<{
+                    at: string;
+                    code: 'rate_limited' | 'account_restricted' | 'login_required' | 'account_mismatch' | 'observation_failed' | 'manual';
+                    since: string;
+                    sourceRef?: string;
+                    pauseReason?: string;
+                    reason?: string;
+                    gateTaskId?: string | null;
+                }>;
+                legacyVerified?: boolean;
+                prePlanSnapshot?: {
+                    label: string;
+                    positioning?: string;
+                    persona?: {
+                        age?: string;
+                        gender?: string;
+                        region?: string;
+                        occupation?: string;
+                        lifeStatus?: string;
+                    };
+                    personaTags?: {
+                        vertical?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interestPool?: {
+                        core?: Array<string>;
+                        extended?: Array<string>;
+                        general?: Array<string>;
+                    };
+                    interaction?: {
+                        like?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        collect?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        follow?: {
+                            enabled: boolean;
+                            dailyCap: number;
+                            ratioPercent: number;
+                            targetTypes?: Array<string>;
+                        };
+                        comment?: {
+                            enabled?: boolean;
+                            dailyCap?: number;
+                        };
+                    };
+                    browseDefaults?: {
+                        dwellSecMin?: number;
+                        dwellSecMax?: number;
+                        searchRatioPercent?: number;
+                        postsPerKeyword?: number;
+                        homeFeedCount?: number;
+                        dailyTargetPosts?: number;
+                        dailySegments?: number;
+                    };
+                    toneGuide?: {
+                        summary?: string;
+                        pillars?: Array<{
+                            name: string;
+                            sharePercent: number;
+                        }>;
+                        topicDirections?: Array<string>;
+                        titlePatterns?: Array<string>;
+                        coverStyle?: string;
+                        bodyStyle?: string;
+                        tagHints?: Array<string>;
+                        keep?: Array<string>;
+                        avoid?: Array<string>;
+                        commentStyle?: string;
+                        cadenceHint?: string;
+                        ruleIds?: Array<string>;
+                        sourceDiagnosisId?: string | null;
+                        confirmedAt?: string | null;
+                    };
+                } | null;
+                paramOverrides?: Array<{
+                    at: string;
+                    reason: string;
+                    fields: Array<string>;
+                }>;
+                deviceHold?: {
+                    taskId: string;
+                    sourceRef: string;
+                    since: string;
+                } | null;
+                activeChangeOrderId?: string | null;
+                observationUntil?: string | null;
+                noNurtureDates?: Array<string>;
+                platformLimitNotices?: Array<{
+                    field: 'nickname' | 'bio' | 'occupation' | 'avatar' | 'cover' | 'gender' | 'birthday' | 'region';
+                    text: string;
+                    observedAt: string;
+                    blockedUntil: string;
+                    sourceTaskId?: string | null;
+                }>;
+            } | null;
+            toneGuide?: {
+                summary?: string;
+                pillars?: Array<{
+                    name: string;
+                    sharePercent: number;
+                }>;
+                topicDirections?: Array<string>;
+                titlePatterns?: Array<string>;
+                coverStyle?: string;
+                bodyStyle?: string;
+                tagHints?: Array<string>;
+                keep?: Array<string>;
+                avoid?: Array<string>;
+                commentStyle?: string;
+                cadenceHint?: string;
+                ruleIds?: Array<string>;
+                sourceDiagnosisId?: string | null;
+                confirmedAt?: string | null;
+            };
+            createdAt: string;
+            updatedAt: string;
+        };
+        event: {
+            name: 'xhs_ops_takeover_identity_locked' | 'xhs_ops_account_audited' | 'xhs_ops_account_diagnosed' | 'xhs_ops_takeover_plan_confirmed' | 'xhs_ops_change_order_finished';
+            payload: {
+                [key: string]: unknown;
+            };
+        } | null;
+    };
+};
+
+export type PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageResponse = PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageResponses[keyof PutApiV1XhsOpsChangeOrdersByOrderIdFieldsByFieldImageResponses];
 
 export type PostApiInternalRuntimeHostExecutionBlockedData = {
     body?: {

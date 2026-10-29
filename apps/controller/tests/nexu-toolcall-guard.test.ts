@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import { restrictedTextSessionKey } from "../src/lib/restricted-text-session-key.js";
+import { XHS_DIAGNOSIS_TEXT_LANE } from "../src/services/xhs-ops-diagnosis-service.js";
 
 type HookHandler = (
   event: Record<string, unknown>,
@@ -2110,7 +2112,10 @@ describe("nexu-toolcall-guard computer-use completion evidence", () => {
 
 describe("nexu-toolcall-guard automation block reporting", () => {
   it("reports an automation block to the controller once per session and tool", async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    const fetchMock = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response(null, { status: 200 }),
+    );
     const previousFetch = globalThis.fetch;
     globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
     try {
@@ -2380,5 +2385,174 @@ describe("nexu-toolcall-guard instruction-file fence", () => {
     } finally {
       await cleanup();
     }
+  });
+});
+
+describe("nexu-toolcall-guard xhs-ops takeover diagnosis session", () => {
+  // The diagnosis prompt carries text read off a customer's phone (takeover
+  // §4.1). Its session key comes from the same helper generateText uses, so a
+  // change to either side that drops the restricted tier fails here.
+  const botId = "bot-xhs-diagnosis";
+  const diagnosisCtx = {
+    sessionKey: restrictedTextSessionKey(
+      botId,
+      XHS_DIAGNOSIS_TEXT_LANE,
+      "0f8fad5b-d9cb-469f-a165-70867728950e",
+    ),
+    agentId: botId,
+  };
+
+  it("resolves to the restricted tier", async () => {
+    const beforeToolCall = await loadBeforeToolCallHook();
+    await expect(
+      beforeToolCall(
+        { toolName: "exec", params: { command: "ls" } },
+        diagnosisCtx,
+      ),
+    ).resolves.toMatchObject({
+      block: true,
+      blockReason: expect.stringContaining("文本生成会话"),
+    });
+  });
+
+  // The key also matches the automation key shape, and a bot that opted its
+  // automations into host execution used to lift the whole restricted block
+  // for it. No setting opens this lane.
+  const HOST_SETTINGS = [
+    { channels: "host", automations: "host" },
+    { channels: "restricted", automations: "host" },
+    { channels: "host", automations: "restricted" },
+  ];
+  const ALWAYS_BLOCKED = [
+    "device_execute_task",
+    "device_dispatch_tasks",
+    "exec",
+    "process",
+    "code_execution",
+    "sessions_send",
+  ];
+
+  for (const setting of HOST_SETTINGS) {
+    it(`keeps the block whatever the bot setting (${JSON.stringify(setting)})`, async () => {
+      const beforeToolCall = await loadBeforeToolCallHook({
+        hostExecution: { [botId]: setting },
+      });
+      for (const toolName of ALWAYS_BLOCKED) {
+        await expect(
+          beforeToolCall({ toolName, params: {} }, diagnosisCtx),
+          `${toolName} must stay blocked with ${JSON.stringify(setting)}`,
+        ).resolves.toMatchObject({ block: true });
+      }
+    });
+  }
+
+  it("keeps the block when the run was also observed with an unattended trigger", async () => {
+    const hooks = await loadHooks({
+      hostExecution: { [botId]: { channels: "host", automations: "host" } },
+    });
+    const record = hooks.get("before_model_resolve");
+    const beforeToolCall = hooks.get("before_tool_call");
+    if (!record || !beforeToolCall) throw new Error("hooks missing");
+    await record(
+      {},
+      { ...diagnosisCtx, runId: "run-xhs-diagnosis-cron", trigger: "cron" },
+    );
+    for (const toolName of ALWAYS_BLOCKED) {
+      await expect(
+        beforeToolCall(
+          { toolName, params: {} },
+          { ...diagnosisCtx, runId: "run-xhs-diagnosis-cron" },
+        ),
+        toolName,
+      ).resolves.toMatchObject({ block: true });
+    }
+  });
+
+  it("hands the block to a sub-session the turn spawns", async () => {
+    const hooks = await loadHooks({
+      hostExecution: { [botId]: { channels: "host", automations: "host" } },
+    });
+    const spawned = hooks.get("subagent_spawned");
+    const beforeToolCall = hooks.get("before_tool_call");
+    if (!spawned || !beforeToolCall) throw new Error("hooks missing");
+    const childSessionKey = `agent:${botId}:subagent:from-diagnosis`;
+    await spawned(
+      { childSessionKey, agentId: botId, mode: "run", threadRequested: false },
+      {
+        runId: "run-xhs-diagnosis-child",
+        childSessionKey,
+        requesterSessionKey: diagnosisCtx.sessionKey,
+      },
+    );
+    for (const toolName of ALWAYS_BLOCKED) {
+      await expect(
+        beforeToolCall(
+          { toolName, params: {} },
+          {
+            runId: "run-xhs-diagnosis-child",
+            sessionKey: childSessionKey,
+            agentId: botId,
+          },
+        ),
+        toolName,
+      ).resolves.toMatchObject({ block: true });
+    }
+  });
+
+  it("leaves real automation sessions on the automations switch", async () => {
+    const bot = "bot-xhs-diagnosis-regression";
+    const optedIn = await loadBeforeToolCallHook({
+      hostExecution: { [bot]: { channels: "restricted", automations: "host" } },
+    });
+    for (const sessionKey of [
+      `agent:${bot}:schedule-42`,
+      `agent:${bot}:schedule:42`,
+      `agent:${bot}:cron:job-1`,
+    ]) {
+      for (const toolName of ["exec", "device_execute_task"]) {
+        await expect(
+          optedIn({ toolName, params: {} }, { sessionKey, agentId: bot }),
+          `${toolName} on ${sessionKey} with automations:"host"`,
+        ).resolves.toBeUndefined();
+      }
+    }
+
+    const notOptedIn = await loadBeforeToolCallHook({
+      hostExecution: { [bot]: { channels: "host", automations: "restricted" } },
+    });
+    await expect(
+      notOptedIn(
+        { toolName: "exec", params: {} },
+        { sessionKey: `agent:${bot}:schedule-42`, agentId: bot },
+      ),
+    ).resolves.toMatchObject({
+      block: true,
+      blockReason: expect.stringContaining("定时任务"),
+    });
+  });
+
+  it("refuses the phone tools", async () => {
+    const beforeToolCall = await loadBeforeToolCallHook();
+    for (const toolName of ["device_execute_task", "device_dispatch_tasks"]) {
+      await expect(
+        beforeToolCall({ toolName, params: {} }, diagnosisCtx),
+        `${toolName} must stay out of reach of the diagnosis turn`,
+      ).resolves.toMatchObject({ block: true });
+    }
+  });
+
+  it("leaves the default textgen lane on the host tier", async () => {
+    const beforeToolCall = await loadBeforeToolCallHook();
+    // Unchanged default behaviour, and the reason the diagnosis needs the
+    // restricted lane: on this key the phone tools are reachable.
+    await expect(
+      beforeToolCall(
+        { toolName: "device_execute_task", params: {} },
+        {
+          sessionKey: `agent:${botId}:subagent:textgen-abc123`,
+          agentId: botId,
+        },
+      ),
+    ).resolves.toBeUndefined();
   });
 });

@@ -1,16 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const TABBY_IMAGE_MODEL = "tabby-image-pro";
-const TABBY_IMAGE_FLASH_MODEL = "tabby-image-flash";
-const IMAGE_MODEL_IDS = [TABBY_IMAGE_MODEL, TABBY_IMAGE_FLASH_MODEL];
+const TABBY_IMAGE_MODEL = "tabby-image";
+// Tier ids from earlier builds, still found in saved canvas nodes, XHS settings
+// and old sessions. The relay now serves one image model, so they all map to it.
+const LEGACY_IMAGE_MODEL_IDS = new Set([
+  "tabby-image-pro",
+  "tabby-image-flash",
+  "tabby-image-free",
+]);
 const GPT_IMAGE_SIZE_TIERS = new Map([
   ["1K", 1024],
   ["2K", 2048],
   ["3K", 3072],
   ["4K", 3840],
 ]);
-const AGNES_IMAGE_SIZE_TIERS = new Set(["1K", "2K", "3K", "4K"]);
 const IMAGE_RATIOS = new Set([
   "1:1",
   "3:4",
@@ -48,33 +52,10 @@ export function readOpenclawConfig(stateDir) {
 }
 
 /**
- * Reads the free-vs-paid routing signal the Nexu controller writes to
- * `$OPENCLAW_STATE_DIR/nexu-account-credit-state.json` (refreshed on the same
- * cadence as the account's cloud model list). Defaults to true — prefer the
- * paid model — when the file is missing or unreadable, so a transient read
- * failure doesn't force every user onto the free tier.
- */
-export function readImageCreditState(stateDir) {
-  try {
-    const raw = fs.readFileSync(
-      path.join(stateDir, "nexu-account-credit-state.json"),
-      "utf8",
-    );
-    const parsed = JSON.parse(raw);
-    return parsed?.hasBalance !== false;
-  } catch {
-    return true;
-  }
-}
-
-/**
  * Pick the tabby-image credential and model id out of an already-parsed
- * openclaw.json config object. Prefers "tabby-image-pro" over
- * "tabby-image-flash"
- * when both are present on the account and the account has credit balance;
- * falls back to "tabby-image-flash" when the balance is exhausted.
+ * openclaw.json config object. A legacy tier id resolves to tabby-image.
  */
-export function resolveLinkCredential(config, stateDir, requestedModel) {
+export function resolveLinkCredential(config, requestedModel) {
   const link = config?.models?.providers?.link;
   if (!link || typeof link.apiKey !== "string" || link.apiKey.length === 0) {
     throw new Error(
@@ -89,32 +70,26 @@ export function resolveLinkCredential(config, stateDir, requestedModel) {
 
   if (
     requestedModel !== undefined &&
-    !IMAGE_MODEL_IDS.includes(requestedModel)
+    requestedModel !== TABBY_IMAGE_MODEL &&
+    !LEGACY_IMAGE_MODEL_IDS.has(requestedModel)
   ) {
     throw new Error(
-      `INVALID_IMAGE_MODEL: ${requestedModel}. Use tabby-image-pro or tabby-image-flash.`,
+      `INVALID_IMAGE_MODEL: ${requestedModel}. Use ${TABBY_IMAGE_MODEL}.`,
     );
   }
 
   const availableIds = new Set((link.models || []).map((m) => m.id));
-  const hasBalance = readImageCreditState(stateDir);
-  const preferredOrder = hasBalance
-    ? IMAGE_MODEL_IDS
-    : [...IMAGE_MODEL_IDS].reverse();
-  const model =
-    requestedModel ?? preferredOrder.find((id) => availableIds.has(id));
-  if (!model) {
+  if (!availableIds.has(TABBY_IMAGE_MODEL)) {
     throw new Error(
-      "NO_IMAGE_MODEL: Your Tabby account does not have access to a supported Tabby image model.",
-    );
-  }
-  if (!availableIds.has(model)) {
-    throw new Error(
-      `NO_IMAGE_MODEL: Your Tabby account does not have access to ${model}.`,
+      `NO_IMAGE_MODEL: Your Tabby account does not have access to ${TABBY_IMAGE_MODEL}.`,
     );
   }
 
-  return { baseUrl: link.baseUrl, apiKey: link.apiKey, model };
+  return {
+    baseUrl: link.baseUrl,
+    apiKey: link.apiKey,
+    model: TABBY_IMAGE_MODEL,
+  };
 }
 
 /** Build the OpenAI-compatible generations endpoint from the configured relay. */
@@ -208,19 +183,9 @@ function resolveGptImageSize(size, ratio) {
   return landscape ? `${longEdge}x${shortEdge}` : `${shortEdge}x${longEdge}`;
 }
 
-function resolveAgnesImageSize(size) {
-  const resolved = size ?? "1K";
-  if (!AGNES_IMAGE_SIZE_TIERS.has(resolved) && !/^\d+x\d+$/.test(resolved)) {
-    throw new Error(
-      `INVALID_SIZE: ${resolved}. tabby-image-flash supports 1K/2K/3K/4K or WIDTHxHEIGHT.`,
-    );
-  }
-  return resolved;
-}
-
 /**
- * Build the relay URL and exact model-specific request body.
- * The paid alias follows GPT Image generations; the free alias follows Agnes.
+ * Build the relay URL and request body. tabby-image follows GPT Image
+ * generations.
  */
 export function buildImageGenerationRequest({
   baseUrl,
@@ -257,23 +222,7 @@ export function buildImageGenerationRequest({
     return { url, body };
   }
 
-  if (model === TABBY_IMAGE_FLASH_MODEL) {
-    validateRatio(ratio);
-    const body = {
-      model,
-      prompt,
-      size: resolveAgnesImageSize(size),
-      extra_body: { response_format: "url" },
-    };
-    if (ratio !== undefined) {
-      body.ratio = ratio;
-    }
-    return { url, body };
-  }
-
-  throw new Error(
-    `INVALID_IMAGE_MODEL: ${model}. Use tabby-image-pro or tabby-image-flash.`,
-  );
+  throw new Error(`INVALID_IMAGE_MODEL: ${model}. Use ${TABBY_IMAGE_MODEL}.`);
 }
 
 /**

@@ -164,6 +164,18 @@ The Run center consumes controller-normalized OpenClaw contracts:
   boundary. Health normalization accepts `oldestFailedAt: null` and omits that
   optional timestamp from the public response.
 
+## XHS takeover routes
+
+The 小红书 takeover routes (`apps/controller/src/routes/xhs-ops-routes.ts`, design in `docs/plans/2026-10-14-xhs-account-takeover-design.md`) follow a few contracts the web card depends on:
+
+- **Structured 409s.** A conflict the card has to act on carries a stable `code` next to the unchanged `message`; every other conflict carries `message` only, so branch on `code`, never on the wording.
+  - The account PATCH and the device transfer answer `xhsOpsAccountConflictResponseSchema`. A takeover parameter conflict adds `code` (`takeover_override_reason_required`: send the same request again with an `overrideReason`; `takeover_param_hard_limit`: the values have to change) and `issues`, the parameters this change newly puts past a limit. A PATCH or transfer that would clear or change a locked 小红书号 answers 409 with `XHS_ACCOUNT_IDENTITY_LOCKED_MESSAGE`; a takeover's 小红书号 only changes through the identity confirm flow.
+  - `POST /projects/{id}/comment-runs` answers `xhsOpsCommentRunConflictResponseSchema`; a paused takeover adds `code: "takeover_paused"`.
+- **503 recovery window.** Until the startup recovery of takeover work has settled (`XhsOpsTakeoverRecoveryState`), every takeover route that starts or advances work — every write except 「暂停接管」, and the change-order reads, which settle expired prechecks and finished reviews on the way — answers 503 with 「控制端刚重启，正在收口上次未完成的接管任务，请稍后重试」. Five shared account routes answer the same 503 for an existing or taken-over account: the identity read, the apply reconcile, the DELETE, the device transfer (source or target), and a PATCH that moves `deviceId` or `platformAccountId`. New accounts are served as before. Declare the 503 in the route's `responses`, so the SDK types it.
+- **`expectedUpdatedAt`.** Every write to an existing change order (image, precheck, confirm, verify, visual-check, manual-check, observation review, cancel) carries the order's `updatedAt` as the client last saw it, and a mismatch answers 409 「变更单已更新，请重新加载后再操作」. The takeover writes on the account (plan confirm and revert, resume, device-hold release) do the same with the account's `updatedAt`. Compare it with the value read before the request refreshes anything: a precheck that refreshes the account first would otherwise always see a newer timestamp.
+- **Image upload.** `PUT /change-orders/{orderId}/fields/{field}/image` takes `{dataUrl, expectedUpdatedAt}` for `avatar` or `cover` only. The schema accepts a base64 `data:image/png|jpeg|webp` URL of at most 14,000,000 characters; the server also caps the decoded file at `XHS_TAKEOVER_IMAGE_MAX_BYTES` (10 MB). Only draft and awaiting_confirm orders accept it, and a new image clears the precheck.
+- **`GET /api/v1/xhs-ops/playbook`** returns the rules a diagnosis may cite (`XHS_OPS_PLAYBOOK`), the playbook version and the phone-skills bundle their doc excerpts were checked against. It is static; `pnpm check:xhs-playbook` keeps the excerpts in step with `../tabby-control/phone-skills`.
+
 ## Local attachment paths
 
 Desktop attachment requests may carry an app-staged path instead of inline base64. Route schemas must cap item count and payload size, while service code must independently validate that the lexical and canonical paths stay inside `<OPENCLAW_STATE_DIR>/media/inbound/`. Reject symbolic links, directories where a file is expected, files where a directory is expected, and non-regular entries before moving content into the session workspace.

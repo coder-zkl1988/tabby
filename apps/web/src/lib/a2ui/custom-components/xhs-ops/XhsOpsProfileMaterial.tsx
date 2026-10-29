@@ -142,14 +142,71 @@ export function XhsOpsProfileMaterialContent({
       <AccountTabs
         accounts={accounts ?? []}
         initialAccountId={initialAccountId}
-        renderAccount={(account) => (
-          <ProfileMaterialRow
-            account={account}
-            onChange={replaceAccount}
-            onAction={onAction}
-          />
-        )}
+        renderAccount={(account) =>
+          account.entryMode === "existing" ? (
+            <TakeoverRedirect account={account} onAction={onAction} />
+          ) : (
+            <ProfileMaterialRow
+              account={account}
+              onChange={replaceAccount}
+              onAction={onAction}
+            />
+          )
+        }
       />
+    </div>
+  );
+}
+
+/**
+ * An existing account never takes the new-account material flow (§5.3 #2):
+ * the profile-draft routes answer 409 for every existing account, and its
+ * public profile only changes through the takeover card's change orders.
+ */
+function TakeoverRedirect({
+  account,
+  onAction,
+}: {
+  account: XhsOpsAccount;
+  onAction?: CustomComponentProps["onAction"];
+}) {
+  const [requestedAt, setRequestedAt] = useState<number | null>(null);
+  return (
+    <div
+      data-testid="takeover-redirect"
+      className="flex flex-col gap-2 rounded-lg border border-border bg-surface-0/40 p-2.5"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <SectionTitle>{account.label}</SectionTitle>
+        <span className="text-[12px] text-text-secondary">
+          接管已有账号 ·{" "}
+          {account.deviceName ?? account.deviceId ?? "未绑定设备"}
+        </span>
+      </div>
+      <HintLine>
+        这是接管的已有账号，不在这里生成或应用新号资料：授权、读号、只读盘点和诊断都在接管卡片上完成，公开资料只通过接管卡片上的变更单逐张确认后修改。
+      </HintLine>
+      <div className="flex flex-wrap items-center gap-2">
+        <PrimaryButton
+          onClick={() => {
+            setRequestedAt(Date.now());
+            onAction?.("xhs_ops_existing_accounts_selected", {
+              projectId: account.projectId,
+              accountIds: [account.id],
+              agentInstruction:
+                "这个已有账号走老号接管，不走新号资料流程：渲染 XhsOpsTakeover（projectId + accountId，用独立的 surfaceId），由用户在卡片上授权、读号、盘点和逐项采纳。不要渲染 XhsOpsProfileMaterial，不要生成或应用新号资料，不要执行登录、退出或切换账号，也不要派发手机任务。",
+            });
+          }}
+          disabled={!onAction}
+        >
+          打开接管卡片
+        </PrimaryButton>
+        {requestedAt ? (
+          <HintLine>
+            已请求 {formatClock(requestedAt)} · 等待 AI 打开接管卡片…
+          </HintLine>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -239,6 +296,7 @@ type Busy =
   | "refresh"
   | null;
 
+/** New accounts only: renderAccount sends every existing one to TakeoverRedirect. */
 function ProfileMaterialRow({
   account,
   onChange,
@@ -505,20 +563,7 @@ function ProfileMaterialRow({
       }),
     );
     if (!saved) return;
-    const fields = readback
-      ? [...applyFields]
-      : account.entryMode === "existing"
-        ? (
-            [
-              "nickname",
-              "bio",
-              "occupation",
-              "gender",
-              "birthday",
-              "region",
-            ] as const
-          ).filter((field) => Boolean(draft[field]?.trim()))
-        : undefined;
+    const fields = readback ? [...applyFields] : undefined;
     const applied = await run("apply", () =>
       // Only send a list once the operator has actually seen a diff; without a
       // readback there is nothing to choose from and the old behaviour stands.
@@ -544,9 +589,7 @@ function ProfileMaterialRow({
       <div className="flex items-center justify-between gap-2">
         <SectionTitle>{account.label}</SectionTitle>
         <span className="text-[12px] text-text-secondary">
-          <span>
-            {account.entryMode === "existing" ? "已有账号" : "新建账号"} ·
-          </span>{" "}
+          <span>新建账号 ·</span>{" "}
           <span>{account.deviceName ?? account.deviceId ?? "未绑定设备"}</span>
         </span>
       </div>
@@ -712,9 +755,7 @@ function ProfileMaterialRow({
           {busy === "text" ? "生成中…" : "生成昵称、简介与职业"}
         </SecondaryButton>
         <HintLine>
-          {account.entryMode === "existing"
-            ? "已有账号默认不把头像写入手机，避免触发平台修改次数限制；生成后仍需人工核对。"
-            : "生成后仍需人工核对；确认应用后才会修改手机公开资料。"}
+          生成后仍需人工核对；确认应用后才会修改手机公开资料。
         </HintLine>
       </div>
 

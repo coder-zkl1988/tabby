@@ -1,6 +1,7 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { logger } from "../lib/logger.js";
+import { restrictedTextSessionKey } from "../lib/restricted-text-session-key.js";
 import type { TabbyMediaRunner } from "./bundled-tabby-media-runner.js";
 
 /**
@@ -179,6 +180,12 @@ const VIDEO_PATH_SRC =
 const AUDIO_PATH_SRC =
   "(\\/[^\\r\\n\"'`]+\\/media\\/[^\\r\\n\"'`]+\\.(?:mp3|wav|m4a|ogg|flac))";
 
+const LEGACY_TABBY_IMAGE_MODELS: ReadonlySet<string> = new Set([
+  "tabby-image-pro",
+  "tabby-image-flash",
+  "tabby-image-free",
+]);
+
 function regexForKind(kind: MediaKind): RegExp {
   switch (kind) {
     case "image":
@@ -222,7 +229,13 @@ export type EnhanceMediaResult = {
 
 export type DescribeMediaResult = { prompt: string };
 
-export type GenerateTextResult = { text: string };
+/** `botId` is set only for a restricted-lane call, so its caller can record who generated it. */
+export type GenerateTextResult = { text: string; botId?: string };
+
+/** generateText cuts the reply here; a JSON reply cut short no longer parses. */
+export const TEXT_GENERATION_MAX_CHARS = 8_000;
+
+const RESTRICTED_TEXT_LANE_PATTERN = /^[a-z0-9-]{1,40}$/;
 
 export class MediaGenerationService {
   private readonly pollIntervalMs: number;
@@ -290,17 +303,15 @@ export class MediaGenerationService {
 
     const count = input.count ?? 1;
     const tabbyMediaRunner = this.deps.tabbyMediaRunner;
+    // The relay serves a single image model; saved canvas nodes and XHS
+    // settings may still carry the old paid/free tier ids.
     const tabbyImageModel =
-      input.model === "tabby-image"
-        ? "tabby-image-pro"
-        : input.model === "tabby-image-free"
-          ? "tabby-image-flash"
-          : input.model;
+      input.model !== undefined && LEGACY_TABBY_IMAGE_MODELS.has(input.model)
+        ? "tabby-image"
+        : input.model;
     const canUseBundledTabbyImage =
       tabbyMediaRunner !== undefined &&
-      (tabbyImageModel === undefined ||
-        tabbyImageModel === "tabby-image-pro" ||
-        tabbyImageModel === "tabby-image-flash") &&
+      (tabbyImageModel === undefined || tabbyImageModel === "tabby-image") &&
       (!input.referenceImages || input.referenceImages.length === 0) &&
       input.sourceImage === undefined &&
       input.maskDataUrl === undefined;
@@ -361,8 +372,8 @@ export class MediaGenerationService {
     }
 
     const imageHints: string[] = [];
-    if (input.model !== undefined) {
-      imageHints.push(`Preferred model: ${input.model}`);
+    if (tabbyImageModel !== undefined) {
+      imageHints.push(`Preferred model: ${tabbyImageModel}`);
     }
     if (input.quality !== undefined) {
       imageHints.push(`Quality: ${input.quality}`);
@@ -568,7 +579,19 @@ export class MediaGenerationService {
     prompt: string;
     sourceText?: string;
     model?: string;
+    /**
+     * Run the turn on restrictedTextSessionKey(bot, lane, …) — the guard's
+     * restricted tier, hidden from the session lists like the textgen lane —
+     * instead of the textgen subagent lane, for prompts that carry untrusted
+     * text (takeover §4.1). Lowercase letters, digits and dashes. Omitted,
+     * nothing changes.
+     */
+    restrictedLane?: string;
   }): Promise<GenerateTextResult> {
+    const lane = input.restrictedLane;
+    if (lane !== undefined && !RESTRICTED_TEXT_LANE_PATTERN.test(lane)) {
+      throw new Error(`invalid restricted text lane: ${lane}`);
+    }
     const botId = await this.deps.pickUtilityBotId();
     if (!botId) {
       throw new ImageGenerationFailedError(
@@ -576,7 +599,10 @@ export class MediaGenerationService {
       );
     }
 
-    const sessionKey = `agent:${botId}:subagent:textgen-${this.deps.genId()}`;
+    const sessionKey =
+      lane !== undefined
+        ? restrictedTextSessionKey(botId, lane, this.deps.genId())
+        : `agent:${botId}:subagent:textgen-${this.deps.genId()}`;
 
     const lines: string[] =
       input.sourceText !== undefined
@@ -600,6 +626,9 @@ export class MediaGenerationService {
       "",
       "Reply with ONLY the resulting text — no preamble, no quotes, no markdown fences, and do NOT render UI (no render_a2ui). If you cannot, reply ONLY UNAVAILABLE.",
     );
+    if (lane !== undefined) {
+      lines.push("Do NOT call any tools; answer from the instruction alone.");
+    }
 
     const message = lines.join("\n");
     await this.deps.sendChat({ botId, sessionKey, message });
@@ -619,7 +648,7 @@ export class MediaGenerationService {
       );
     }
 
-    const trimmed = reply.trim().slice(0, 8_000);
+    const trimmed = reply.trim().slice(0, TEXT_GENERATION_MAX_CHARS);
     if (!trimmed) {
       throw new ImageGenerationFailedError(
         "text generation finished but returned empty text",
@@ -627,7 +656,7 @@ export class MediaGenerationService {
     }
 
     logger.info({ chars: trimmed.length }, "media generation: text ready");
-    return { text: trimmed };
+    return lane !== undefined ? { text: trimmed, botId } : { text: trimmed };
   }
 
   async generateVideo(input: {

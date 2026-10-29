@@ -2,6 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  XhsOpsAccount,
+  XhsOpsPlanSkip,
   XhsOpsPlanSuggestion,
   XhsOpsRun,
   XhsOpsRunCreate,
@@ -13,6 +15,7 @@ import {
   isScheduleDue,
   localClock,
 } from "../src/services/xhs-ops-scheduler.js";
+import type { XhsOpsTakeoverRecoveryState } from "../src/services/xhs-ops-takeover-recovery.js";
 import { XhsOpsStore } from "../src/store/xhs-ops-store.js";
 
 const tempDir = mkdtempSync(join(tmpdir(), "xhs-ops-scheduler-"));
@@ -39,7 +42,7 @@ function suggestion(
       like: { enabled: false, dailyCap: 0, ratioPercent: 0 },
       collect: { enabled: false, dailyCap: 0, ratioPercent: 0 },
       follow: { enabled: false, dailyCap: 0, ratioPercent: 0 },
-      comment: { enabled: false },
+      comment: { enabled: false, dailyCap: 0 },
     },
     rationale: [],
     segment,
@@ -620,5 +623,256 @@ describe("XhsOpsScheduler (P2-4 每日自动执行)", () => {
     expect(
       (await store.getProject(project.id))?.schedule.lastTriggeredDate,
     ).toBeNull();
+  });
+});
+
+describe("takeover accounts in the daily dispatch (§6.1, #10)", () => {
+  /** Verified existing rows whose takeover was authorized: they nurture (D5). */
+  async function takeoverProject(name: string, labels: readonly string[]) {
+    const store = new XhsOpsStore(join(tempDir, `${name}.json`));
+    const project = await store.createProject({ name });
+    const accounts: XhsOpsAccount[] = [];
+    for (const [index, label] of labels.entries()) {
+      const created = await store.createAccount({
+        projectId: project.id,
+        entryMode: "existing",
+        label,
+        platformAccountId: `xhs-${index}`,
+        deviceId: `${name}-phone-${index}`,
+      });
+      const at = new Date(AT_TEN).toISOString();
+      const verified = await store.updateAccount(
+        created.id,
+        {},
+        {
+          profileApplyResult: {
+            expectedProfileDraft: created.profileDraft,
+            expectedPlatformAccountId: created.platformAccountId,
+            appliedAt: at,
+            applyStatus: "applied",
+            applyResult: "verified",
+            verifiedAt: at,
+            verifiedAccountId: created.platformAccountId,
+            verificationTaskId: `verify-${index}`,
+          },
+        },
+      );
+      if (!verified) throw new Error("missing account fixture");
+      accounts.push(
+        await store.authorizeTakeover(verified.id, {
+          expectedUpdatedAt: verified.updatedAt,
+          ownershipConfirmed: true,
+        }),
+      );
+    }
+    const at = (index: number): XhsOpsAccount => {
+      const account = accounts[index];
+      if (!account) throw new Error("missing account fixture");
+      return account;
+    };
+    return { store, project, accounts, at };
+  }
+
+  function recordingRunService(
+    plans: XhsOpsPlanSuggestion[],
+    skips: XhsOpsPlanSkip[] = [],
+  ) {
+    const created: string[] = [];
+    let n = 0;
+    return {
+      created,
+      service: {
+        suggestPlans: async (
+          _projectId: string,
+          options?: { onSkipped?: (skip: XhsOpsPlanSkip) => void },
+        ) => {
+          for (const skip of skips) options?.onSkipped?.(skip);
+          return plans;
+        },
+        createRun: async (
+          input: XhsOpsRunCreate,
+          options?: { onCreated?: () => void },
+        ) => {
+          created.push(input.accountId);
+          options?.onCreated?.();
+          return {
+            id: `run-${++n}`,
+            status: "planned",
+            accountId: input.accountId,
+            deviceId: "dev",
+          } as XhsOpsRun;
+        },
+        startRun: async (runId: string) =>
+          ({
+            id: runId,
+            status: "running",
+            queuedBehindRunId: null,
+          }) as XhsOpsRun,
+      },
+    };
+  }
+
+  it("skips paused, held, auditing and changed-today takeovers, their change orders listed first", async () => {
+    const { store, project, accounts, at } = await takeoverProject(
+      "takeover-skips",
+      ["暂停号", "隔离号", "盘点号", "改资料号", "正常号"],
+    );
+    await store.pauseTakeover(at(0).id, {
+      code: "manual",
+      reason: "运营手动暂停",
+      sourceRef: "card",
+    });
+    await store.holdTakeoverDevice(at(1).id, {
+      taskId: "task-x",
+      sourceRef: "audit-x",
+    });
+    await store.createAudit({
+      projectId: project.id,
+      accountId: at(2).id,
+      deviceId: at(2).deviceId ?? "",
+      platformAccountId: at(2).platformAccountId,
+      trigger: "manual",
+      status: "running",
+      startedAt: new Date(AT_TEN).toISOString(),
+    });
+    await store.mutateTakeover(at(3).id, ({ account }) => ({
+      account: {
+        ...account,
+        takeover: account.takeover && {
+          ...account.takeover,
+          noNurtureDates: ["2026-09-05"],
+        },
+      },
+      result: null,
+    }));
+    const listed: string[] = [];
+    const { service, created } = recordingRunService(
+      accounts.map((account) => suggestion(account.id, account.label)),
+    );
+    const scheduler = new XhsOpsScheduler({
+      store,
+      runService: service,
+      changeOrders: {
+        listChangeOrders: async (accountId: string) => {
+          listed.push(accountId);
+          return [];
+        },
+      },
+      now: () => AT_TEN,
+    });
+
+    const result = await scheduler.triggerProject(project.id, {
+      reason: "schedule",
+    });
+    expect(listed).toEqual(accounts.map((account) => account.id));
+    expect(created).toEqual([at(4).id]);
+    expect(result.skipped).toEqual([
+      "暂停号：账号暂停中：运营手动暂停",
+      "隔离号：手机上的任务停止未确认，请到手机上确认后在接管卡片解除",
+      "盘点号：只读盘点进行中",
+      "改资料号：今天改过公开资料，按规则当天不养号",
+    ]);
+    // A pause, a hold or an audit can clear today: the next tick tries again.
+    expect(
+      (await store.getProject(project.id))?.schedule.lastTriggeredDate,
+    ).toBeNull();
+  });
+
+  it("closes the day when only a change today held an account back", async () => {
+    const { store, project, accounts, at } = await takeoverProject(
+      "takeover-changed",
+      ["改资料号", "正常号"],
+    );
+    await store.mutateTakeover(at(0).id, ({ account }) => ({
+      account: {
+        ...account,
+        takeover: account.takeover && {
+          ...account.takeover,
+          noNurtureDates: ["2026-09-05"],
+        },
+      },
+      result: null,
+    }));
+    const { service, created } = recordingRunService(
+      accounts.map((account) => suggestion(account.id, account.label)),
+    );
+    const result = await new XhsOpsScheduler({
+      store,
+      runService: service,
+      now: () => AT_TEN,
+    }).triggerProject(project.id, { reason: "schedule" });
+    expect(created).toEqual([at(1).id]);
+    expect(result.skipped).toEqual([
+      "改资料号：今天改过公开资料，按规则当天不养号",
+    ]);
+    expect(
+      (await store.getProject(project.id))?.schedule.lastTriggeredDate,
+    ).toBe("2026-09-05");
+  });
+
+  it("dispatches nothing for a takeover until the startup recovery settled", async () => {
+    const { store, project, accounts, at } = await takeoverProject(
+      "takeover-recovery",
+      ["接管号"],
+    );
+    const recovery: XhsOpsTakeoverRecoveryState = { settled: false };
+    const listed: string[] = [];
+    const { service, created } = recordingRunService(
+      accounts.map((account) => suggestion(account.id, account.label)),
+    );
+    const scheduler = new XhsOpsScheduler({
+      store,
+      runService: service,
+      changeOrders: {
+        listChangeOrders: async (accountId: string) => {
+          listed.push(accountId);
+          return [];
+        },
+      },
+      takeoverRecovery: recovery,
+      now: () => AT_TEN,
+    });
+    const waiting = await scheduler.triggerProject(project.id, {
+      reason: "schedule",
+    });
+    expect(created).toEqual([]);
+    expect(listed).toEqual([]);
+    expect(waiting.skipped).toEqual([
+      "接管号：控制器刚重启，接管任务的恢复检查还没完成，稍后自动重试",
+    ]);
+    expect(
+      (await store.getProject(project.id))?.schedule.lastTriggeredDate,
+    ).toBeNull();
+
+    recovery.settled = true;
+    const settled = await scheduler.triggerProject(project.id, {
+      reason: "schedule",
+    });
+    expect(settled.skipped).toEqual([]);
+    expect(listed).toEqual([at(0).id]);
+    expect(created).toEqual([at(0).id]);
+  });
+
+  it("records an account the planner left out and still dispatches the others (§5.3 #5)", async () => {
+    const store = new XhsOpsStore(join(tempDir, "plan-skip.json"));
+    const project = await store.createProject({ name: "计划跳过" });
+    const reason =
+      "本段搜索目标 36 篇至少需要 5 个兴趣词，当前只有 1 个，请补充兴趣池或增加每日分段";
+    const { service, created } = recordingRunService(
+      [suggestion("b", "桃子爸")],
+      [{ accountId: "a", accountLabel: "豆豆妈", reason }],
+    );
+    const result = await new XhsOpsScheduler({
+      store,
+      runService: service,
+      now: () => AT_TEN,
+    }).triggerProject(project.id, { reason: "schedule" });
+    expect(created).toEqual(["b"]);
+    expect(result).toMatchObject({ planned: 1, started: 1 });
+    expect(result.skipped).toEqual([`豆豆妈：${reason}`]);
+    // Like an empty interest pool, it waits for the operator, not the next tick.
+    expect(
+      (await store.getProject(project.id))?.schedule.lastTriggeredDate,
+    ).toBe("2026-09-05");
   });
 });

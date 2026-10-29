@@ -11,6 +11,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ControllerEnv } from "../src/app/env.js";
 import { mediaCacheDir, mediaCachePathFor } from "../src/lib/media-cache.js";
+import { restrictedTextSessionKey } from "../src/lib/restricted-text-session-key.js";
 import {
   SessionMessageNotFoundError,
   SessionTranscriptLockedError,
@@ -132,6 +133,47 @@ describe("SessionsRuntime", () => {
       source: "openclaw-filesystem",
       path: path.join(rootDir, "agents", "bot-1", "sessions", "s1.jsonl"),
     });
+  });
+
+  it("hides restricted text-generation turns like subagent lanes", async () => {
+    rootDir = await mkdtemp(path.join(tmpdir(), "nexu-sessions-runtime-"));
+    const runtime = new SessionsRuntime(
+      createEnv({ openclawStateDir: rootDir }),
+    );
+    const sessionsDir = path.join(rootDir, "agents", "bot-1", "sessions");
+    await mkdir(sessionsDir, { recursive: true });
+    const index: Record<string, { sessionId: string; sessionFile: string }> =
+      {};
+    for (const [sessionKey, sessionId] of [
+      ["agent:bot-1:main", "main-session"],
+      [
+        restrictedTextSessionKey("bot-1", "xhs-diagnosis", "gen-1"),
+        "diagnosis-session",
+      ],
+    ] as const) {
+      const sessionFile = path.join(sessionsDir, `${sessionId}.jsonl`);
+      await writeFile(
+        sessionFile,
+        `${JSON.stringify({
+          type: "message",
+          id: `msg-${sessionId}`,
+          timestamp: "2026-10-21T02:00:00.000Z",
+          message: { role: "user", content: [{ type: "text", text: "hi" }] },
+        })}\n`,
+        "utf8",
+      );
+      index[sessionKey] = { sessionId, sessionFile };
+    }
+    await writeFile(
+      path.join(sessionsDir, "sessions.json"),
+      `${JSON.stringify(index)}\n`,
+      "utf8",
+    );
+
+    const sessions = await runtime.listSessions();
+    expect(sessions.map((session) => session.sessionKey)).toEqual([
+      "agent:bot-1:main",
+    ]);
   });
 
   it("infers and persists Feishu exact chat targets from transcript metadata", async () => {

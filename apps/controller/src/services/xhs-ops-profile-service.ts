@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type {
@@ -7,6 +8,8 @@ import type {
   TaskResult,
   XhsOpsAccount,
   XhsOpsAccountIdentity,
+  XhsOpsChangeOrder,
+  XhsOpsProfileApplyOperation,
   XhsOpsProfileApplyStatus,
   XhsOpsProfileDraft,
   XhsOpsProfileField,
@@ -14,12 +17,16 @@ import type {
   XhsOpsProfilePart,
   XhsOpsProfileReadback,
   XhsOpsProject,
+  XhsOpsTakeoverProfileField,
 } from "@nexu/shared";
 import {
   XHS_PROFILE_CANDIDATES,
+  XHS_PROFILE_FIELD_LABEL,
+  xhsOpsIsTakeoverImageField,
   xhsOpsProfileCandidatePlan,
   xhsOpsProfileDraftReady,
 } from "@nexu/shared";
+import { logger } from "../lib/logger.js";
 import type {
   XhsOpsProfileApplyCompletion,
   XhsOpsStore,
@@ -29,6 +36,13 @@ import {
   DeviceControlTimeoutError,
   dispatchRejectionReason,
 } from "./device-control-service.js";
+import type { XhsOpsAuditService } from "./xhs-ops-audit-service.js";
+import {
+  XHS_CHANGE_ORDER_TASK_PENDING,
+  type XhsOpsChangeOrderApplyOutcome,
+  settleChangeOrderApply,
+  takeoverProfileField,
+} from "./xhs-ops-change-order-rules.js";
 import {
   buildPreparationRequest,
   buildPreparationVerificationRequest,
@@ -38,20 +52,31 @@ import {
 import {
   XHS_OPS_DEFAULT_OFFLINE_AFTER_MS,
   XHS_PACKAGE,
+  XHS_TAKEOVER_APPLY_TASK_POLICY,
   XHS_TASK_POLICY,
   XhsOpsError,
 } from "./xhs-ops-run-service.js";
 import {
+  XHS_TAKEOVER_UNKNOWN_TASK_ID,
+  describeError,
+  runTakeoverPhoneTask,
+  stopTakeoverPhoneTask,
+} from "./xhs-ops-takeover-phone.js";
+import {
+  XHS_TAKEOVER_TASK_LIMITS,
   type XhsOpsProfileJson,
+  type XhsOpsTakeoverApplyField,
   buildAccountIdentityTask,
   buildProfileApplyTask,
   buildProfileReadbackTask,
   buildProfileVerificationTask,
+  buildTakeoverProfileApplyTask,
   formatPersona,
   parseAccountIdentityJson,
   parseProfileJson,
   parseProfileReadbackJson,
   parseProfileVerificationJson,
+  parseTakeoverProfileJson,
 } from "./xhs-ops-task-builder.js";
 
 /**
@@ -83,6 +108,17 @@ export interface XhsOpsProfileServiceDeps {
   deviceControl: XhsOpsProfileDeviceControl;
   /** OpenClaw 媒体根目录（openclawStateDir/media），推送前校验路径不越界。 */
   mediaRoot: string;
+  /**
+   * Identity reads of existing accounts (takeover N9): the read-only variant
+   * under the audit policy, the exclusive lock and the idle check. Without it
+   * readIdentity refuses existing accounts.
+   */
+  takeoverIdentity?: Pick<XhsOpsAuditService, "readTakeoverIdentity">;
+  /**
+   * How often a change order's running apply task is looked up on the device
+   * to persist its id as applyTaskId, so a restart can stop that task by id.
+   */
+  taskIdPollIntervalMs?: number;
   readFile?: (filePath: string) => Promise<Buffer>;
   now?: () => number;
 }
@@ -115,6 +151,33 @@ type ProfilePreparationOutcome = {
   reason: string;
   cancellationUnconfirmed: boolean;
 };
+
+/** What gateNewAccount hands executeApply. */
+interface NewAccountApplyContext {
+  account: XhsOpsAccount;
+  project: XhsOpsProject;
+  deviceId: string;
+}
+
+/** A confirmed change order the takeover path may apply (gateChangeOrder). */
+interface ChangeOrderApplyContext {
+  account: XhsOpsAccount;
+  order: XhsOpsChangeOrder;
+  operation: XhsOpsProfileApplyOperation;
+  deviceId: string;
+}
+
+/** The order and account after applyChangeOrder settled the apply step. */
+export interface XhsOpsChangeOrderApplyResult {
+  order: XhsOpsChangeOrder;
+  account: XhsOpsAccount;
+  /** A stop went unconfirmed: takeover.deviceHold keeps the device lock. */
+  held: boolean;
+}
+
+const CHANGE_ORDER_STOP_UNCONFIRMED =
+  "手机修改任务停止未确认；本单字段可能已改。请到手机上确认任务已结束，在接管卡片解除后补跑核验";
+const CHANGE_ORDER_TASK_ID_POLL_MS = 2_000;
 
 /** The card's receipt box is small; the controller log keeps the full text. */
 const MAX_APPLY_RESULT_ERROR_CHARS = 200;
@@ -161,9 +224,7 @@ export function buildProfileTextPrompt(
     // The star sign has to survive intact: the birthday is derived from it, so a
     // stray ♎ next to 巨蟹 makes the finished profile contradict itself.
     "简介：三段合一、总长 ≤100 字：①星座+MBTI（自拟，符合人设；星座只写中文名如「巨蟹座」，不要 ♈♉♊ 这类星座符号或 emoji）②一句自我介绍（年龄段/身份/所在地，口语化）③一句兴趣介绍（围绕核心兴趣但像日常分享）。禁止营销话术、联系方式、引流、品牌名。",
-    account.entryMode === "existing"
-      ? "occupation：这是已有账号优化模式；结合账号定位、项目画像和核心兴趣，从已枚举的职业身份中生成一个最匹配的精确职业，等待人工核对。"
-      : "occupation：必须从人设中的职业/身份原样生成，不能改成泛化或相近职业；如果人设职业为空，留空等待人工选择。",
+    "occupation：必须从人设中的职业/身份原样生成，不能改成泛化或相近职业；如果人设职业为空，留空等待人工选择。",
     'gender：必须是 "男"、"女"、"不展示" 三者之一，与人设一致。',
     "region：人设所在城市，只写城市名（如「上海」「北京」），不带省份或区县。",
     "interestTags：3-5 个小红书兴趣标签，取自上面的核心/扩展兴趣，每个 ≤10 字，不重复、不带井号。",
@@ -442,6 +503,8 @@ export class XhsOpsProfileService {
   private readonly media: XhsOpsProfileMedia;
   private readonly deviceControl: XhsOpsProfileDeviceControl;
   private readonly mediaRoot: string;
+  private readonly takeoverIdentity: XhsOpsProfileServiceDeps["takeoverIdentity"];
+  private readonly taskIdPollIntervalMs: number;
   private readonly readFile: (filePath: string) => Promise<Buffer>;
   private readonly now: () => number;
 
@@ -450,6 +513,9 @@ export class XhsOpsProfileService {
     this.media = deps.media;
     this.deviceControl = deps.deviceControl;
     this.mediaRoot = path.resolve(deps.mediaRoot);
+    this.takeoverIdentity = deps.takeoverIdentity;
+    this.taskIdPollIntervalMs =
+      deps.taskIdPollIntervalMs ?? CHANGE_ORDER_TASK_ID_POLL_MS;
     this.readFile = deps.readFile ?? ((p) => fs.readFile(p));
     this.now = deps.now ?? (() => Date.now());
   }
@@ -605,13 +671,29 @@ export class XhsOpsProfileService {
     accountId: string,
     fields?: readonly XhsOpsProfileField[],
   ): Promise<XhsOpsAccount> {
-    let { account, project } = await this.loadAccount(accountId);
+    const ctx = await this.gateNewAccount(accountId);
+    return this.executeApply(ctx, fields);
+  }
+
+  /**
+   * apply() serves new accounts only (takeover §2.5, §5.3 #7). An existing
+   * account's public profile changes only through applyChangeOrder: this path
+   * runs the login preparation (TYPE, SMS) under XHS_TASK_POLICY, authorizes
+   * every photo and pushes generated portraits, none of which may touch a
+   * real account.
+   */
+  private async gateNewAccount(
+    accountId: string,
+  ): Promise<NewAccountApplyContext> {
+    const { account, project } = await this.loadAccount(accountId);
+    if (account.entryMode !== "new")
+      throw new XhsOpsError(409, "已有账号请先开始接管，资料修改走变更单");
     if (!account.deviceId)
       throw new XhsOpsError(400, "账号未绑定设备，无法应用资料");
     if (!project.profile?.confirmedAt) {
       throw new XhsOpsError(409, "请先确认目标用户画像");
     }
-    if (account.entryMode !== "existing" && !account.personaReviewedAt) {
+    if (!account.personaReviewedAt) {
       throw new XhsOpsError(409, "请先确认账号人设");
     }
     if (!account.platformAccountId.trim()) {
@@ -620,7 +702,17 @@ export class XhsOpsProfileService {
     if (!xhsOpsProfileDraftReady(account.profileDraft)) {
       throw new XhsOpsError(409, "请先完成账号资料并人工校验确认");
     }
-    const deviceId = account.deviceId;
+    return { account, project, deviceId: account.deviceId };
+  }
+
+  /** The new-account apply: login preparation, apply task, then all-field verification. */
+  private async executeApply(
+    ctx: NewAccountApplyContext,
+    fields?: readonly XhsOpsProfileField[],
+  ): Promise<XhsOpsAccount> {
+    let account = ctx.account;
+    const { project, deviceId } = ctx;
+    const accountId = account.id;
     const claimed = await this.store.beginProfileApply(
       account.id,
       account.updatedAt,
@@ -866,6 +958,436 @@ export class XhsOpsProfileService {
   }
 
   /**
+   * Apply a confirmed change order of a taken-over account (§5.2 step 4) —
+   * the only way an existing account's public profile changes. The caller
+   * (the change-order service) confirmed digest and acks, moved the order to
+   * applying with its ledger and albums, and holds the exclusive device lock;
+   * it keeps the lock when the result says `held`.
+   *
+   * No preparation task runs: identity is checked three times without it
+   * (precheck readback, the apply task's own 号码比对, the verification). So
+   * this path never dispatches account.login with TYPE or the default_sms
+   * role, whatever a policy would allow.
+   */
+  async applyChangeOrder(
+    orderId: string,
+  ): Promise<XhsOpsChangeOrderApplyResult> {
+    const ctx = await this.gateChangeOrder(orderId);
+    return this.executeChangeOrderApply(ctx);
+  }
+
+  /** Not xhsOpsProfileDraftReady: an order checks its own fields, not nine materials (§5.3 #2). */
+  private async gateChangeOrder(
+    orderId: string,
+  ): Promise<ChangeOrderApplyContext> {
+    const order = await this.store.getChangeOrder(orderId);
+    if (!order) throw new XhsOpsError(404, "变更单不存在");
+    const account = await this.store.getAccount(order.accountId);
+    if (!account) throw new XhsOpsError(404, "账号不存在");
+    const takeover = account.takeover;
+    if (account.entryMode !== "existing" || !takeover?.authorizedAt)
+      throw new XhsOpsError(409, "请先在接管卡片上授权接管该账号");
+    if (order.status !== "applying")
+      throw new XhsOpsError(409, "变更单不在执行状态");
+    const operation = account.profileDraft.applyOperation;
+    if (
+      !operation ||
+      operation.status !== "running" ||
+      operation.changeOrderId !== order.id ||
+      operation.taskId !== null
+    )
+      throw new XhsOpsError(409, "变更单的执行记录已变化，请刷新后重试");
+    if (
+      !takeover.identityConfirmedAt ||
+      account.platformAccountId !== order.platformAccountId ||
+      !account.deviceId ||
+      account.deviceId !== order.deviceId
+    )
+      throw new XhsOpsError(409, "小红书号或设备已变化，请重新锁定身份");
+    if (order.fields.some((entry) => !takeoverProfileField(entry.field)))
+      throw new XhsOpsError(409, "变更单含有接管不修改的字段");
+    return { account, order, operation, deviceId: account.deviceId };
+  }
+
+  /**
+   * Push each picture into its own flat album, dispatch the takeover apply
+   * task under XHS_TAKEOVER_APPLY_TASK_POLICY and write the receipt back to
+   * the order and the ledger in one mutation (settleChangeOrderApply). A
+   * CALL_USER or a lost answer stops the phone task by id first — the phone
+   * resumes by itself after 60 s otherwise — and an unconfirmed stop holds
+   * the device. An aborted or blocked task is still searched for its
+   * PROFILE_JSON; without one every field is uncertain.
+   */
+  private async executeChangeOrderApply(
+    ctx: ChangeOrderApplyContext,
+  ): Promise<XhsOpsChangeOrderApplyResult> {
+    const { order, deviceId } = ctx;
+    const applyFields: XhsOpsTakeoverApplyField[] = [];
+    // Albums of this attempt that may hold a picture on the phone: one that
+    // reported success, and one whose push call itself failed — the picture
+    // may have landed before the answer was lost (order.pushedAlbums).
+    const pushedAlbums: string[] = [];
+    const notDispatched = (reason: string, mayHaveLanded?: string) =>
+      this.settleChangeOrder(ctx, {
+        kind: "not_dispatched",
+        reason,
+        pushedAlbums: mayHaveLanded
+          ? [...pushedAlbums, mayHaveLanded]
+          : pushedAlbums,
+      });
+    for (const entry of order.fields) {
+      const field = takeoverProfileField(entry.field);
+      if (!field) continue;
+      if (!xhsOpsIsTakeoverImageField(field)) {
+        applyFields.push({ field, after: entry.after });
+        continue;
+      }
+      const label = XHS_PROFILE_FIELD_LABEL[field];
+      if (!entry.imagePath || !entry.imageSha256 || !entry.mediaAlbum)
+        return notDispatched(`${label}的图片或专用相册缺失，请重新上传后预检`);
+      const filename = `tabby-${field}-${order.id.slice(0, 8)}${
+        path.extname(entry.imagePath).toLowerCase() || ".jpg"
+      }`;
+      let image: DevicePushMediaBody["images"][number];
+      try {
+        image = await this.readMediaForPush(entry.imagePath, filename);
+      } catch {
+        return notDispatched(`${label}的图片读不到了，请重新上传后预检`);
+      }
+      const sha256 = createHash("sha256")
+        .update(Buffer.from(image.dataBase64, "base64"))
+        .digest("hex");
+      if (sha256 !== entry.imageSha256)
+        return notDispatched(`${label}的图片在预检之后被替换，请重新预检`);
+      // A push changes no profile field: whatever it threw, no apply task
+      // went out, so the order goes back to draft rather than "maybe changed".
+      let pushed: DevicePushMediaResponse;
+      try {
+        pushed = await this.deviceControl.pushMedia(deviceId, {
+          album: entry.mediaAlbum,
+          images: [image],
+        });
+      } catch (error) {
+        return notDispatched(
+          `${label}推送到手机失败：${describeError(error).slice(0, 120)}`,
+          entry.mediaAlbum,
+        );
+      }
+      const failed = pushed.results.filter((result) => !result.success);
+      if (failed.length > 0 || pushed.results.length === 0)
+        return notDispatched(
+          `${label}推送到手机失败：${failed
+            .map((result) => result.error ?? result.mediaId)
+            .join("；")
+            .slice(0, 120)}`,
+        );
+      pushedAlbums.push(entry.mediaAlbum);
+      applyFields.push({ field, mediaAlbum: entry.mediaAlbum });
+    }
+    const fields = applyFields.map((entry) => entry.field);
+    const limits = fields.some(xhsOpsIsTakeoverImageField)
+      ? XHS_TAKEOVER_TASK_LIMITS.applyImage
+      : XHS_TAKEOVER_TASK_LIMITS.applyText;
+    const outcome = await runTakeoverPhoneTask(this.deviceControl, {
+      deviceId,
+      body: {
+        task: buildTakeoverProfileApplyTask({
+          platformAccountId: order.platformAccountId,
+          fields: applyFields,
+        }),
+        maxSteps: limits.maxSteps,
+        timeout: limits.timeoutMs,
+        allowedApps: [XHS_PACKAGE],
+        taskPolicy: XHS_TAKEOVER_APPLY_TASK_POLICY,
+      },
+      // The id replaces the "pending" placeholder while the task runs: a
+      // restart then stops or reconciles exactly this task (§3.1 表二).
+      pollIntervalMs: this.taskIdPollIntervalMs,
+      onTaskId: async (taskId) => {
+        await this.store.updateChangeOrder(order.id, (current) =>
+          current.status === "applying" &&
+          current.applyTaskId === XHS_CHANGE_ORDER_TASK_PENDING
+            ? { ...current, applyTaskId: taskId }
+            : current,
+        );
+      },
+      // §5.2 前提: a phone that is not enforce gets the task stopped at once.
+      onPolicyBreach: async (breach) => {
+        await this.store.pauseTakeover(ctx.account.id, {
+          code: "manual",
+          reason: breach.reason,
+          sourceRef: order.id,
+        });
+      },
+    });
+    if (outcome.kind === "rejected")
+      return notDispatched(dispatchRejectedResult(outcome.reason));
+    if (outcome.kind === "policy") {
+      // Stopped mid-way: every field may have changed (§5.2 step 4).
+      const { breach } = outcome;
+      const taskId = breach.taskId ?? outcome.result?.taskId ?? null;
+      const reason = `${breach.reason}；本单字段可能已改，换用 enforce 构建后请补跑核验`;
+      if (!breach.stopped)
+        return this.stopChangeOrderTask(ctx, taskId, {
+          message: outcome.result?.message,
+          reason,
+        });
+      return this.settleChangeOrder(ctx, {
+        kind: "ended",
+        taskId,
+        receipt: parseTakeoverProfileJson(outcome.result?.message, fields),
+        completed: false,
+        reason,
+      });
+    }
+    if (outcome.kind === "lost") {
+      const taskId = outcome.taskId ?? (await this.currentTaskOf(deviceId));
+      return this.stopChangeOrderTask(ctx, taskId, {
+        message: undefined,
+        reason: outcome.timedOut
+          ? "手机修改任务超时，已停止；本单字段可能已改，请补跑核验"
+          : "与手机的连接中断，修改任务已停止；本单字段可能已改，请补跑核验",
+      });
+    }
+    const result = outcome.result;
+    if (result.needsInteraction)
+      return this.stopChangeOrderTask(ctx, result.taskId, {
+        message: result.message,
+        reason:
+          "手机修改任务请求人工处理，已停止；本单字段可能已改，请补跑核验",
+      });
+    return this.settleChangeOrder(ctx, {
+      kind: "ended",
+      taskId: result.taskId,
+      receipt: parseTakeoverProfileJson(result.message, fields),
+      completed: true,
+      reason: result.success
+        ? null
+        : `手机修改任务没有正常结束（${result.status ?? "failed"}）`,
+    });
+  }
+
+  /** A task that may still run: stop it by id; unconfirmed, hold the device and keep the ledger running. */
+  private async stopChangeOrderTask(
+    ctx: ChangeOrderApplyContext,
+    taskId: string | null,
+    input: { message: string | undefined; reason: string },
+  ): Promise<XhsOpsChangeOrderApplyResult> {
+    const fields = ctx.order.fields.flatMap((entry) => {
+      const field = takeoverProfileField(entry.field);
+      return field ? [field] : [];
+    });
+    if (await stopTakeoverPhoneTask(this.deviceControl, ctx.deviceId, taskId))
+      return this.settleChangeOrder(ctx, {
+        kind: "ended",
+        taskId,
+        receipt: parseTakeoverProfileJson(input.message, fields),
+        completed: false,
+        reason: input.reason,
+      });
+    try {
+      await this.store.holdTakeoverDevice(ctx.account.id, {
+        taskId: taskId ?? XHS_TAKEOVER_UNKNOWN_TASK_ID,
+        sourceRef: ctx.order.id,
+      });
+    } catch (error) {
+      // The device lock still stays with this account (held below).
+      logger.warn(
+        { orderId: ctx.order.id, error: describeError(error) },
+        "xhs-ops: change order device hold failed",
+      );
+    }
+    // The reconcile sweep may fetch the receipt once the phone is idle.
+    this.store.markDeviceBindingSettled(ctx.account.id, ctx.deviceId);
+    logger.warn(
+      { orderId: ctx.order.id, deviceId: ctx.deviceId, taskId },
+      "xhs-ops: change order apply stop unconfirmed, device held",
+    );
+    const settled = await this.settleChangeOrder(ctx, {
+      kind: "unconfirmed",
+      taskId,
+      reason: CHANGE_ORDER_STOP_UNCONFIRMED,
+    });
+    return { ...settled, held: true };
+  }
+
+  private async currentTaskOf(deviceId: string): Promise<string | null> {
+    try {
+      const device = await this.deviceControl.getDevice(deviceId);
+      return device?.status === "busy" ? (device.currentTaskId ?? null) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async settleChangeOrder(
+    ctx: ChangeOrderApplyContext,
+    outcome: XhsOpsChangeOrderApplyOutcome,
+  ): Promise<XhsOpsChangeOrderApplyResult> {
+    const settled = await this.store.mutateTakeover(
+      ctx.account.id,
+      (snapshot) => {
+        const order = snapshot.changeOrders.find(
+          (entry) => entry.id === ctx.order.id,
+        );
+        if (!order) return { result: null };
+        const next = settleChangeOrderApply({
+          account: snapshot.account,
+          order,
+          outcome,
+          now: snapshot.now,
+          mode: "live",
+        });
+        return {
+          account: next.account,
+          changeOrders: [next.order],
+          result: next.order,
+        };
+      },
+    );
+    const order = settled.result ?? ctx.order;
+    logger.info(
+      {
+        orderId: order.id,
+        accountId: settled.account.id,
+        outcome: outcome.kind,
+        status: order.status,
+        fields: order.fields.map((entry) => `${entry.field}:${entry.outcome}`),
+      },
+      "xhs-ops: change order apply settled",
+    );
+    return { order, account: settled.account, held: false };
+  }
+
+  /**
+   * Restart reconcile of a change order's ledger (§2.6, §5.2 状态表): the
+   * receipt tabby-control kept — by applyTaskId once known, otherwise the
+   * newest PROFILE_JSON since the ledger started — is written back to the
+   * order, which stays interrupted for verify. Without one every unsettled
+   * field becomes uncertain.
+   */
+  private async reconcileChangeOrder(
+    account: XhsOpsAccount,
+    operation: XhsOpsProfileApplyOperation,
+  ): Promise<XhsOpsAccount | null> {
+    const orderId = operation.changeOrderId;
+    const order = orderId ? await this.store.getChangeOrder(orderId) : null;
+    const recovered = order
+      ? await this.recoverChangeOrderReceipt(order, operation)
+      : null;
+    try {
+      const fields = (order?.fields ?? []).flatMap((entry) => {
+        const field = takeoverProfileField(entry.field);
+        return field ? [field] : [];
+      });
+      const settled = await this.store.mutateTakeover(
+        account.id,
+        (snapshot) => {
+          const ledger = snapshot.account.profileDraft.applyOperation;
+          if (
+            !ledger ||
+            ledger.operationId !== operation.operationId ||
+            ledger.status !== "running"
+          )
+            return { result: null };
+          const current = snapshot.changeOrders.find(
+            (entry) => entry.id === orderId,
+          );
+          if (!current)
+            return {
+              account: {
+                ...snapshot.account,
+                profileDraft: {
+                  ...snapshot.account.profileDraft,
+                  applyOperation: {
+                    ...ledger,
+                    status: "completed",
+                    completedAt: snapshot.now,
+                  },
+                },
+              },
+              result: null,
+            };
+          // A task stopped after the restart is recovered too, but its
+          // result carries no PROFILE_JSON: say so rather than "recovered".
+          const receipt = parseTakeoverProfileJson(recovered?.message, fields);
+          const next = settleChangeOrderApply({
+            account: snapshot.account,
+            order: current,
+            outcome: {
+              kind: "ended",
+              taskId: recovered?.taskId ?? null,
+              receipt,
+              completed: recovered !== null,
+              reason: receipt.extracted
+                ? "桌面端当时已断开，已事后取回修改回执"
+                : "桌面端未收到手机修改任务的回执，设备已空闲；本单字段可能已改，请补跑核验",
+            },
+            now: snapshot.now,
+            mode: "recovered",
+          });
+          return {
+            account: next.account,
+            changeOrders: [next.order],
+            result: null,
+          };
+        },
+      );
+      return settled.account;
+    } finally {
+      this.store.releaseDeviceBinding(account.id, operation.deviceId);
+    }
+  }
+
+  private async recoverChangeOrderReceipt(
+    order: XhsOpsChangeOrder,
+    operation: XhsOpsProfileApplyOperation,
+  ): Promise<{ taskId: string; message: string | undefined } | null> {
+    const fetch = this.deviceControl.getTaskResults;
+    if (!fetch) return null;
+    const startedAt = Date.parse(operation.startedAt);
+    const taskId =
+      order.applyTaskId && order.applyTaskId !== XHS_CHANGE_ORDER_TASK_PENDING
+        ? order.applyTaskId
+        : null;
+    const fields: XhsOpsTakeoverProfileField[] = order.fields.flatMap(
+      (entry) => {
+        const field = takeoverProfileField(entry.field);
+        return field ? [field] : [];
+      },
+    );
+    try {
+      const entries = await fetch.call(
+        this.deviceControl,
+        taskId
+          ? { taskId, deviceId: operation.deviceId }
+          : {
+              deviceId: operation.deviceId,
+              limit: XHS_RECOVERABLE_RECEIPT_LOOKBACK,
+            },
+      );
+      const mine = entries
+        .filter((entry) =>
+          taskId
+            ? entry.taskId === taskId
+            : Number.isFinite(startedAt) &&
+              entry.completedAt >= startedAt &&
+              parseTakeoverProfileJson(entry.result.message, fields).extracted,
+        )
+        .sort((a, b) => b.completedAt - a.completedAt)[0];
+      return mine
+        ? { taskId: mine.result.taskId, message: mine.result.message }
+        : null;
+    } catch (error) {
+      logger.warn(
+        { orderId: order.id, error: describeError(error) },
+        "xhs-ops: change order receipt recovery failed",
+      );
+      return null;
+    }
+  }
+
+  /**
    * Park the bound phone on 编辑主页 and hand the operator the screenshot, so
    * they can see which account is actually signed in before pinning it.
    *
@@ -875,6 +1397,14 @@ export class XhsOpsProfileService {
   async readIdentity(accountId: string): Promise<XhsOpsAccountIdentity> {
     const account = await this.store.getAccount(accountId);
     if (!account) throw new XhsOpsError(404, "账号不存在");
+    // An existing account's phone holds a real account: never the
+    // new-account task under XHS_TASK_POLICY (TYPE, login not forbidden).
+    if (account.entryMode === "existing") {
+      if (!this.takeoverIdentity)
+        throw new XhsOpsError(409, "已有账号请在接管卡片上读取手机当前账号");
+      return (await this.takeoverIdentity.readTakeoverIdentity(accountId))
+        .identity;
+    }
     if (account.profileDraft.applyOperation?.status === "running") {
       throw new XhsOpsError(409, "账号资料正在应用到手机，请等待任务结束");
     }
@@ -1034,6 +1564,8 @@ export class XhsOpsProfileService {
     ) {
       return account;
     }
+    if (operation.changeOrderId !== null)
+      return this.reconcileChangeOrder(account, operation);
     const recovered = await this.recoverApplyReceipt(operation);
     try {
       return await this.store.completeProfileApply(

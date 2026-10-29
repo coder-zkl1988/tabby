@@ -68,7 +68,7 @@ describe("mac update metadata", () => {
     expect(appUpdateYml).toBe(
       [
         "provider: generic",
-        "url: https://downloads.picaso.studio/updates/stable/arm64",
+        "url: https://downloads.happywork.today/updates/stable/arm64",
         "updaterCacheDirName: tabby-updater",
         "",
       ].join("\n"),

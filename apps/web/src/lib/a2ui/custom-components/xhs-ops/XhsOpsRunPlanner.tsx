@@ -1,5 +1,10 @@
 import { Switch } from "@/components/ui/switch";
-import { type XhsOpsProject, xhsOpsAccountNurtureIssues } from "@nexu/shared";
+import {
+  XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE,
+  type XhsOpsPlanSkip,
+  type XhsOpsProject,
+  xhsOpsAccountNurtureIssues,
+} from "@nexu/shared";
 import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import {
   type MutableRefObject,
@@ -15,6 +20,7 @@ import {
   getRunPreparation,
 } from "./XhsOpsPreparationStatus";
 import { XhsOpsProfileMaterialContent } from "./XhsOpsProfileMaterial";
+import { XhsOpsTakeoverContent } from "./XhsOpsTakeover";
 import { describeXhsOpsError, xhsOpsApi } from "./xhs-ops-api";
 import { localDateString } from "./xhs-ops-dashboard-data";
 import { ProjectPicker, useProjectResolution } from "./xhs-ops-project-picker";
@@ -152,6 +158,16 @@ function chunkTitle(chunk: XhsOpsRunChunk): string {
     : `搜索「${chunk.keyword ?? ""}」`;
 }
 
+/**
+ * 「已赞跳过 k 篇」 (§6.3, NU-04): notes an existing account had liked before
+ * were not liked again. The summary carries it only when it is above 0, and
+ * new accounts never get it.
+ */
+function alreadyLikedSkippedText(run: Pick<XhsOpsRun, "summary">) {
+  const skipped = run.summary?.alreadyLikedSkipped ?? 0;
+  return skipped > 0 ? `已赞跳过 ${skipped} 篇` : null;
+}
+
 function sumInteractions(chunks: XhsOpsRunChunk[]) {
   return chunks.reduce(
     (acc, c) => ({
@@ -230,12 +246,14 @@ export function XhsOpsRunPlanner({
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [accountsReload, setAccountsReload] = useState(0);
   const [project, setProject] = useState<XhsOpsProject | null>(null);
+  const today = localDateString(new Date());
   const blockingAccounts = accounts
     ? [...accounts.values()]
         .filter((account) => Boolean(account.deviceId))
         .map((account) => ({
           account,
-          issues: xhsOpsAccountNurtureIssues(account, project),
+          // A running read-only audit is on the row (takeover.activeAuditId).
+          issues: xhsOpsAccountNurtureIssues(account, project, { today }),
         }))
         .filter((entry) => entry.issues.length > 0)
     : [];
@@ -249,6 +267,8 @@ export function XhsOpsRunPlanner({
     () => new Map(),
   );
   const [autoError, setAutoError] = useState<string | null>(null);
+  /** Accounts the desktop could not plan today (e.g. a pool too small for the target); the others are still planned. */
+  const [autoSkipped, setAutoSkipped] = useState<XhsOpsPlanSkip[]>([]);
   useEffect(() => {
     if (plans.length > 0 || !projectId) return;
     if (accounts === null) return;
@@ -256,8 +276,9 @@ export function XhsOpsRunPlanner({
     setAutoPlans(null);
     xhsOpsApi
       .suggestPlans(projectId)
-      .then((list) => {
+      .then(({ plans: list, skipped }) => {
         if (cancelled) return;
+        setAutoSkipped(skipped);
         setAutoPlans(
           list.map((p) => ({
             accountId: p.accountId,
@@ -282,6 +303,7 @@ export function XhsOpsRunPlanner({
       .catch((err) => {
         if (cancelled) return;
         setAutoPlans([]);
+        setAutoSkipped([]);
         setAutoError(describeXhsOpsError(err, "今日计划建议生成失败"));
       });
     return () => {
@@ -432,6 +454,19 @@ export function XhsOpsRunPlanner({
     >
       {accountsError ? <ErrorLine message={accountsError} /> : null}
       {autoError ? <ErrorLine message={autoError} /> : null}
+      {plans.length === 0 && autoSkipped.length > 0 ? (
+        <div
+          data-testid="plan-skipped"
+          className="flex flex-col gap-0.5 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] px-2.5 py-1.5 text-[12px] text-[var(--color-warning-ink)]"
+        >
+          <span className="font-medium">这些账号今天没有生成计划：</span>
+          {autoSkipped.map((skip) => (
+            <span key={skip.accountId}>
+              {skip.accountLabel}：{skip.reason}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {blockingAccounts.length > 0 ? (
         <NurtureGate
           projectId={projectId}
@@ -584,6 +619,11 @@ function EmptyPlanHistory({ projectId }: { projectId: string }) {
                 {run.summary?.browsedTotal ?? 0}/
                 {run.summary?.plannedTotal ?? 0} 篇
               </span>
+              {alreadyLikedSkippedText(run) ? (
+                <span className="shrink-0 text-text-secondary">
+                  {alreadyLikedSkippedText(run)}
+                </span>
+              ) : null}
               <span className="min-w-0 flex-1 truncate text-text-secondary">
                 {run.error ?? run.notes ?? ""}
               </span>
@@ -616,10 +656,16 @@ function NurtureGate({
     .filter(({ issues }) =>
       issues.some(
         (issue) =>
-          issue.includes("八项账号资料") || issue.includes("手机账号配置"),
+          issue === XHS_ACCOUNT_PROFILE_MATERIAL_REQUIRED_MESSAGE ||
+          issue.includes("手机账号配置"),
       ),
     )
     .map(({ account }) => account.id);
+  // A takeover account is unlocked on its takeover card (identity, baseline,
+  // plan, pause, device hold), never through the new-account material.
+  const takeoverAccounts = entries
+    .filter(({ account }) => account.entryMode === "existing")
+    .map(({ account }) => account);
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-[var(--color-warning-ink)]/[20%] bg-[var(--color-warning-ink)]/[6%] p-3">
@@ -670,6 +716,20 @@ function NurtureGate({
           onAccountChange={onAccountChange}
         />
       ) : null}
+      {takeoverAccounts.map((account) => (
+        <div
+          key={account.id}
+          data-testid="run-planner-takeover"
+          className="rounded-lg border border-border bg-surface-1 p-3"
+        >
+          <XhsOpsTakeoverContent
+            accountId={account.id}
+            projectId={projectId}
+            onAction={onAction}
+            onAccountChange={onAccountChange}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -1063,7 +1123,9 @@ function RunPlanCard({
         (candidate) => candidate.id === accountId,
       );
       const freshIssues = freshAccount
-        ? xhsOpsAccountNurtureIssues(freshAccount, freshProject)
+        ? xhsOpsAccountNurtureIssues(freshAccount, freshProject, {
+            today: localDateString(new Date()),
+          })
         : ["账号不存在或不属于当前项目"];
       if (freshIssues.length > 0) {
         setError(`养号条件尚未完成：${freshIssues.join("；")}`);
@@ -1642,6 +1704,11 @@ function RunPlanCard({
                   <span className="shrink-0 text-text-secondary">
                     异常 {r.summary?.anomalyCount ?? 0}
                   </span>
+                  {alreadyLikedSkippedText(r) ? (
+                    <span className="shrink-0 text-text-secondary">
+                      {alreadyLikedSkippedText(r)}
+                    </span>
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate text-text-secondary">
                     {r.notes}
                   </span>
@@ -1675,6 +1742,7 @@ function RunResult({
   const observations = run.chunks
     .filter((c) => c.observation?.trim())
     .map((c) => ({ chunk: chunkTitle(c), text: c.observation as string }));
+  const alreadyLiked = alreadyLikedSkippedText(run);
 
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-2">
@@ -1699,6 +1767,12 @@ function RunResult({
           value={String(summary?.anomalyCount ?? anomalies.length)}
         />
       </div>
+      {alreadyLiked ? (
+        <HintLine>
+          {alreadyLiked}
+          ：这个号以前赞过的笔记不再重复点赞，点赞数低于上限属正常。
+        </HintLine>
+      ) : null}
 
       {anomalies.length > 0 ? (
         <div className="flex flex-col gap-1">

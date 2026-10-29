@@ -8,9 +8,9 @@ import type {
 
 const FEISHU_FALLBACK_TEMPLATES: FallbackTemplateMap = {
   unknown: {
-    en: "🤖 Sorry, I can't handle your request right now. Please try again later, or contact the Tabby team for support: https://tabby.picaso.studio/docs/guide/contact",
+    en: "🤖 Sorry, I can't handle your request right now. Please try again later, or contact the Tabby team for support: https://tabby.happywork.today/docs/guide/contact",
     "zh-CN":
-      "🤖 抱歉，我暂时无法处理你的请求，请稍后重试，或联系 Tabby 工作人员获取支持：https://tabby.picaso.studio/docs/zh/guide/contact",
+      "🤖 抱歉，我暂时无法处理你的请求，请稍后重试，或联系 Tabby 工作人员获取支持：https://tabby.happywork.today/docs/zh/guide/contact",
   },
   internal_error: {
     en: "Sorry, I hit an internal error while replying. Please try again in a moment.",

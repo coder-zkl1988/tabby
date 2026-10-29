@@ -30,6 +30,8 @@ export * from "./schemas/device-mirror.js";
 export * from "./schemas/mirror-control-codec.js";
 export * from "./schemas/device-task-history.js";
 export * from "./schemas/xhs-ops.js";
+export * from "./xhs-ops-playbook.js";
+export * from "./xhs-ops-takeover-events.js";
 export * from "./schemas/canvas-ops.js";
 export * from "./schemas/agent-browser.js";
 export * from "./schemas/schedule.js";

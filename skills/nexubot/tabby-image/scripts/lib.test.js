@@ -7,7 +7,6 @@ import {
   buildImageGenerationRequest,
   buildImageGenerationsUrl,
   parseImageResponse,
-  readImageCreditState,
   readOpenclawConfig,
   resolveLinkCredential,
   resolveOutputPath,
@@ -51,204 +50,58 @@ test("resolveLinkCredential throws NOT_LOGGED_IN when apiKey is empty", () => {
   assert.throws(() => resolveLinkCredential(config), /NOT_LOGGED_IN/);
 });
 
-test("resolveLinkCredential throws NO_IMAGE_MODEL when neither variant is present", () => {
-  const config = {
+function linkConfig(models) {
+  return {
     models: {
       providers: {
-        link: {
-          baseUrl: "https://x/v1",
-          apiKey: "key123",
-          models: [{ id: "gpt-5.5" }, { id: "deepseek-v4-pro" }],
-        },
+        link: { baseUrl: "https://x/v1", apiKey: "key123", models },
       },
     },
   };
-  assert.throws(() => resolveLinkCredential(config), /NO_IMAGE_MODEL/);
+}
+
+test("resolveLinkCredential throws NO_IMAGE_MODEL when tabby-image is not on the account", () => {
+  const config = linkConfig([
+    { id: "gpt-5.5" },
+    { id: "deepseek-v4-pro" },
+    { id: "tabby-image-pro" },
+  ]);
+  assert.throws(
+    () => resolveLinkCredential(config),
+    /NO_IMAGE_MODEL.*tabby-image/,
+  );
 });
 
-test("resolveLinkCredential prefers tabby-image-pro over tabby-image-flash", () => {
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://x/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-flash" }, { id: "tabby-image-pro" }],
-        },
-      },
-    },
-  };
-  const result = resolveLinkCredential(config);
-  assert.equal(result.model, "tabby-image-pro");
+test("resolveLinkCredential returns tabby-image with the link credential", () => {
+  const result = resolveLinkCredential(linkConfig([{ id: "tabby-image" }]));
+  assert.equal(result.model, "tabby-image");
   assert.equal(result.baseUrl, "https://x/v1");
   assert.equal(result.apiKey, "key123");
 });
 
-test("resolveLinkCredential falls back to tabby-image-flash", () => {
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://x/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-flash" }],
-        },
-      },
-    },
-  };
-  const result = resolveLinkCredential(config);
-  assert.equal(result.model, "tabby-image-flash");
-});
-
-test("readImageCreditState defaults to true when the state file is missing", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tabby-image-test-"));
-  assert.equal(readImageCreditState(dir), true);
-});
-
-test("readImageCreditState defaults to true on unparsable JSON", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tabby-image-test-"));
-  fs.writeFileSync(
-    path.join(dir, "nexu-account-credit-state.json"),
-    "{not json",
+test("resolveLinkCredential accepts an explicit tabby-image", () => {
+  const result = resolveLinkCredential(
+    linkConfig([{ id: "tabby-image" }]),
+    "tabby-image",
   );
-  assert.equal(readImageCreditState(dir), true);
+  assert.equal(result.model, "tabby-image");
 });
 
-test("readImageCreditState returns false when hasBalance is false", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tabby-image-test-"));
-  fs.writeFileSync(
-    path.join(dir, "nexu-account-credit-state.json"),
-    JSON.stringify({ hasBalance: false }),
-  );
-  assert.equal(readImageCreditState(dir), false);
-});
-
-test("readImageCreditState returns true when hasBalance is true", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tabby-image-test-"));
-  fs.writeFileSync(
-    path.join(dir, "nexu-account-credit-state.json"),
-    JSON.stringify({ hasBalance: true }),
-  );
-  assert.equal(readImageCreditState(dir), true);
-});
-
-test("resolveLinkCredential falls back to tabby-image-flash when the account has no balance, even though tabby-image-pro is available", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tabby-image-test-"));
-  fs.writeFileSync(
-    path.join(dir, "nexu-account-credit-state.json"),
-    JSON.stringify({ hasBalance: false }),
-  );
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://x/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-pro" }, { id: "tabby-image-flash" }],
-        },
-      },
-    },
-  };
-  const result = resolveLinkCredential(config, dir);
-  assert.equal(result.model, "tabby-image-flash");
-});
-
-test("resolveLinkCredential still uses tabby-image-pro with no balance when tabby-image-flash isn't on the account", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tabby-image-test-"));
-  fs.writeFileSync(
-    path.join(dir, "nexu-account-credit-state.json"),
-    JSON.stringify({ hasBalance: false }),
-  );
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://x/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-pro" }],
-        },
-      },
-    },
-  };
-  const result = resolveLinkCredential(config, dir);
-  assert.equal(result.model, "tabby-image-pro");
-});
-
-test("resolveLinkCredential honors an explicit pro model even without balance", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tabby-image-test-"));
-  fs.writeFileSync(
-    path.join(dir, "nexu-account-credit-state.json"),
-    JSON.stringify({ hasBalance: false }),
-  );
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://relay.example/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-pro" }, { id: "tabby-image-flash" }],
-        },
-      },
-    },
-  };
-
-  const result = resolveLinkCredential(config, dir, "tabby-image-pro");
-
-  assert.equal(result.model, "tabby-image-pro");
-});
-
-test("resolveLinkCredential honors an explicit flash model", () => {
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://relay.example/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-pro" }, { id: "tabby-image-flash" }],
-        },
-      },
-    },
-  };
-
-  const result = resolveLinkCredential(config, undefined, "tabby-image-flash");
-
-  assert.equal(result.model, "tabby-image-flash");
-});
-
-test("resolveLinkCredential rejects an explicit model missing from the account", () => {
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://relay.example/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-flash" }],
-        },
-      },
-    },
-  };
-
-  assert.throws(
-    () => resolveLinkCredential(config, undefined, "tabby-image-pro"),
-    /NO_IMAGE_MODEL.*tabby-image-pro/,
-  );
+test("resolveLinkCredential resolves legacy tier ids to tabby-image", () => {
+  const config = linkConfig([{ id: "tabby-image" }]);
+  for (const legacy of [
+    "tabby-image-pro",
+    "tabby-image-flash",
+    "tabby-image-free",
+  ]) {
+    assert.equal(resolveLinkCredential(config, legacy).model, "tabby-image");
+  }
 });
 
 test("resolveLinkCredential rejects a non-relay image model alias", () => {
-  const config = {
-    models: {
-      providers: {
-        link: {
-          baseUrl: "https://relay.example/v1",
-          apiKey: "key123",
-          models: [{ id: "tabby-image-pro" }],
-        },
-      },
-    },
-  };
-
   assert.throws(
-    () => resolveLinkCredential(config, undefined, "gpt-image-2"),
+    () =>
+      resolveLinkCredential(linkConfig([{ id: "tabby-image" }]), "gpt-image-2"),
     /INVALID_IMAGE_MODEL/,
   );
 });
@@ -263,13 +116,13 @@ test("buildImageGenerationsUrl uses the configured relay and normalizes trailing
 test("buildImageGenerationRequest builds the exact GPT Image body", () => {
   const result = buildImageGenerationRequest({
     baseUrl: "https://relay.example/v1",
-    model: "tabby-image-pro",
+    model: "tabby-image",
     prompt: "a cat on mars",
   });
 
   assert.equal(result.url, "https://relay.example/v1/images/generations");
   assert.deepEqual(result.body, {
-    model: "tabby-image-pro",
+    model: "tabby-image",
     prompt: "a cat on mars",
     n: 1,
     size: "1024x1024",
@@ -281,7 +134,7 @@ test("buildImageGenerationRequest builds the exact GPT Image body", () => {
 test("buildImageGenerationRequest maps GPT ratio and optional controls", () => {
   const result = buildImageGenerationRequest({
     baseUrl: "https://relay.example/v1/",
-    model: "tabby-image-pro",
+    model: "tabby-image",
     prompt: "product shot",
     ratio: "16:9",
     quality: "high",
@@ -289,7 +142,7 @@ test("buildImageGenerationRequest maps GPT ratio and optional controls", () => {
   });
 
   assert.deepEqual(result.body, {
-    model: "tabby-image-pro",
+    model: "tabby-image",
     prompt: "product shot",
     n: 1,
     size: "1536x864",
@@ -299,64 +152,11 @@ test("buildImageGenerationRequest maps GPT ratio and optional controls", () => {
   assert.equal(Object.hasOwn(result.body, "ratio"), false);
 });
 
-test("buildImageGenerationRequest builds the exact Agnes URL-output body", () => {
-  const result = buildImageGenerationRequest({
-    baseUrl: "https://relay.example/v1",
-    model: "tabby-image-flash",
-    prompt: "a luminous city",
-    size: "2K",
-    ratio: "16:9",
-  });
-
-  assert.equal(result.url, "https://relay.example/v1/images/generations");
-  assert.deepEqual(result.body, {
-    model: "tabby-image-flash",
-    prompt: "a luminous city",
-    size: "2K",
-    extra_body: { response_format: "url" },
-    ratio: "16:9",
-  });
-  assert.equal(Object.hasOwn(result.body, "n"), false);
-  assert.equal(Object.hasOwn(result.body, "response_format"), false);
-});
-
-test("buildImageGenerationRequest defaults Agnes to 1K and keeps the relay alias", () => {
-  const result = buildImageGenerationRequest({
-    baseUrl: "https://relay.example/v1",
-    model: "tabby-image-flash",
-    prompt: "a studio portrait",
-  });
-
-  assert.deepEqual(result.body, {
-    model: "tabby-image-flash",
-    prompt: "a studio portrait",
-    size: "1K",
-    extra_body: { response_format: "url" },
-  });
-});
-
-test("buildImageGenerationRequest omits GPT-only controls for Agnes", () => {
-  const result = buildImageGenerationRequest({
-    baseUrl: "https://relay.example/v1",
-    model: "tabby-image-flash",
-    prompt: "a cat",
-    quality: "high",
-    transparentBackground: true,
-  });
-
-  assert.deepEqual(result.body, {
-    model: "tabby-image-flash",
-    prompt: "a cat",
-    size: "1K",
-    extra_body: { response_format: "url" },
-  });
-});
-
 test("buildImageGenerationRequest maps GPT tiers and validates exact sizes", () => {
   assert.equal(
     buildImageGenerationRequest({
       baseUrl: "https://relay.example/v1",
-      model: "tabby-image-pro",
+      model: "tabby-image",
       prompt: "a cat",
       size: "2K",
       ratio: "9:16",
@@ -366,7 +166,7 @@ test("buildImageGenerationRequest maps GPT tiers and validates exact sizes", () 
   assert.equal(
     buildImageGenerationRequest({
       baseUrl: "https://relay.example/v1",
-      model: "tabby-image-pro",
+      model: "tabby-image",
       prompt: "a cat",
       size: "4K",
       ratio: "1:1",
@@ -376,7 +176,7 @@ test("buildImageGenerationRequest maps GPT tiers and validates exact sizes", () 
   assert.equal(
     buildImageGenerationRequest({
       baseUrl: "https://relay.example/v1",
-      model: "tabby-image-pro",
+      model: "tabby-image",
       prompt: "a cat",
       size: "1536x864",
     }).body.size,
@@ -387,7 +187,7 @@ test("buildImageGenerationRequest maps GPT tiers and validates exact sizes", () 
     () =>
       buildImageGenerationRequest({
         baseUrl: "https://relay.example/v1",
-        model: "tabby-image-flash",
+        model: "tabby-image",
         prompt: "a cat",
         ratio: "5:4",
       }),
@@ -397,11 +197,23 @@ test("buildImageGenerationRequest maps GPT tiers and validates exact sizes", () 
     () =>
       buildImageGenerationRequest({
         baseUrl: "https://relay.example/v1",
-        model: "tabby-image-pro",
+        model: "tabby-image",
         prompt: "a cat",
         size: "1537x864",
       }),
     /INVALID_SIZE/,
+  );
+});
+
+test("buildImageGenerationRequest rejects a model other than tabby-image", () => {
+  assert.throws(
+    () =>
+      buildImageGenerationRequest({
+        baseUrl: "https://relay.example/v1",
+        model: "tabby-image-flash",
+        prompt: "a cat",
+      }),
+    /INVALID_IMAGE_MODEL/,
   );
 });
 

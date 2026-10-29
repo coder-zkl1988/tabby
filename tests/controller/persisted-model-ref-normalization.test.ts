@@ -10,7 +10,7 @@ import { nexuConfigSchema } from "#controller/store/schemas";
  */
 function configWithGoogleProvider(defaultModelId: string) {
   return {
-    $schema: "https://tabby.picaso.studio/config.json",
+    $schema: "https://tabby.happywork.today/config.json",
     schemaVersion: 2,
     app: {},
     bots: [],

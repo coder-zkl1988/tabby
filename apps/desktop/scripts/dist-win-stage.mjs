@@ -837,7 +837,7 @@ async function ensureBuildConfig() {
   const gitCommit = getGitValue(["rev-parse", "HEAD"]);
 
   const config = {
-    NEXU_CLOUD_URL: merged.NEXU_CLOUD_URL ?? "https://tabby.picaso.studio",
+    NEXU_CLOUD_URL: merged.NEXU_CLOUD_URL ?? "https://tabby.happywork.today",
     NEXU_LINK_URL: merged.NEXU_LINK_URL ?? null,
     ...(merged.NEXU_DESKTOP_UPDATE_CHANNEL
       ? {
